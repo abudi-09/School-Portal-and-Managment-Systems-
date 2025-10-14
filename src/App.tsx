@@ -11,6 +11,14 @@ import Timetable from "./pages/Timetable";
 import Announcements from "./pages/Announcements";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import TeacherLayout from "./components/TeacherLayout";
+import TeacherDashboard from "./pages/teacher/TeacherDashboard";
+import TeacherAssignments from "./pages/teacher/TeacherAssignments";
+import TeacherGrades from "./pages/teacher/TeacherGrades";
+import TeacherClasses from "./pages/teacher/TeacherClasses";
+import TeacherAnnouncements from "./pages/teacher/TeacherAnnouncements";
+import TeacherProfile from "./pages/teacher/TeacherProfile";
+import TeacherAttendance from "./pages/teacher/TeacherAttendance";
 
 const queryClient = new QueryClient();
 
@@ -21,6 +29,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          {/* Student Portal Routes */}
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/scores" element={<Scores />} />
@@ -29,6 +38,18 @@ const App = () => (
             <Route path="/announcements" element={<Announcements />} />
             <Route path="/profile" element={<Profile />} />
           </Route>
+
+          {/* Teacher Portal Routes */}
+          <Route path="/teacher" element={<TeacherLayout />}>
+            <Route index element={<TeacherDashboard />} />
+            <Route path="assignments" element={<TeacherAssignments />} />
+            <Route path="grades" element={<TeacherGrades />} />
+            <Route path="classes" element={<TeacherClasses />} />
+            <Route path="announcements" element={<TeacherAnnouncements />} />
+            <Route path="attendance" element={<TeacherAttendance />} />
+            <Route path="profile" element={<TeacherProfile />} />
+          </Route>
+
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

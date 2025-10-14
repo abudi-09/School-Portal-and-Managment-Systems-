@@ -1,0 +1,254 @@
+import { useState } from "react";
+import { Plus, Bell, Paperclip, Filter } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const TeacherAnnouncements = () => {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("all");
+
+  const announcements = [
+    {
+      id: 1,
+      title: "Homework Reminder - Chapter 5",
+      author: "You",
+      audience: "Class 11A",
+      date: "2024-11-15",
+      category: "homework",
+      content: "Don't forget to complete exercises 5.1 to 5.5 by Friday.",
+      hasAttachment: false,
+    },
+    {
+      id: 2,
+      title: "Mid-Term Exam Schedule",
+      author: "Head of School",
+      audience: "All Teachers",
+      date: "2024-11-14",
+      category: "exam",
+      content: "Mid-term examinations will begin on November 20th. Please ensure all grades are updated.",
+      hasAttachment: true,
+    },
+    {
+      id: 3,
+      title: "Parent-Teacher Conference",
+      author: "Admin",
+      audience: "All Teachers",
+      date: "2024-11-13",
+      category: "event",
+      content: "Parent-teacher conferences scheduled for November 25-26. Please review your schedule.",
+      hasAttachment: false,
+    },
+    {
+      id: 4,
+      title: "Mathematics Department Meeting",
+      author: "Department Head",
+      audience: "Mathematics Dept",
+      date: "2024-11-12",
+      category: "meeting",
+      content: "Department meeting on Friday at 2 PM to discuss curriculum updates.",
+      hasAttachment: false,
+    },
+    {
+      id: 5,
+      title: "Assignment Extension Notice",
+      author: "You",
+      audience: "Class 12A",
+      date: "2024-11-11",
+      category: "assignment",
+      content: "Due to technical issues, the calculus assignment deadline has been extended to Monday.",
+      hasAttachment: false,
+    },
+  ];
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case "exam":
+        return "destructive";
+      case "homework":
+        return "secondary";
+      case "assignment":
+        return "default";
+      case "event":
+        return "outline";
+      case "meeting":
+        return "secondary";
+      default:
+        return "secondary";
+    }
+  };
+
+  const filteredAnnouncements =
+    filter === "all"
+      ? announcements
+      : filter === "sent"
+      ? announcements.filter((a) => a.author === "You")
+      : announcements.filter((a) => a.author !== "You");
+
+  return (
+    <div className="p-4 md:p-8 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Announcements</h1>
+          <p className="text-muted-foreground">
+            Manage announcements for your classes and view school updates
+          </p>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              New Announcement
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create Announcement</DialogTitle>
+              <DialogDescription>
+                Post a new announcement for your class or students
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="audience">Audience</Label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select class" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10a">Class 10A</SelectItem>
+                    <SelectItem value="11a">Class 11A</SelectItem>
+                    <SelectItem value="11b">Class 11B</SelectItem>
+                    <SelectItem value="12a">Class 12A</SelectItem>
+                    <SelectItem value="all">All My Classes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="category">Category</Label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="homework">Homework</SelectItem>
+                    <SelectItem value="assignment">Assignment</SelectItem>
+                    <SelectItem value="exam">Exam Info</SelectItem>
+                    <SelectItem value="event">Event</SelectItem>
+                    <SelectItem value="general">General</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input id="title" placeholder="Enter announcement title" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="content">Message</Label>
+                <Textarea
+                  id="content"
+                  placeholder="Write your announcement message"
+                  rows={6}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Attachment (optional)</Label>
+                <Button variant="outline" className="w-full gap-2">
+                  <Paperclip className="h-4 w-4" />
+                  Attach File
+                </Button>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => setOpen(false)}>Post Announcement</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Filter */}
+      <div className="flex items-center gap-2">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        <Select value={filter} onValueChange={setFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Announcements</SelectItem>
+            <SelectItem value="sent">Sent by Me</SelectItem>
+            <SelectItem value="received">Received</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Announcements List */}
+      <div className="space-y-4">
+        {filteredAnnouncements.map((announcement) => (
+          <Card key={announcement.id} className="hover:shadow-md transition-shadow">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle className="text-lg">{announcement.title}</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Posted by {announcement.author} • {announcement.date}
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={getCategoryColor(announcement.category)}>
+                    {announcement.category}
+                  </Badge>
+                  {announcement.hasAttachment && (
+                    <Badge variant="outline">
+                      <Paperclip className="h-3 w-3" />
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <p className="text-foreground">{announcement.content}</p>
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <Badge variant="secondary">{announcement.audience}</Badge>
+                  {announcement.author === "You" && (
+                    <Button variant="ghost" size="sm">
+                      Edit
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default TeacherAnnouncements;

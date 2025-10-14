@@ -19,6 +19,14 @@ import TeacherClasses from "./pages/teacher/TeacherClasses";
 import TeacherAnnouncements from "./pages/teacher/TeacherAnnouncements";
 import TeacherProfile from "./pages/teacher/TeacherProfile";
 import TeacherAttendance from "./pages/teacher/TeacherAttendance";
+import HeadLayout from "./components/HeadLayout";
+import HeadDashboard from "./pages/head/HeadDashboard";
+import TeacherManagement from "./pages/head/TeacherManagement";
+import StudentManagement from "./pages/head/StudentManagement";
+import ScheduleManagement from "./pages/head/ScheduleManagement";
+import AssignmentManagement from "./pages/head/AssignmentManagement";
+import HeadAnnouncements from "./pages/head/HeadAnnouncements";
+import HeadProfile from "./pages/head/HeadProfile";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +56,17 @@ const App = () => (
             <Route path="announcements" element={<TeacherAnnouncements />} />
             <Route path="attendance" element={<TeacherAttendance />} />
             <Route path="profile" element={<TeacherProfile />} />
+          </Route>
+
+          {/* Head of School Portal Routes */}
+          <Route path="/head" element={<HeadLayout />}>
+            <Route index element={<HeadDashboard />} />
+            <Route path="teachers" element={<TeacherManagement />} />
+            <Route path="students" element={<StudentManagement />} />
+            <Route path="schedules" element={<ScheduleManagement />} />
+            <Route path="assignments" element={<AssignmentManagement />} />
+            <Route path="announcements" element={<HeadAnnouncements />} />
+            <Route path="profile" element={<HeadProfile />} />
           </Route>
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

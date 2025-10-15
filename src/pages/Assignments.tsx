@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +8,7 @@ import { Paperclip, Eye, Calendar, CheckCircle2, Clock, AlertCircle } from "luci
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const Assignments = () => {
+  const navigate = useNavigate();
   const [filterSubject, setFilterSubject] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -204,7 +206,11 @@ const Assignments = () => {
                         </div>
                       )}
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => navigate(`/assignment/${assignment.id}`)}
+                    >
                       <Eye className="h-4 w-4 mr-2" />
                       View Details
                     </Button>

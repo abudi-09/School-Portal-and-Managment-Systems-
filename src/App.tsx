@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Scores from "./pages/Scores";
@@ -33,61 +34,73 @@ import AdminStudentManagement from "./pages/admin/AdminStudentManagement";
 import AdminUserManagement from "./pages/admin/AdminUserManagement";
 import AdminRegistrationControl from "./pages/admin/AdminRegistrationControl";
 import AdminProfile from "./pages/admin/AdminProfile";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import AssignmentDetail from "./pages/AssignmentDetail";
+import TimetableMatrix from "./pages/TimetableMatrix";
+import AttendanceTracking from "./pages/AttendanceTracking";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          {/* Student Portal Routes */}
-          <Route element={<Layout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/scores" element={<Scores />} />
-            <Route path="/assignments" element={<Assignments />} />
-            <Route path="/timetable" element={<Timetable />} />
-            <Route path="/announcements" element={<Announcements />} />
-            <Route path="/profile" element={<Profile />} />
-          </Route>
+      <AuthProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
 
-          {/* Teacher Portal Routes */}
-          <Route path="/teacher" element={<TeacherLayout />}>
-            <Route index element={<TeacherDashboard />} />
-            <Route path="assignments" element={<TeacherAssignments />} />
-            <Route path="grades" element={<TeacherGrades />} />
-            <Route path="classes" element={<TeacherClasses />} />
-            <Route path="announcements" element={<TeacherAnnouncements />} />
-            <Route path="attendance" element={<TeacherAttendance />} />
-            <Route path="profile" element={<TeacherProfile />} />
-          </Route>
+            {/* Student Portal Routes */}
+            <Route element={<Layout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/scores" element={<Scores />} />
+              <Route path="/assignments" element={<Assignments />} />
+              <Route path="/assignment/:id" element={<AssignmentDetail />} />
+              <Route path="/timetable" element={<TimetableMatrix />} />
+              <Route path="/attendance" element={<AttendanceTracking />} />
+              <Route path="/announcements" element={<Announcements />} />
+              <Route path="/profile" element={<Profile />} />
+            </Route>
 
-          {/* Head of School Portal Routes */}
-          <Route path="/head" element={<HeadLayout />}>
-            <Route index element={<HeadDashboard />} />
-            <Route path="teachers" element={<TeacherManagement />} />
-            <Route path="students" element={<StudentManagement />} />
-            <Route path="schedules" element={<ScheduleManagement />} />
-            <Route path="assignments" element={<AssignmentManagement />} />
-            <Route path="announcements" element={<HeadAnnouncements />} />
-            <Route path="profile" element={<HeadProfile />} />
-          </Route>
+            {/* Teacher Portal Routes */}
+            <Route path="/teacher" element={<TeacherLayout />}>
+              <Route index element={<TeacherDashboard />} />
+              <Route path="assignments" element={<TeacherAssignments />} />
+              <Route path="grades" element={<TeacherGrades />} />
+              <Route path="classes" element={<TeacherClasses />} />
+              <Route path="announcements" element={<TeacherAnnouncements />} />
+              <Route path="attendance" element={<TeacherAttendance />} />
+              <Route path="profile" element={<TeacherProfile />} />
+            </Route>
 
-          {/* Admin Portal Routes */}
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<AdminDashboard />} />
-            <Route path="students" element={<AdminStudentManagement />} />
-            <Route path="users" element={<AdminUserManagement />} />
-            <Route path="registration" element={<AdminRegistrationControl />} />
-            <Route path="profile" element={<AdminProfile />} />
-          </Route>
+            {/* Head of School Portal Routes */}
+            <Route path="/head" element={<HeadLayout />}>
+              <Route index element={<HeadDashboard />} />
+              <Route path="teachers" element={<TeacherManagement />} />
+              <Route path="students" element={<StudentManagement />} />
+              <Route path="schedules" element={<ScheduleManagement />} />
+              <Route path="assignments" element={<AssignmentManagement />} />
+              <Route path="announcements" element={<HeadAnnouncements />} />
+              <Route path="profile" element={<HeadProfile />} />
+            </Route>
 
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+            {/* Admin Portal Routes */}
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="students" element={<AdminStudentManagement />} />
+              <Route path="users" element={<AdminUserManagement />} />
+              <Route path="registration" element={<AdminRegistrationControl />} />
+              <Route path="profile" element={<AdminProfile />} />
+            </Route>
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

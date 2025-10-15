@@ -1,20 +1,68 @@
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, Calendar, User, FileText } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import { useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Download, Calendar, User, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 
 const AssignmentDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { toast } = useToast();
+
+  const handleDownload = (fileName: string, fileUrl: string) => {
+    // In a real application, this would download the actual file from the server
+    // For now, we'll simulate the download with a toast notification
+    toast({
+      title: "Download Started",
+      description: `Downloading ${fileName}...`,
+    });
+
+    // Simulate download delay
+    setTimeout(() => {
+      // Create a mock download by creating a blob and triggering download
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Download Complete",
+        description: `${fileName} has been downloaded successfully.`,
+      });
+    }, 1000);
+  };
+
+  const handleDownloadAll = () => {
+    toast({
+      title: "Download Started",
+      description: `Downloading all ${assignment.attachments.length} files...`,
+    });
+
+    // Download all files sequentially with a small delay between each
+    assignment.attachments.forEach((file, index) => {
+      setTimeout(() => {
+        handleDownload(file.name, file.url);
+      }, index * 500); // 500ms delay between downloads
+    });
+  };
 
   // Mock assignment data - would come from API/context in production
   const assignment = {
-    id: id || '1',
-    subject: 'Mathematics',
-    title: 'Calculus Problem Set 5',
-    description: 'Complete problems 1-20 from Chapter 5 on Derivatives and Applications',
+    id: id || "1",
+    subject: "Mathematics",
+    title: "Calculus Problem Set 5",
+    description:
+      "Complete problems 1-20 from Chapter 5 on Derivatives and Applications",
     detailedInstructions: `
       This assignment focuses on understanding derivatives and their real-world applications.
       
@@ -40,27 +88,27 @@ const AssignmentDetail = () => {
       - Khan Academy videos on derivatives
       - Practice problems available on the course website
     `,
-    teacher: 'Mrs. Johnson',
-    dueDate: '2024-03-25',
+    teacher: "Mrs. Johnson",
+    dueDate: "2024-03-25",
     submittedDate: null,
-    status: 'pending',
+    status: "pending",
     points: 100,
     attachments: [
-      { name: 'Problem_Set_5.pdf', size: '2.4 MB', url: '#' },
-      { name: 'Reference_Sheet.pdf', size: '1.1 MB', url: '#' },
+      { name: "Problem_Set_5.pdf", size: "2.4 MB", url: "#" },
+      { name: "Reference_Sheet.pdf", size: "1.1 MB", url: "#" },
     ],
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'submitted':
-        return 'default';
-      case 'graded':
-        return 'secondary';
-      case 'late':
-        return 'destructive';
+      case "submitted":
+        return "default";
+      case "graded":
+        return "secondary";
+      case "late":
+        return "destructive";
       default:
-        return 'outline';
+        return "outline";
     }
   };
 
@@ -71,7 +119,7 @@ const AssignmentDetail = () => {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate('/assignments')}
+          onClick={() => navigate("/assignments")}
           className="gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -91,11 +139,12 @@ const AssignmentDetail = () => {
                 </Badge>
               </div>
               <CardTitle className="text-3xl">{assignment.title}</CardTitle>
-              <CardDescription>{assignment.description}</CardDescription>
             </div>
             <div className="text-right space-y-1">
               <p className="text-sm text-muted-foreground">Worth</p>
-              <p className="text-2xl font-bold text-primary">{assignment.points} pts</p>
+              <p className="text-2xl font-bold text-primary">
+                {assignment.points} pts
+              </p>
             </div>
           </div>
         </CardHeader>
@@ -103,6 +152,21 @@ const AssignmentDetail = () => {
         <Separator />
 
         <CardContent className="space-y-6 pt-6">
+          {/* Assignment Description */}
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Assignment Description
+            </h3>
+            <div className="bg-gradient-to-r from-primary/5 to-secondary/5 p-6 rounded-lg border border-primary/10">
+              <p className="text-muted-foreground leading-relaxed text-base">
+                {assignment.description}
+              </p>
+            </div>
+          </div>
+
+          <Separator />
+
           {/* Meta Information */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex items-center gap-3">
@@ -121,7 +185,9 @@ const AssignmentDetail = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Due Date</p>
-                <p className="font-medium">{new Date(assignment.dueDate).toLocaleDateString()}</p>
+                <p className="font-medium">
+                  {new Date(assignment.dueDate).toLocaleDateString()}
+                </p>
               </div>
             </div>
 
@@ -131,7 +197,9 @@ const AssignmentDetail = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Attachments</p>
-                <p className="font-medium">{assignment.attachments.length} files</p>
+                <p className="font-medium">
+                  {assignment.attachments.length} files
+                </p>
               </div>
             </div>
           </div>
@@ -165,10 +233,17 @@ const AssignmentDetail = () => {
                     </div>
                     <div>
                       <p className="font-medium">{file.name}</p>
-                      <p className="text-sm text-muted-foreground">{file.size}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {file.size}
+                      </p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" className="gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => handleDownload(file.name, file.url)}
+                  >
                     <Download className="h-4 w-4" />
                     Download
                   </Button>
@@ -179,12 +254,14 @@ const AssignmentDetail = () => {
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4">
-            {assignment.status === 'pending' && (
-              <Button className="gap-2">
-                Submit Assignment
-              </Button>
+            {assignment.status === "pending" && (
+              <Button className="gap-2">Submit Assignment</Button>
             )}
-            <Button variant="outline" className="gap-2">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleDownloadAll}
+            >
               <Download className="h-4 w-4" />
               Download All Files
             </Button>

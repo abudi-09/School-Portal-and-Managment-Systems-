@@ -1,26 +1,32 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  Users, 
-  UserCog, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Users,
+  UserCog,
+  Settings,
   User,
   ClipboardCheck,
   LogOut,
   Menu,
-  X
+  X,
 } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const AdminLayout = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { logout } = useAuth();
 
   const navigation = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { name: "Student Management", href: "/admin/students", icon: Users },
     { name: "User Management", href: "/admin/users", icon: UserCog },
-    { name: "Registration Control", href: "/admin/registration", icon: ClipboardCheck },
+    {
+      name: "Registration Control",
+      href: "/admin/registration",
+      icon: ClipboardCheck,
+    },
     { name: "Profile", href: "/admin/profile", icon: User },
   ];
 
@@ -38,7 +44,11 @@ const AdminLayout = () => {
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-card border border-border"
       >
-        {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        {mobileMenuOpen ? (
+          <X className="h-5 w-5" />
+        ) : (
+          <Menu className="h-5 w-5" />
+        )}
       </button>
 
       {/* Sidebar */}
@@ -85,7 +95,10 @@ const AdminLayout = () => {
 
           {/* Footer */}
           <div className="p-4 border-t border-border">
-            <button className="flex items-center gap-3 px-4 py-3 rounded-lg w-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+            <button
+              onClick={logout}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg w-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
               <LogOut className="h-5 w-5" />
               <span className="font-medium">Logout</span>
             </button>

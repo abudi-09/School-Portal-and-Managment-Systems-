@@ -1,16 +1,62 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Paperclip, Eye, Calendar, CheckCircle2, Clock, AlertCircle } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Paperclip,
+  Eye,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Download,
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 
 const Assignments = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [filterSubject, setFilterSubject] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+
+  const handleDownload = (fileName: string, fileUrl: string) => {
+    // In a real application, this would download the actual file from the server
+    toast({
+      title: "Download Started",
+      description: `Downloading ${fileName}...`,
+    });
+
+    // Simulate download delay
+    setTimeout(() => {
+      // Create a mock download by creating a blob and triggering download
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Download Complete",
+        description: `${fileName} has been downloaded successfully.`,
+      });
+    }, 1000);
+  };
 
   const assignments = [
     {
@@ -21,6 +67,10 @@ const Assignments = () => {
       status: "pending",
       description: "Complete lab report with calculations and analysis",
       hasAttachment: true,
+      attachments: [
+        { name: "Lab_Report_Template.pdf", size: "1.2 MB", url: "#" },
+        { name: "Lab_Data_Sheet.xlsx", size: "245 KB", url: "#" },
+      ],
     },
     {
       id: 2,
@@ -30,6 +80,7 @@ const Assignments = () => {
       status: "pending",
       description: "Write a 1500-word essay analyzing themes in Hamlet",
       hasAttachment: false,
+      attachments: [],
     },
     {
       id: 3,
@@ -37,8 +88,12 @@ const Assignments = () => {
       subject: "Mathematics",
       deadline: "2025-10-20",
       status: "submitted",
+      grade: 92,
       description: "Complete problems 1-25 from chapter 8",
       hasAttachment: true,
+      attachments: [
+        { name: "Calculus_Problems.pdf", size: "3.1 MB", url: "#" },
+      ],
     },
     {
       id: 4,
@@ -46,9 +101,13 @@ const Assignments = () => {
       subject: "History",
       deadline: "2025-10-22",
       status: "graded",
-      grade: 92,
+      grade: 88,
       description: "Research presentation on WWII impact",
       hasAttachment: true,
+      attachments: [
+        { name: "WWII_Project_Guide.pdf", size: "2.8 MB", url: "#" },
+        { name: "Research_Sources.doc", size: "1.5 MB", url: "#" },
+      ],
     },
     {
       id: 5,
@@ -58,6 +117,9 @@ const Assignments = () => {
       status: "late",
       description: "Complete titration experiment and submit results",
       hasAttachment: true,
+      attachments: [
+        { name: "Titration_Lab_Manual.pdf", size: "4.2 MB", url: "#" },
+      ],
     },
   ];
 
@@ -69,6 +131,10 @@ const Assignments = () => {
       deadline: "2025-10-14",
       status: "pending",
       pages: "Pages 245-250, Problems 1-30",
+      hasAttachment: true,
+      attachments: [
+        { name: "Chapter_9_Worksheet.pdf", size: "1.8 MB", url: "#" },
+      ],
     },
     {
       id: 2,
@@ -77,6 +143,8 @@ const Assignments = () => {
       deadline: "2025-10-16",
       status: "submitted",
       pages: "Pages 180-185, All questions",
+      hasAttachment: false,
+      attachments: [],
     },
     {
       id: 3,
@@ -85,6 +153,11 @@ const Assignments = () => {
       deadline: "2025-10-17",
       status: "pending",
       pages: "Chapters 5-8 with notes",
+      hasAttachment: true,
+      attachments: [
+        { name: "Reading_Assignment.pdf", size: "2.1 MB", url: "#" },
+        { name: "Study_Guide.doc", size: "856 KB", url: "#" },
+      ],
     },
   ];
 
@@ -104,7 +177,10 @@ const Assignments = () => {
   };
 
   const getStatusBadge = (status: string, grade?: number) => {
-    const variants = {
+    const variants: Record<
+      string,
+      "default" | "secondary" | "destructive" | "outline"
+    > = {
       submitted: "default",
       pending: "secondary",
       graded: "default",
@@ -112,15 +188,17 @@ const Assignments = () => {
     };
 
     return (
-      <Badge variant={variants[status as keyof typeof variants] as any}>
+      <Badge variant={variants[status] || "outline"}>
         {status === "graded" && grade ? `Graded: ${grade}%` : status}
       </Badge>
     );
   };
 
   const filteredAssignments = assignments.filter((assignment) => {
-    const matchesSubject = filterSubject === "all" || assignment.subject === filterSubject;
-    const matchesStatus = filterStatus === "all" || assignment.status === filterStatus;
+    const matchesSubject =
+      filterSubject === "all" || assignment.subject === filterSubject;
+    const matchesStatus =
+      filterStatus === "all" || assignment.status === filterStatus;
     return matchesSubject && matchesStatus;
   });
 
@@ -176,15 +254,22 @@ const Assignments = () => {
           {/* Assignments List */}
           <div className="grid gap-4">
             {filteredAssignments.map((assignment) => (
-              <Card key={assignment.id} className="hover:shadow-md transition-shadow">
+              <Card
+                key={assignment.id}
+                className="hover:shadow-md transition-shadow"
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         {getStatusIcon(assignment.status)}
-                        <CardTitle className="text-lg">{assignment.title}</CardTitle>
+                        <CardTitle className="text-lg">
+                          {assignment.title}
+                        </CardTitle>
                       </div>
-                      <CardDescription>{assignment.description}</CardDescription>
+                      <CardDescription>
+                        {assignment.description}
+                      </CardDescription>
                     </div>
                     {getStatusBadge(assignment.status, assignment.grade)}
                   </div>
@@ -197,23 +282,45 @@ const Assignments = () => {
                       </div>
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Calendar className="h-4 w-4" />
-                        <span>Due: {new Date(assignment.deadline).toLocaleDateString()}</span>
+                        <span>
+                          Due:{" "}
+                          {new Date(assignment.deadline).toLocaleDateString()}
+                        </span>
                       </div>
                       {assignment.hasAttachment && (
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <Paperclip className="h-4 w-4" />
-                          <span>Has attachment</span>
+                          <span>
+                            {assignment.attachments.length} attachment
+                            {assignment.attachments.length !== 1 ? "s" : ""}
+                          </span>
                         </div>
                       )}
                     </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => navigate(`/assignment/${assignment.id}`)}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View Details
-                    </Button>
+                    <div className="flex gap-2">
+                      {assignment.attachments.map((attachment, index) => (
+                        <Button
+                          key={index}
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            handleDownload(attachment.name, attachment.url)
+                          }
+                          className="gap-2"
+                        >
+                          <Download className="h-4 w-4" />
+                          Download
+                        </Button>
+                      ))}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/assignment/${assignment.id}`)}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Details
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -239,13 +346,40 @@ const Assignments = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-6 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex flex-wrap items-center gap-6 text-sm">
                       <Badge variant="outline">{item.subject}</Badge>
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Calendar className="h-4 w-4" />
-                        <span>Due: {new Date(item.deadline).toLocaleDateString()}</span>
+                        <span>
+                          Due: {new Date(item.deadline).toLocaleDateString()}
+                        </span>
                       </div>
+                      {item.hasAttachment && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Paperclip className="h-4 w-4" />
+                          <span>
+                            {item.attachments.length} attachment
+                            {item.attachments.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      {item.attachments.map((attachment, index) => (
+                        <Button
+                          key={index}
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            handleDownload(attachment.name, attachment.url)
+                          }
+                          className="gap-2"
+                        >
+                          <Download className="h-4 w-4" />
+                          Download
+                        </Button>
+                      ))}
                     </div>
                   </div>
                 </CardContent>

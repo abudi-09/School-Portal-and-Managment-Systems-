@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  ClipboardList, 
+import {
+  LayoutDashboard,
+  ClipboardList,
   GraduationCap,
-  Bell, 
+  Bell,
   User,
   Menu,
   X,
   BookOpen,
-  Users
+  Users,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navigation = [
   { name: "Dashboard", href: "/teacher", icon: LayoutDashboard },
@@ -30,8 +32,11 @@ const headTeacherNav = [
 const TeacherLayout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isHeadTeacher = false; // This would come from auth/role system
+  const { logout } = useAuth();
 
-  const allNavigation = isHeadTeacher ? [...navigation.slice(0, 3), ...headTeacherNav, ...navigation.slice(3)] : navigation;
+  const allNavigation = isHeadTeacher
+    ? [...navigation.slice(0, 3), ...headTeacherNav, ...navigation.slice(3)]
+    : navigation;
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,8 +68,12 @@ const TeacherLayout = () => {
               <GraduationCap className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-bold text-lg text-foreground">Teacher Portal</h1>
-              <p className="text-xs text-muted-foreground">Academic Management</p>
+              <h1 className="font-bold text-lg text-foreground">
+                Teacher Portal
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Academic Management
+              </p>
             </div>
           </div>
 
@@ -93,15 +102,28 @@ const TeacherLayout = () => {
 
           {/* User info */}
           <div className="px-6 py-4 border-t border-border">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center">
-                <span className="text-sm font-semibold text-accent-foreground">MJ</span>
+                <span className="text-sm font-semibold text-accent-foreground">
+                  MJ
+                </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">Ms. Jane</p>
-                <p className="text-xs text-muted-foreground">Mathematics Dept.</p>
+                <p className="text-sm font-medium text-foreground truncate">
+                  Ms. Jane
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Mathematics Dept.
+                </p>
               </div>
             </div>
+            <button
+              onClick={logout}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg w-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <LogOut className="h-5 w-5" />
+              <span className="font-medium">Logout</span>
+            </button>
           </div>
         </div>
       </aside>

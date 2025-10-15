@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  Award, 
-  ClipboardList, 
-  Calendar, 
-  Bell, 
+import {
+  LayoutDashboard,
+  Award,
+  ClipboardList,
+  Calendar,
+  Bell,
   User,
   Menu,
-  X
+  X,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -23,6 +25,7 @@ const navigation = [
 
 const Layout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { logout } = useAuth();
 
   return (
     <div className="min-h-screen bg-background">
@@ -54,8 +57,12 @@ const Layout = () => {
               <Award className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-bold text-lg text-foreground">Student Portal</h1>
-              <p className="text-xs text-muted-foreground">Academic Excellence</p>
+              <h1 className="font-bold text-lg text-foreground">
+                Student Portal
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Academic Excellence
+              </p>
             </div>
           </div>
 
@@ -84,15 +91,26 @@ const Layout = () => {
 
           {/* User info */}
           <div className="px-6 py-4 border-t border-border">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center">
-                <span className="text-sm font-semibold text-accent-foreground">JS</span>
+                <span className="text-sm font-semibold text-accent-foreground">
+                  JS
+                </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">John Smith</p>
+                <p className="text-sm font-medium text-foreground truncate">
+                  John Smith
+                </p>
                 <p className="text-xs text-muted-foreground">Grade 11A</p>
               </div>
             </div>
+            <button
+              onClick={logout}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg w-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <LogOut className="h-5 w-5" />
+              <span className="font-medium">Logout</span>
+            </button>
           </div>
         </div>
       </aside>

@@ -93,7 +93,10 @@ const App = () => (
               <Route index element={<AdminDashboard />} />
               <Route path="students" element={<AdminStudentManagement />} />
               <Route path="users" element={<AdminUserManagement />} />
-              <Route path="registration" element={<AdminRegistrationControl />} />
+              <Route
+                path="registration"
+                element={<AdminRegistrationControl />}
+              />
               <Route path="profile" element={<AdminProfile />} />
             </Route>
 

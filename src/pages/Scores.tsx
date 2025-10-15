@@ -8,7 +8,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
   Award,
   TrendingUp,
@@ -217,10 +216,6 @@ const Scores = () => {
                         <h3 className="font-semibold text-foreground">
                           {subject.name}
                         </h3>
-                        <Progress
-                          value={subject.total}
-                          className="flex-1 max-w-xs"
-                        />
                       </div>
                       <div className="flex items-center gap-6">
                         <div className="text-right">
@@ -297,39 +292,232 @@ const Scores = () => {
                     </div>
                   </Button>
                   {isExpanded && (
-                    <div className="p-4 bg-secondary/30 border-t space-y-3">
-                      {Object.entries(subject.breakdown).map(
-                        ([type, score]) => (
-                          <div
-                            key={type}
-                            className="flex items-center justify-between"
-                          >
-                            <div className="flex items-center gap-3 flex-1">
-                              <span className="text-sm font-medium text-muted-foreground capitalize w-24">
-                                {type}
-                              </span>
-                              <Progress
-                                value={(score / 50) * 100}
-                                className="flex-1"
-                              />
-                            </div>
-                            <span className="font-semibold text-foreground ml-4">
-                              {score}
-                            </span>
-                          </div>
-                        )
-                      )}
-                      <div className="pt-3 border-t flex items-center justify-between">
-                        <span className="text-sm font-semibold text-foreground">
-                          Total
-                        </span>
-                        <span
-                          className={`text-lg font-bold ${getScoreColor(
-                            subject.total
-                          )}`}
-                        >
-                          {subject.total} / 100
-                        </span>
+                    <div className="p-6 bg-gradient-to-r from-secondary/20 to-secondary/10 border-t border-primary/10">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-lg font-semibold text-foreground">
+                            Assessment Breakdown
+                          </h4>
+                          <Badge variant="outline" className="text-xs">
+                            {Object.keys(subject.breakdown).length} Components
+                          </Badge>
+                        </div>
+                        <div className="overflow-hidden rounded-lg border border-primary/20 shadow-sm">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="bg-primary/5 border-b border-primary/20">
+                                <th className="text-left py-4 px-6 font-bold text-foreground text-sm uppercase tracking-wider">
+                                  Assessment Component
+                                </th>
+                                <th className="text-center py-4 px-6 font-bold text-foreground text-sm uppercase tracking-wider">
+                                  Raw Score
+                                </th>
+                                <th className="text-center py-4 px-6 font-bold text-foreground text-sm uppercase tracking-wider">
+                                  Weight
+                                </th>
+                                <th className="text-center py-4 px-6 font-bold text-foreground text-sm uppercase tracking-wider">
+                                  Contribution
+                                </th>
+                                <th className="text-center py-4 px-6 font-bold text-foreground text-sm uppercase tracking-wider">
+                                  Status
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-primary/10">
+                              {Object.entries(subject.breakdown).map(
+                                ([type, score]) => {
+                                  const weight =
+                                    type === "exam"
+                                      ? 45
+                                      : type === "test"
+                                      ? 25
+                                      : type === "assignment"
+                                      ? 15
+                                      : 15;
+                                  const contribution = (
+                                    (score * weight) /
+                                    100
+                                  ).toFixed(1);
+                                  const maxScore =
+                                    type === "exam"
+                                      ? 50
+                                      : type === "test"
+                                      ? 25
+                                      : type === "assignment"
+                                      ? 15
+                                      : 15;
+                                  const percentage = (
+                                    (score / maxScore) *
+                                    100
+                                  ).toFixed(0);
+                                  const isExcellent = percentage >= "90";
+                                  const isGood = percentage >= "80";
+                                  const isAverage = percentage >= "70";
+
+                                  return (
+                                    <tr
+                                      key={type}
+                                      className="hover:bg-primary/5 transition-colors duration-150"
+                                    >
+                                      <td className="py-4 px-6">
+                                        <div className="flex items-center gap-3">
+                                          <div
+                                            className={`w-2 h-2 rounded-full ${
+                                              type === "exam"
+                                                ? "bg-red-500"
+                                                : type === "test"
+                                                ? "bg-blue-500"
+                                                : type === "assignment"
+                                                ? "bg-green-500"
+                                                : "bg-purple-500"
+                                            }`}
+                                          />
+                                          <span className="font-medium text-foreground capitalize">
+                                            {type === "exam"
+                                              ? "Final Examination"
+                                              : type === "test"
+                                              ? "Class Tests"
+                                              : type === "assignment"
+                                              ? "Assignments"
+                                              : "Other Assessments"}
+                                          </span>
+                                        </div>
+                                      </td>
+                                      <td className="py-4 px-6 text-center">
+                                        <div className="space-y-1">
+                                          <div className="font-bold text-foreground text-lg">
+                                            {score}
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            / {maxScore}
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="py-4 px-6 text-center">
+                                        <Badge
+                                          variant="secondary"
+                                          className="font-semibold"
+                                        >
+                                          {weight}%
+                                        </Badge>
+                                      </td>
+                                      <td className="py-4 px-6 text-center">
+                                        <div className="space-y-1">
+                                          <div className="font-bold text-foreground">
+                                            {contribution}
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            points
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="py-4 px-6 text-center">
+                                        <Badge
+                                          variant={
+                                            isExcellent
+                                              ? "default"
+                                              : isGood
+                                              ? "secondary"
+                                              : isAverage
+                                              ? "outline"
+                                              : "destructive"
+                                          }
+                                          className={`font-medium ${
+                                            isExcellent
+                                              ? "bg-green-100 text-green-800 border-green-200"
+                                              : isGood
+                                              ? "bg-blue-100 text-blue-800 border-blue-200"
+                                              : isAverage
+                                              ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                                              : "bg-red-100 text-red-800 border-red-200"
+                                          }`}
+                                        >
+                                          {isExcellent
+                                            ? "Excellent"
+                                            : isGood
+                                            ? "Good"
+                                            : isAverage
+                                            ? "Average"
+                                            : "Needs Improvement"}
+                                        </Badge>
+                                      </td>
+                                    </tr>
+                                  );
+                                }
+                              )}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-primary/10 border-t-2 border-primary/30">
+                                <td className="py-5 px-6">
+                                  <div className="flex items-center gap-3">
+                                    <Trophy className="h-5 w-5 text-primary" />
+                                    <span className="font-bold text-foreground text-lg">
+                                      Final Grade
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-5 px-6 text-center">
+                                  <div
+                                    className={`text-2xl font-bold ${getScoreColor(
+                                      subject.total
+                                    )}`}
+                                  >
+                                    {subject.total}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    / 100
+                                  </div>
+                                </td>
+                                <td className="py-5 px-6 text-center">
+                                  <Badge
+                                    variant="default"
+                                    className="font-bold text-lg"
+                                  >
+                                    100%
+                                  </Badge>
+                                </td>
+                                <td className="py-5 px-6 text-center">
+                                  <div className="text-xl font-bold text-primary">
+                                    {subject.total}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    total points
+                                  </div>
+                                </td>
+                                <td className="py-5 px-6 text-center">
+                                  <Badge
+                                    variant={
+                                      subject.total >= 90
+                                        ? "default"
+                                        : subject.total >= 80
+                                        ? "secondary"
+                                        : subject.total >= 70
+                                        ? "outline"
+                                        : "destructive"
+                                    }
+                                    className={`font-bold text-sm px-3 py-1 ${
+                                      subject.total >= 90
+                                        ? "bg-green-100 text-green-800 border-green-200"
+                                        : subject.total >= 80
+                                        ? "bg-blue-100 text-blue-800 border-blue-200"
+                                        : subject.total >= 70
+                                        ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                                        : "bg-red-100 text-red-800 border-red-200"
+                                    }`}
+                                  >
+                                    {subject.total >= 90
+                                      ? "A - Outstanding"
+                                      : subject.total >= 80
+                                      ? "B - Good"
+                                      : subject.total >= 70
+                                      ? "C - Satisfactory"
+                                      : "D - Needs Work"}
+                                  </Badge>
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   )}

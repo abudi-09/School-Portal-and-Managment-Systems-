@@ -16,6 +16,8 @@ export interface User {
   role: UserRole;
   subject?: string;
   position?: string;
+  // Optional flag: a teacher who is also a head/class lead
+  isHeadClassTeacher?: boolean;
 }
 
 interface AuthContextType {
@@ -50,6 +52,7 @@ const MOCK_USERS: User[] = [
     email: "sarah@school.edu",
     role: "teacher",
     subject: "Mathematics",
+    isHeadClassTeacher: true,
   },
   {
     id: "3",
@@ -144,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
+  // eslint-disable-next-line react-refresh/only-export-components
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");

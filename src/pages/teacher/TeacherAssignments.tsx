@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Plus, Upload, Calendar, FileText, Download } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -97,7 +103,9 @@ const TeacherAssignments = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Assignments</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            Assignments
+          </h1>
           <p className="text-muted-foreground">
             Manage assignments and homework for your classes
           </p>
@@ -190,7 +198,10 @@ const TeacherAssignments = () => {
 
         <TabsContent value="assignments" className="space-y-4">
           {assignments.map((assignment) => (
-            <Card key={assignment.id} className="hover:shadow-md transition-shadow">
+            <Card
+              key={assignment.id}
+              className="hover:shadow-md transition-shadow"
+            >
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
@@ -205,7 +216,7 @@ const TeacherAssignments = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex items-center gap-2 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Due:</span>
@@ -218,26 +229,6 @@ const TeacherAssignments = () => {
                       {assignment.submissions}/{assignment.totalStudents}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <Download className="h-4 w-4" />
-                      View Submissions
-                    </Button>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="w-full bg-secondary rounded-full h-2">
-                    <div
-                      className="bg-accent h-2 rounded-full transition-all"
-                      style={{
-                        width: `${(assignment.submissions / assignment.totalStudents) * 100}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {Math.round((assignment.submissions / assignment.totalStudents) * 100)}%
-                    submitted
-                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -255,7 +246,9 @@ const TeacherAssignments = () => {
                       {item.subject} • Class {item.class}
                     </CardDescription>
                   </div>
-                  <Badge variant={getStatusColor(item.status)}>{item.status}</Badge>
+                  <Badge variant={getStatusColor(item.status)}>
+                    {item.status}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent>

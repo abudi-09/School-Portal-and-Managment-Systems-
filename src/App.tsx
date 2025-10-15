@@ -27,6 +27,12 @@ import ScheduleManagement from "./pages/head/ScheduleManagement";
 import AssignmentManagement from "./pages/head/AssignmentManagement";
 import HeadAnnouncements from "./pages/head/HeadAnnouncements";
 import HeadProfile from "./pages/head/HeadProfile";
+import AdminLayout from "./components/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminStudentManagement from "./pages/admin/AdminStudentManagement";
+import AdminUserManagement from "./pages/admin/AdminUserManagement";
+import AdminRegistrationControl from "./pages/admin/AdminRegistrationControl";
+import AdminProfile from "./pages/admin/AdminProfile";
 
 const queryClient = new QueryClient();
 
@@ -67,6 +73,15 @@ const App = () => (
             <Route path="assignments" element={<AssignmentManagement />} />
             <Route path="announcements" element={<HeadAnnouncements />} />
             <Route path="profile" element={<HeadProfile />} />
+          </Route>
+
+          {/* Admin Portal Routes */}
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="students" element={<AdminStudentManagement />} />
+            <Route path="users" element={<AdminUserManagement />} />
+            <Route path="registration" element={<AdminRegistrationControl />} />
+            <Route path="profile" element={<AdminProfile />} />
           </Route>
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

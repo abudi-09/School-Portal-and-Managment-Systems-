@@ -23,7 +23,8 @@ import { Progress } from "@/components/ui/progress";
 
 const TeacherGrades = () => {
   const [selectedClass, setSelectedClass] = useState("11a");
-  const [status, setStatus] = useState("draft");
+  const [status, setStatus] = useState<"draft" | "submitted" | "verified" | "approved">("draft");
+  const [grades, setGrades] = useState<{ [key: string]: { [key: string]: number } }>({});
 
   const students = [
     {
@@ -147,13 +148,13 @@ const TeacherGrades = () => {
         </Card>
       </div>
 
-      {/* Class Selection and Workflow */}
+      {/* Grading Workflow Status */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Select Class</CardTitle>
-              <CardDescription>Choose the class to enter grades for</CardDescription>
+              <CardTitle>Grading Workflow</CardTitle>
+              <CardDescription>Track the approval process for grades</CardDescription>
             </div>
             <Select value={selectedClass} onValueChange={setSelectedClass}>
               <SelectTrigger className="w-64">
@@ -169,21 +170,106 @@ const TeacherGrades = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-warning" />
-              <span className="text-muted-foreground">Teacher inputs scores</span>
+          <div className="space-y-4">
+            {/* Progress Steps */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex items-center justify-center w-10 h-10 rounded-full ${
+                    status === "draft" || status === "submitted" || status === "verified" || status === "approved"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  1
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Teacher Entry</p>
+                  <p className="text-xs text-muted-foreground">Input scores</p>
+                </div>
+              </div>
+              <div className="flex-1 h-0.5 bg-border mx-4" />
+              
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex items-center justify-center w-10 h-10 rounded-full ${
+                    status === "submitted" || status === "verified" || status === "approved"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  2
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Head Class Review</p>
+                  <p className="text-xs text-muted-foreground">Verify & calculate</p>
+                </div>
+              </div>
+              <div className="flex-1 h-0.5 bg-border mx-4" />
+              
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex items-center justify-center w-10 h-10 rounded-full ${
+                    status === "verified" || status === "approved"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  3
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Head Approval</p>
+                  <p className="text-xs text-muted-foreground">Final review</p>
+                </div>
+              </div>
+              <div className="flex-1 h-0.5 bg-border mx-4" />
+              
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex items-center justify-center w-10 h-10 rounded-full ${
+                    status === "approved"
+                      ? "bg-success text-success-foreground"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  ✓
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Published</p>
+                  <p className="text-xs text-muted-foreground">Visible to students</p>
+                </div>
+              </div>
             </div>
-            <span className="text-muted-foreground">→</span>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-secondary" />
-              <span className="text-muted-foreground">Head Class Teacher reviews</span>
-            </div>
-            <span className="text-muted-foreground">→</span>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-accent" />
-              <span className="text-muted-foreground">Head of School approves</span>
-            </div>
+
+            {/* Status Message */}
+            {status === "draft" && (
+              <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+                <p className="text-sm text-warning">
+                  Complete grade entry and submit for Head Class Teacher review
+                </p>
+              </div>
+            )}
+            {status === "submitted" && (
+              <div className="p-3 rounded-lg bg-secondary border">
+                <p className="text-sm text-muted-foreground">
+                  Grades submitted - waiting for Head Class Teacher verification
+                </p>
+              </div>
+            )}
+            {status === "verified" && (
+              <div className="p-3 rounded-lg bg-accent/10 border border-accent/20">
+                <p className="text-sm text-accent">
+                  Verified by Head Class Teacher - awaiting Head of School approval
+                </p>
+              </div>
+            )}
+            {status === "approved" && (
+              <div className="p-3 rounded-lg bg-success/10 border border-success/20">
+                <p className="text-sm text-success">
+                  Grades approved and published - now visible to students
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

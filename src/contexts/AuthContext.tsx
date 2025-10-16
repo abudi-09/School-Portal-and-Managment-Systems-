@@ -1,4 +1,4 @@
-﻿import {
+import {
   createContext,
   useContext,
   useState,
@@ -71,15 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedUser = localStorage.getItem("currentUser");
     if (storedUser) {
       setUser(JSON.parse(storedUser));
-    } else {
-      // Auto-login as Sarah Teacher (Head Class Teacher) for testing
-      const sarahTeacher = MOCK_USERS.find(
-        (u) => u.email === "sarah@school.edu"
-      );
-      if (sarahTeacher) {
-        setUser(sarahTeacher);
-        localStorage.setItem("currentUser", JSON.stringify(sarahTeacher));
-      }
     }
   }, []);
 

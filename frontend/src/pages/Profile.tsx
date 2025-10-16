@@ -32,13 +32,13 @@ const Profile = () => {
 
   useEffect(() => {
     try {
-      const profile = (authUser as unknown) && (authUser as any).profile;
+      const profile = (authUser as unknown) && (authUser as unknown).profile;
       if (profile && typeof profile.avatar === "string") {
         const avatarPath = profile.avatar;
         // import.meta.env typing can be strict in some toolchains, so safely access.
         const base =
-          typeof (import.meta as any)?.env?.VITE_API_BASE_URL === "string"
-            ? (import.meta as any).env.VITE_API_BASE_URL
+          typeof (import.meta as unknown)?.env?.VITE_API_BASE_URL === "string"
+            ? (import.meta as unknown).env.VITE_API_BASE_URL
             : "http://localhost:5000";
         setAvatarPreview(
           avatarPath.startsWith("http") ? avatarPath : `${base}${avatarPath}`

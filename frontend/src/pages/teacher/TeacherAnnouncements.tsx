@@ -226,7 +226,7 @@ const TeacherAnnouncements = () => {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={handleNewAnnouncement}>
               <Plus className="h-4 w-4" />
               New Announcement
             </Button>
@@ -255,11 +255,13 @@ const TeacherAnnouncements = () => {
                     <SelectValue placeholder="Select class" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="10a">Class 10A</SelectItem>
-                    <SelectItem value="11a">Class 11A</SelectItem>
-                    <SelectItem value="11b">Class 11B</SelectItem>
-                    <SelectItem value="12a">Class 12A</SelectItem>
-                    <SelectItem value="all">All My Classes</SelectItem>
+                    <SelectItem value="Class 10A">Class 10A</SelectItem>
+                    <SelectItem value="Class 11A">Class 11A</SelectItem>
+                    <SelectItem value="Class 11B">Class 11B</SelectItem>
+                    <SelectItem value="Class 12A">Class 12A</SelectItem>
+                    <SelectItem value="All My Classes">
+                      All My Classes
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>

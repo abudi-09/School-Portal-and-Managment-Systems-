@@ -11,47 +11,32 @@ import {
   BookOpen,
   Users,
   LogOut,
-  Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
+const navigation = [
+  { name: "Dashboard", href: "/teacher", icon: LayoutDashboard },
+  { name: "Assignments", href: "/teacher/assignments", icon: ClipboardList },
+  { name: "Grades", href: "/teacher/grades", icon: GraduationCap },
+  { name: "My Classes", href: "/teacher/classes", icon: BookOpen },
+  { name: "Announcements", href: "/teacher/announcements", icon: Bell },
+  { name: "Profile", href: "/teacher/profile", icon: User },
+];
+
+// Additional nav items for Head Class Teacher
+const headTeacherNav = [
+  { name: "Attendance", href: "/teacher/attendance", icon: Users },
+];
+
 const TeacherLayout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const isHeadTeacher = false; // This would come from auth/role system
+  const { logout } = useAuth();
 
-  // Check if teacher is also a Head Class Teacher
-  const isHeadClassTeacher =
-    user?.role === "teacher" && user.isHeadClassTeacher;
-
-  // Build navigation based on role
-  const baseNavigation = [
-    { name: "Dashboard", href: "/teacher", icon: LayoutDashboard },
-    { name: "Assignments", href: "/teacher/assignments", icon: ClipboardList },
-    { name: "Grades", href: "/teacher/grades", icon: GraduationCap },
-  ];
-
-  // Navigation items that appear before profile
-  const preProfileNavigation = [
-    { name: "My Classes", href: "/teacher/classes", icon: BookOpen },
-    { name: "Announcements", href: "/teacher/announcements", icon: Bell },
-    { name: "Profile", href: "/teacher/profile", icon: User },
-  ];
-
-  // Additional navigation for Head Class Teachers (appears after profile)
-  const headClassTeacherNavigation = [
-    { name: "Attendance", href: "/teacher/attendance", icon: Users },
-    { name: "Head Class Grades", href: "/teacher/head-grades", icon: Award },
-  ];
-
-  // Combine navigation based on role
-  const allNavigation = isHeadClassTeacher
-    ? [
-        ...baseNavigation,
-        ...preProfileNavigation,
-        ...headClassTeacherNavigation,
-      ]
-    : [...baseNavigation, ...preProfileNavigation];
+  const allNavigation = isHeadTeacher
+    ? [...navigation.slice(0, 3), ...headTeacherNav, ...navigation.slice(3)]
+    : navigation;
 
   return (
     <div className="min-h-screen bg-background">
@@ -94,7 +79,7 @@ const TeacherLayout = () => {
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1">
-            {baseNavigation.map((item) => (
+            {allNavigation.map((item) => (
               <NavLink
                 key={item.name}
                 to={item.href}
@@ -113,51 +98,6 @@ const TeacherLayout = () => {
                 {item.name}
               </NavLink>
             ))}
-            {preProfileNavigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                end={false}
-                onClick={() => setMobileMenuOpen(false)}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )
-                }
-              >
-                <item.icon className="h-5 w-5" />
-                {item.name}
-              </NavLink>
-            ))}
-            {isHeadClassTeacher && (
-              <>
-                <div className="px-4 pt-4 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Additional Role
-                </div>
-                {headClassTeacherNavigation.map((item) => (
-                  <NavLink
-                    key={item.name}
-                    to={item.href}
-                    end={false}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={({ isActive }) =>
-                      cn(
-                        "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
-                        isActive
-                          ? "bg-accent text-accent-foreground"
-                          : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                      )
-                    }
-                  >
-                    <item.icon className="h-5 w-5" />
-                    {item.name}
-                  </NavLink>
-                ))}
-              </>
-            )}
           </nav>
 
           {/* User info */}
@@ -165,20 +105,15 @@ const TeacherLayout = () => {
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center">
                 <span className="text-sm font-semibold text-accent-foreground">
-                  {user?.name
-                    ?.split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .toUpperCase() || "T"}
+                  MJ
                 </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">
-                  {user?.name || "Teacher"}
+                  Ms. Jane
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {user?.subject ? `${user.subject} Dept.` : "Teacher"}
-                  {isHeadClassTeacher && <span className="ml-1">(Head)</span>}
+                  Mathematics Dept.
                 </p>
               </div>
             </div>

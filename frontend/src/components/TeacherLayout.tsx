@@ -15,28 +15,37 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
-const navigation = [
-  { name: "Dashboard", href: "/teacher", icon: LayoutDashboard },
-  { name: "Assignments", href: "/teacher/assignments", icon: ClipboardList },
-  { name: "Grades", href: "/teacher/grades", icon: GraduationCap },
-  { name: "My Classes", href: "/teacher/classes", icon: BookOpen },
-  { name: "Announcements", href: "/teacher/announcements", icon: Bell },
-  { name: "Profile", href: "/teacher/profile", icon: User },
-];
-
-// Additional nav items for Head Class Teacher
-const headTeacherNav = [
-  { name: "Attendance", href: "/teacher/attendance", icon: Users },
-];
-
 const TeacherLayout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const isHeadTeacher = false; // This would come from auth/role system
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
-  const allNavigation = isHeadTeacher
-    ? [...navigation.slice(0, 3), ...headTeacherNav, ...navigation.slice(3)]
-    : navigation;
+  // Check if teacher is also a Head Class Teacher
+  const isHeadClassTeacher =
+    user?.role === "teacher" && user.isHeadClassTeacher;
+
+  // Build navigation based on role
+  const baseNavigation = [
+    { name: "Dashboard", href: "/teacher", icon: LayoutDashboard },
+    { name: "Assignments", href: "/teacher/assignments", icon: ClipboardList },
+    { name: "Grades", href: "/teacher/grades", icon: GraduationCap },
+  ];
+
+  // Additional navigation for Head Class Teachers
+  const headClassTeacherNavigation = [
+    { name: "Attendance", href: "/teacher/attendance", icon: Users },
+  ];
+
+  // Remaining navigation items (My Classes, Announcements, Profile)
+  const remainingNavigation = [
+    { name: "My Classes", href: "/teacher/classes", icon: BookOpen },
+    { name: "Announcements", href: "/teacher/announcements", icon: Bell },
+    { name: "Profile", href: "/teacher/profile", icon: User },
+  ];
+
+  // Combine navigation based on role
+  const allNavigation = isHeadClassTeacher
+    ? [...baseNavigation, ...headClassTeacherNavigation, ...remainingNavigation]
+    : [...baseNavigation, ...remainingNavigation];
 
   return (
     <div className="min-h-screen bg-background">

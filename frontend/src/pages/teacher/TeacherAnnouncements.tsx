@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Plus, Bell, Paperclip, Filter, Edit2 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -39,7 +45,8 @@ const TeacherAnnouncements = () => {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("all");
   const [isEditing, setIsEditing] = useState(false);
-  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [editingAnnouncement, setEditingAnnouncement] =
+    useState<Announcement | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     audience: "",
@@ -65,7 +72,8 @@ const TeacherAnnouncements = () => {
       audience: "All Teachers",
       date: "2024-11-14",
       category: "exam",
-      content: "Mid-term examinations will begin on November 20th. Please ensure all grades are updated.",
+      content:
+        "Mid-term examinations will begin on November 20th. Please ensure all grades are updated.",
       hasAttachment: true,
     },
     {
@@ -75,7 +83,8 @@ const TeacherAnnouncements = () => {
       audience: "All Teachers",
       date: "2024-11-13",
       category: "event",
-      content: "Parent-teacher conferences scheduled for November 25-26. Please review your schedule.",
+      content:
+        "Parent-teacher conferences scheduled for November 25-26. Please review your schedule.",
       hasAttachment: false,
     },
     {
@@ -85,7 +94,8 @@ const TeacherAnnouncements = () => {
       audience: "Mathematics Dept",
       date: "2024-11-12",
       category: "meeting",
-      content: "Department meeting on Friday at 2 PM to discuss curriculum updates.",
+      content:
+        "Department meeting on Friday at 2 PM to discuss curriculum updates.",
       hasAttachment: false,
     },
     {
@@ -95,7 +105,8 @@ const TeacherAnnouncements = () => {
       audience: "Class 12A",
       date: "2024-11-11",
       category: "assignment",
-      content: "Due to technical issues, the calculus assignment deadline has been extended to Monday.",
+      content:
+        "Due to technical issues, the calculus assignment deadline has been extended to Monday.",
       hasAttachment: false,
     },
   ]);
@@ -125,15 +136,20 @@ const TeacherAnnouncements = () => {
   };
 
   const handleSubmit = () => {
-    if (!formData.title || !formData.audience || !formData.category || !formData.content) {
+    if (
+      !formData.title ||
+      !formData.audience ||
+      !formData.category ||
+      !formData.content
+    ) {
       toast.error("Please fill in all required fields");
       return;
     }
 
     if (isEditing && editingAnnouncement) {
       // Update existing announcement
-      setAnnouncements(prev =>
-        prev.map(ann =>
+      setAnnouncements((prev) =>
+        prev.map((ann) =>
           ann.id === editingAnnouncement.id
             ? {
                 ...ann,
@@ -141,7 +157,7 @@ const TeacherAnnouncements = () => {
                 audience: formData.audience,
                 category: formData.category,
                 content: formData.content,
-                date: new Date().toISOString().split('T')[0], // Update date
+                date: new Date().toISOString().split("T")[0], // Update date
               }
             : ann
         )
@@ -150,16 +166,16 @@ const TeacherAnnouncements = () => {
     } else {
       // Create new announcement
       const newAnnouncement: Announcement = {
-        id: Math.max(...announcements.map(a => a.id)) + 1,
+        id: Math.max(...announcements.map((a) => a.id)) + 1,
         title: formData.title,
         author: "You",
         audience: formData.audience,
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toISOString().split("T")[0],
         category: formData.category,
         content: formData.content,
         hasAttachment: false, // For now, no attachment handling
       };
-      setAnnouncements(prev => [newAnnouncement, ...prev]);
+      setAnnouncements((prev) => [newAnnouncement, ...prev]);
       toast.success("Announcement posted successfully");
     }
 
@@ -171,57 +187,6 @@ const TeacherAnnouncements = () => {
       content: "",
     });
   };
-    {
-      id: 1,
-      title: "Homework Reminder - Chapter 5",
-      author: "You",
-      audience: "Class 11A",
-      date: "2024-11-15",
-      category: "homework",
-      content: "Don't forget to complete exercises 5.1 to 5.5 by Friday.",
-      hasAttachment: false,
-    },
-    {
-      id: 2,
-      title: "Mid-Term Exam Schedule",
-      author: "Head of School",
-      audience: "All Teachers",
-      date: "2024-11-14",
-      category: "exam",
-      content: "Mid-term examinations will begin on November 20th. Please ensure all grades are updated.",
-      hasAttachment: true,
-    },
-    {
-      id: 3,
-      title: "Parent-Teacher Conference",
-      author: "Admin",
-      audience: "All Teachers",
-      date: "2024-11-13",
-      category: "event",
-      content: "Parent-teacher conferences scheduled for November 25-26. Please review your schedule.",
-      hasAttachment: false,
-    },
-    {
-      id: 4,
-      title: "Mathematics Department Meeting",
-      author: "Department Head",
-      audience: "Mathematics Dept",
-      date: "2024-11-12",
-      category: "meeting",
-      content: "Department meeting on Friday at 2 PM to discuss curriculum updates.",
-      hasAttachment: false,
-    },
-    {
-      id: 5,
-      title: "Assignment Extension Notice",
-      author: "You",
-      audience: "Class 12A",
-      date: "2024-11-11",
-      category: "assignment",
-      content: "Due to technical issues, the calculus assignment deadline has been extended to Monday.",
-      hasAttachment: false,
-    },
-  ];
 
   const getCategoryColor = (category: string) => {
     switch (category) {
@@ -252,7 +217,9 @@ const TeacherAnnouncements = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Announcements</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            Announcements
+          </h1>
           <p className="text-muted-foreground">
             Manage announcements for your classes and view school updates
           </p>
@@ -266,15 +233,24 @@ const TeacherAnnouncements = () => {
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Create Announcement</DialogTitle>
+              <DialogTitle>
+                {isEditing ? "Edit Announcement" : "Create Announcement"}
+              </DialogTitle>
               <DialogDescription>
-                Post a new announcement for your class or students
+                {isEditing
+                  ? "Update your announcement details"
+                  : "Post a new announcement for your class or students"}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="audience">Audience</Label>
-                <Select>
+                <Select
+                  value={formData.audience}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, audience: value }))
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select class" />
                   </SelectTrigger>
@@ -289,7 +265,12 @@ const TeacherAnnouncements = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
-                <Select>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, category: value }))
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
@@ -304,7 +285,14 @@ const TeacherAnnouncements = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
-                <Input id="title" placeholder="Enter announcement title" />
+                <Input
+                  id="title"
+                  placeholder="Enter announcement title"
+                  value={formData.title}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, title: e.target.value }))
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="content">Message</Label>
@@ -312,6 +300,13 @@ const TeacherAnnouncements = () => {
                   id="content"
                   placeholder="Write your announcement message"
                   rows={6}
+                  value={formData.content}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      content: e.target.value,
+                    }))
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -326,7 +321,9 @@ const TeacherAnnouncements = () => {
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={() => setOpen(false)}>Post Announcement</Button>
+              <Button onClick={handleSubmit}>
+                {isEditing ? "Update Announcement" : "Post Announcement"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -350,13 +347,18 @@ const TeacherAnnouncements = () => {
       {/* Announcements List */}
       <div className="space-y-4">
         {filteredAnnouncements.map((announcement) => (
-          <Card key={announcement.id} className="hover:shadow-md transition-shadow">
+          <Card
+            key={announcement.id}
+            className="hover:shadow-md transition-shadow"
+          >
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <Bell className="h-4 w-4 text-muted-foreground" />
-                    <CardTitle className="text-lg">{announcement.title}</CardTitle>
+                    <CardTitle className="text-lg">
+                      {announcement.title}
+                    </CardTitle>
                   </div>
                   <CardDescription>
                     Posted by {announcement.author} • {announcement.date}
@@ -380,7 +382,11 @@ const TeacherAnnouncements = () => {
                 <div className="flex items-center justify-between pt-2 border-t">
                   <Badge variant="secondary">{announcement.audience}</Badge>
                   {announcement.author === "You" && (
-                    <Button variant="ghost" size="sm">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditAnnouncement(announcement)}
+                    >
                       Edit
                     </Button>
                   )}

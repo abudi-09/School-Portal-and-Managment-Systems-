@@ -6,6 +6,9 @@ import {
   AlertTriangle,
   CalendarCheck,
   BarChart3,
+  Award,
+  User,
+  Eye,
 } from "lucide-react";
 import {
   Card,
@@ -33,6 +36,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type StudentStatus = "active" | "inactive" | "on-leave";
 
@@ -232,6 +244,7 @@ const StudentManagement = () => {
     "all"
   );
   const [performanceFilter, setPerformanceFilter] = useState("all");
+  const [profileStudent, setProfileStudent] = useState<Student | null>(null);
 
   const students = STUDENTS;
 
@@ -457,10 +470,10 @@ const StudentManagement = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>All Students</CardTitle>
+          <CardTitle>Student Directory</CardTitle>
           <CardDescription>
-            Monitor academic progress, attendance, and class positioning at a
-            glance
+            Comprehensive oversight of academic performance, attendance metrics,
+            and class standings
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -558,7 +571,16 @@ const StudentManagement = () => {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setProfileStudent(student)}
+                          className="hover:bg-primary/5 hover:border-primary/20 transition-colors"
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Details
+                        </Button>
                         <Button variant="outline" size="sm">
                           {student.status === "active"
                             ? "Deactivate"
@@ -583,6 +605,494 @@ const StudentManagement = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Student Profile Dialog */}
+      <Dialog
+        open={!!profileStudent}
+        onOpenChange={() => setProfileStudent(null)}
+      >
+        <DialogContent className="max-w-5xl max-h-[95vh] p-0">
+          <div className="flex flex-col h-full max-h-[95vh]">
+            <DialogHeader className="px-6 py-6 border-b bg-gradient-to-br from-primary/8 via-primary/5 to-blue-50/30 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <div className="p-3 bg-gradient-to-br from-primary to-primary/80 rounded-xl shadow-lg">
+                      <User className="h-8 w-8 text-white" />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+                  </div>
+                  <div className="space-y-1">
+                    <DialogTitle className="text-2xl font-bold text-gray-900 leading-tight">
+                      {profileStudent?.name}
+                    </DialogTitle>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="secondary" className="font-medium">
+                        {profileStudent?.studentId}
+                      </Badge>
+                      <Badge
+                        variant={
+                          profileStudent?.status === "active"
+                            ? "default"
+                            : "outline"
+                        }
+                        className="font-medium"
+                      >
+                        {profileStudent?.status}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="text-right space-y-1">
+                    <div className="text-sm text-muted-foreground">
+                      Academic Score
+                    </div>
+                    <div className="text-lg font-bold text-primary">
+                      {profileStudent?.gradeAverage}/100%
+                    </div>
+                  </div>
+                  <div className="w-px h-12 bg-border"></div>
+                  <div className="text-right space-y-1">
+                    <div className="text-sm text-muted-foreground">
+                      Attendance Rate
+                    </div>
+                    <div
+                      className={`text-lg font-bold ${
+                        profileStudent?.attendanceRate >= 90
+                          ? "text-green-600"
+                          : profileStudent?.attendanceRate >= 80
+                          ? "text-yellow-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {profileStudent?.attendanceRate}%
+                    </div>
+                  </div>
+                  <div className="w-px h-12 bg-border"></div>
+                  <div className="text-right space-y-1">
+                    <div className="text-sm text-muted-foreground">
+                      Class Position
+                    </div>
+                    <div className="text-lg font-bold text-gray-900">
+                      #{profileStudent?.classRank}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <DialogDescription className="text-base text-muted-foreground mt-4 flex items-center gap-2">
+                <div className="w-1 h-1 bg-primary rounded-full"></div>
+                Comprehensive academic performance and attendance analytics
+                <div className="w-1 h-1 bg-primary rounded-full"></div>
+              </DialogDescription>
+            </DialogHeader>
+
+            {profileStudent && (
+              <ScrollArea className="flex-1 px-6 py-4">
+                <div className="space-y-6">
+                  {/* Overview Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card className="border-l-4 border-l-primary">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2">
+                          <GraduationCap className="h-4 w-4" />
+                          Academic Profile
+                        </CardTitle>
+                        <CardDescription className="text-xs uppercase tracking-wide text-muted-foreground/80">
+                          Core academic identifiers
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <dl className="space-y-3 text-sm">
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Academic Level
+                            </dt>
+                            <dd>
+                              <Badge
+                                variant="secondary"
+                                className="font-medium"
+                              >
+                                {profileStudent.gradeLevel}
+                              </Badge>
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Class Section
+                            </dt>
+                            <dd>
+                              <Badge variant="outline">
+                                {profileStudent.section}
+                              </Badge>
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Class Position
+                            </dt>
+                            <dd>
+                              <Badge variant="outline" className="font-medium">
+                                #{profileStudent.classRank}
+                              </Badge>
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Academic Score (100%)
+                            </dt>
+                            <dd>
+                              <Badge
+                                variant={
+                                  profileStudent.gradeAverage >= 85
+                                    ? "default"
+                                    : "secondary"
+                                }
+                                className="font-medium"
+                              >
+                                {profileStudent.gradeAverage}
+                              </Badge>
+                            </dd>
+                          </div>
+                        </dl>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-l-4 border-l-blue-500">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2">
+                          <CalendarCheck className="h-4 w-4" />
+                          Attendance Metrics
+                        </CardTitle>
+                        <CardDescription className="text-xs uppercase tracking-wide text-muted-foreground/80">
+                          Engagement and contact summary
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <dl className="space-y-3 text-sm">
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Current Attendance Rate
+                            </dt>
+                            <dd>
+                              <Badge
+                                variant={
+                                  profileStudent.attendanceRate >= 90
+                                    ? "default"
+                                    : profileStudent.attendanceRate >= 80
+                                    ? "secondary"
+                                    : "destructive"
+                                }
+                                className="font-medium"
+                              >
+                                {profileStudent.attendanceRate}%
+                              </Badge>
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Enrollment Status
+                            </dt>
+                            <dd>
+                              <Badge
+                                variant={
+                                  profileStudent.status === "active"
+                                    ? "default"
+                                    : "outline"
+                                }
+                                className="font-medium"
+                              >
+                                {profileStudent.status}
+                              </Badge>
+                            </dd>
+                          </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Primary Guardian
+                            </dt>
+                            <dd className="text-right font-medium">
+                              {profileStudent.guardian}
+                            </dd>
+                          </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Guardian Contact
+                            </dt>
+                            <dd className="text-right font-medium">
+                              {profileStudent.contact}
+                            </dd>
+                          </div>
+                        </dl>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-l-4 border-l-green-500">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2">
+                          <Award className="h-4 w-4" />
+                          Performance Overview
+                        </CardTitle>
+                        <CardDescription className="text-xs uppercase tracking-wide text-muted-foreground/80">
+                          Holistic performance snapshot
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <dl className="space-y-3 text-sm">
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Academic Status
+                            </dt>
+                            <dd>
+                              <Badge
+                                variant={
+                                  profileStudent.attendanceRate < 80 ||
+                                  profileStudent.gradeAverage < 75
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                              >
+                                {profileStudent.attendanceRate < 80 ||
+                                profileStudent.gradeAverage < 75
+                                  ? "Requires Attention"
+                                  : "Satisfactory"}
+                              </Badge>
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Performance Level
+                            </dt>
+                            <dd>
+                              <Badge
+                                variant={
+                                  profileStudent.gradeAverage >= 85
+                                    ? "default"
+                                    : "secondary"
+                                }
+                              >
+                                {profileStudent.gradeAverage >= 85
+                                  ? "Superior"
+                                  : "Standard"}
+                              </Badge>
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Attendance Rate
+                            </dt>
+                            <dd className="font-medium">
+                              {profileStudent.attendanceRate}%
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-muted-foreground">
+                              Academic Score
+                            </dt>
+                            <dd className="font-medium">
+                              {profileStudent.gradeAverage}%
+                            </dd>
+                          </div>
+                        </dl>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Subject Performance */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <BarChart3 className="h-5 w-5" />
+                        Subject Performance Analytics
+                      </CardTitle>
+                      <CardDescription>
+                        Detailed subject-wise performance breakdown and
+                        comparative analysis
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {profileStudent.subjects.map((subject, index) => (
+                          <div
+                            key={index}
+                            className="space-y-3 p-4 border rounded-lg bg-muted/30"
+                          >
+                            <header className="flex items-start justify-between gap-3">
+                              <div>
+                                <h4 className="font-semibold text-sm text-foreground">
+                                  {subject.subject}
+                                </h4>
+                                <p className="text-xs text-muted-foreground">
+                                  Curriculum alignment & cohort standing
+                                </p>
+                              </div>
+                              <Badge
+                                variant={
+                                  subject.grade.startsWith("A")
+                                    ? "default"
+                                    : subject.grade.startsWith("B")
+                                    ? "secondary"
+                                    : "outline"
+                                }
+                                className="font-medium"
+                              >
+                                {subject.grade}
+                              </Badge>
+                            </header>
+                            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                              <div className="flex flex-col gap-0.5">
+                                <dt className="text-muted-foreground">
+                                  Individual Performance
+                                </dt>
+                                <dd className="font-medium">
+                                  {subject.grade === "A"
+                                    ? "95+%"
+                                    : subject.grade === "A-"
+                                    ? "90-94%"
+                                    : subject.grade === "B+"
+                                    ? "85-89%"
+                                    : subject.grade === "B"
+                                    ? "80-84%"
+                                    : "75-79%"}
+                                </dd>
+                              </div>
+                              <div className="flex flex-col gap-0.5 text-right">
+                                <dt className="text-muted-foreground">
+                                  Class Benchmark
+                                </dt>
+                                <dd className="font-medium">
+                                  {subject.classAverage}%
+                                </dd>
+                              </div>
+                              <div className="col-span-2 text-xs text-muted-foreground border-t pt-2">
+                                Performance level:&nbsp;
+                                {subject.grade === "A"
+                                  ? "Outstanding"
+                                  : subject.grade === "A-"
+                                  ? "Excellent"
+                                  : subject.grade === "B+"
+                                  ? "Very Good"
+                                  : subject.grade === "B"
+                                  ? "Good"
+                                  : "Satisfactory"}
+                              </div>
+                            </dl>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Attendance History */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <CalendarCheck className="h-5 w-5" />
+                        Attendance Tracking
+                      </CardTitle>
+                      <CardDescription>
+                        Historical attendance patterns and trend analysis
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-[2fr,1fr,1fr] items-center text-xs uppercase tracking-wide text-muted-foreground/80">
+                        <span>Period</span>
+                        <span className="text-right">Attendance</span>
+                        <span className="text-right">Status</span>
+                      </div>
+                      <div className="space-y-3">
+                        {profileStudent.attendanceHistory.map(
+                          (period, index) => (
+                            <div
+                              key={index}
+                              className="grid grid-cols-[2fr,1fr,1fr] items-center gap-3 rounded-lg border bg-muted/20 px-4 py-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 rounded-full bg-primary"></div>
+                                <span className="font-medium text-foreground">
+                                  {period.period}
+                                </span>
+                              </div>
+                              <span className="text-right text-sm font-medium">
+                                {period.rate}%
+                              </span>
+                              <span className="flex justify-end">
+                                <Badge
+                                  variant={
+                                    period.rate >= 90
+                                      ? "default"
+                                      : period.rate >= 80
+                                      ? "secondary"
+                                      : "destructive"
+                                  }
+                                  className="text-xs"
+                                >
+                                  {period.rate >= 90
+                                    ? "Excellent"
+                                    : period.rate >= 80
+                                    ? "Good"
+                                    : "Needs Attention"}
+                                </Badge>
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Alerts */}
+                  {profileStudent.alerts.length > 0 && (
+                    <Card className="border-destructive/50 bg-destructive/5">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-destructive">
+                          <AlertTriangle className="h-5 w-5" />
+                          Critical Alerts & Notifications
+                        </CardTitle>
+                        <CardDescription>
+                          Urgent matters requiring immediate administrative
+                          attention
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {profileStudent.alerts.map((alert, index) => (
+                            <div
+                              key={index}
+                              className="flex items-start gap-3 p-3 bg-destructive/10 border border-destructive/20 rounded-lg"
+                            >
+                              <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-destructive">
+                                  {alert}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Immediate administrative intervention required
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </ScrollArea>
+            )}
+
+            <DialogFooter className="px-6 py-4 border-t bg-muted/30">
+              <Button
+                variant="outline"
+                onClick={() => setProfileStudent(null)}
+                className="min-w-[100px]"
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

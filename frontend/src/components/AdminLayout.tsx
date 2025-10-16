@@ -94,10 +94,10 @@ const AdminLayout = () => {
           </nav>
 
           {/* Footer */}
-          <div className="p-4 border-t border-border">
+          <div className="p-4 border-t border-gray-200">
             <button
               onClick={logout}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg w-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg w-full text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors border border-gray-200 bg-white"
             >
               <LogOut className="h-5 w-5" />
               <span className="font-medium">Logout</span>

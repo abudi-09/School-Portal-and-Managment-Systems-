@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Bell, Paperclip, Filter } from "lucide-react";
+import { Plus, Bell, Paperclip, Filter, Edit2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,12 +22,155 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
+
+interface Announcement {
+  id: number;
+  title: string;
+  author: string;
+  audience: string;
+  date: string;
+  category: string;
+  content: string;
+  hasAttachment: boolean;
+}
 
 const TeacherAnnouncements = () => {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [formData, setFormData] = useState({
+    title: "",
+    audience: "",
+    category: "",
+    content: "",
+  });
 
-  const announcements = [
+  const [announcements, setAnnouncements] = useState<Announcement[]>([
+    {
+      id: 1,
+      title: "Homework Reminder - Chapter 5",
+      author: "You",
+      audience: "Class 11A",
+      date: "2024-11-15",
+      category: "homework",
+      content: "Don't forget to complete exercises 5.1 to 5.5 by Friday.",
+      hasAttachment: false,
+    },
+    {
+      id: 2,
+      title: "Mid-Term Exam Schedule",
+      author: "Head of School",
+      audience: "All Teachers",
+      date: "2024-11-14",
+      category: "exam",
+      content: "Mid-term examinations will begin on November 20th. Please ensure all grades are updated.",
+      hasAttachment: true,
+    },
+    {
+      id: 3,
+      title: "Parent-Teacher Conference",
+      author: "Admin",
+      audience: "All Teachers",
+      date: "2024-11-13",
+      category: "event",
+      content: "Parent-teacher conferences scheduled for November 25-26. Please review your schedule.",
+      hasAttachment: false,
+    },
+    {
+      id: 4,
+      title: "Mathematics Department Meeting",
+      author: "Department Head",
+      audience: "Mathematics Dept",
+      date: "2024-11-12",
+      category: "meeting",
+      content: "Department meeting on Friday at 2 PM to discuss curriculum updates.",
+      hasAttachment: false,
+    },
+    {
+      id: 5,
+      title: "Assignment Extension Notice",
+      author: "You",
+      audience: "Class 12A",
+      date: "2024-11-11",
+      category: "assignment",
+      content: "Due to technical issues, the calculus assignment deadline has been extended to Monday.",
+      hasAttachment: false,
+    },
+  ]);
+
+  const handleNewAnnouncement = () => {
+    setIsEditing(false);
+    setEditingAnnouncement(null);
+    setFormData({
+      title: "",
+      audience: "",
+      category: "",
+      content: "",
+    });
+    setOpen(true);
+  };
+
+  const handleEditAnnouncement = (announcement: Announcement) => {
+    setIsEditing(true);
+    setEditingAnnouncement(announcement);
+    setFormData({
+      title: announcement.title,
+      audience: announcement.audience,
+      category: announcement.category,
+      content: announcement.content,
+    });
+    setOpen(true);
+  };
+
+  const handleSubmit = () => {
+    if (!formData.title || !formData.audience || !formData.category || !formData.content) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    if (isEditing && editingAnnouncement) {
+      // Update existing announcement
+      setAnnouncements(prev =>
+        prev.map(ann =>
+          ann.id === editingAnnouncement.id
+            ? {
+                ...ann,
+                title: formData.title,
+                audience: formData.audience,
+                category: formData.category,
+                content: formData.content,
+                date: new Date().toISOString().split('T')[0], // Update date
+              }
+            : ann
+        )
+      );
+      toast.success("Announcement updated successfully");
+    } else {
+      // Create new announcement
+      const newAnnouncement: Announcement = {
+        id: Math.max(...announcements.map(a => a.id)) + 1,
+        title: formData.title,
+        author: "You",
+        audience: formData.audience,
+        date: new Date().toISOString().split('T')[0],
+        category: formData.category,
+        content: formData.content,
+        hasAttachment: false, // For now, no attachment handling
+      };
+      setAnnouncements(prev => [newAnnouncement, ...prev]);
+      toast.success("Announcement posted successfully");
+    }
+
+    setOpen(false);
+    setFormData({
+      title: "",
+      audience: "",
+      category: "",
+      content: "",
+    });
+  };
     {
       id: 1,
       title: "Homework Reminder - Chapter 5",

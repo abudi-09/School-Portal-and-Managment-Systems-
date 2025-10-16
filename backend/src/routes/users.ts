@@ -1,6 +1,66 @@
 import express from "express";
 import User from "../models/User";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
+import path from "path";
+
+let multer: any;
+try {
+  // try to require the real multer
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  multer = require("multer");
+} catch (e) {
+  // fallback to local shim so server can run even if multer isn't installed
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  multer = require("../utils/multer-shim");
+}
+
+// Configure multer
+const uploadDir = path.join(__dirname, "..", "..", "uploads");
+const storage =
+  typeof multer.diskStorage === "function"
+    ? multer.diskStorage({
+        destination: function (
+          _req: unknown,
+          _file: unknown,
+          cb: (err: Error | null, destination?: string) => void
+        ) {
+          cb(null, uploadDir);
+        },
+        filename: function (
+          _req: unknown,
+          file: { originalname?: string },
+          cb: (err: Error | null, filename?: string) => void
+        ) {
+          const originalName = file?.originalname ?? "upload";
+          const ext = path.extname(originalName);
+          cb(
+            null,
+            `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext}`
+          );
+        },
+      })
+    : undefined;
+
+const upload =
+  typeof multer === "function"
+    ? multer({
+        storage,
+        limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+        fileFilter: (
+          _req: unknown,
+          file: { originalname?: string },
+          cb: (error: Error | null, allow?: boolean) => void
+        ) => {
+          const allowed = /jpeg|jpg|png/;
+          const ext = path.extname(file?.originalname ?? "").toLowerCase();
+          if (allowed.test(ext)) {
+            cb(null, true);
+            return;
+          }
+          cb(new Error("Only JPEG/PNG files are allowed"));
+        },
+      })
+    : multer();
 
 const router = express.Router();
 
@@ -93,6 +153,63 @@ router.get(
   }
 );
 
+// @route   POST /api/users/:id/avatar
+// @desc    Upload avatar for user (owner or admin)
+// @access  Private
+router.post(
+  "/:id/avatar",
+  authMiddleware,
+  upload.single("avatar"),
+  async (
+    req: express.Request & { user?: any; file?: { filename?: string } | null },
+    res: express.Response
+  ) => {
+    try {
+      // Permission check
+      if (
+        req.user?._id.toString() !== req.params.id &&
+        req.user?.role !== "admin"
+      ) {
+        return res
+          .status(403)
+          .json({ success: false, message: "Access denied" });
+      }
+
+      if (!req.file || !req.file.filename) {
+        return res
+          .status(400)
+          .json({ success: false, message: "No file uploaded" });
+      }
+
+      const user = await User.findById(req.params.id);
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      // Save relative path to avatar
+      user.profile = user.profile || {};
+      user.profile.avatar = `/uploads/${req.file.filename}`;
+      await user.save();
+
+      res.json({
+        success: true,
+        message: "Avatar uploaded",
+        data: { avatar: user.profile.avatar },
+      });
+    } catch (error: any) {
+      console.error("Upload avatar error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error uploading avatar",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
 // @route   PUT /api/users/:id
 // @desc    Update user
 // @access  Private
@@ -149,6 +266,62 @@ router.put(
       res.status(500).json({
         success: false,
         message: "Server error updating user",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+// @route   PUT /api/users/:id/responsibilities
+// @desc    Update user responsibilities (head or admin only)
+// @access  Private
+router.put(
+  "/:id/responsibilities",
+  authMiddleware,
+  authorizeRoles("head", "admin"),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { responsibilities } = req.body;
+
+      if (typeof responsibilities !== "string") {
+        return res.status(400).json({
+          success: false,
+          message: "Responsibilities must be a string",
+        });
+      }
+
+      const user = await User.findById(req.params.id);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Only head or admin can update responsibilities
+      if (req.user?.role !== "head" && req.user?.role !== "admin") {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied",
+        });
+      }
+
+      user.employmentInfo = user.employmentInfo || {};
+      user.employmentInfo.responsibilities = responsibilities;
+      await user.save();
+
+      res.json({
+        success: true,
+        message: "Responsibilities updated successfully",
+        data: { user: { _id: user._id, employmentInfo: user.employmentInfo } },
+      });
+    } catch (error: any) {
+      console.error("Update responsibilities error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error updating responsibilities",
         error:
           process.env.NODE_ENV === "development" ? error.message : undefined,
       });

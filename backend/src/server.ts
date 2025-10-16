@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import path from "path";
 import morgan from "morgan";
 import dotenv from "dotenv";
 import connectDB from "./config/database";
@@ -28,6 +29,11 @@ app.use(
   })
 );
 
+// Serve uploaded static files
+app.use(
+  "/uploads",
+  express.static(path.join(__dirname, "..", "..", "uploads"))
+);
 // Logging middleware
 app.use(morgan("combined"));
 

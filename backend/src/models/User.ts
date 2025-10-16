@@ -28,6 +28,7 @@ export interface IUser extends Document {
     department?: string;
     position?: string;
     joinDate?: Date;
+    responsibilities?: string;
   };
   lastLogin?: Date;
   createdAt: Date;
@@ -99,6 +100,7 @@ const userSchema = new Schema<IUser>(
       department: String,
       position: String,
       joinDate: Date,
+      responsibilities: String,
     },
     lastLogin: Date,
   },

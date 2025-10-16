@@ -2,8 +2,11 @@ import { BookOpen, Users, ClipboardCheck, Calendar, Bell, TrendingUp } from "luc
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
 
 const TeacherDashboard = () => {
+  const { user } = useAuth();
+  
   const stats = [
     { title: "Total Classes", value: "5", icon: BookOpen, color: "text-primary" },
     { title: "Total Students", value: "127", icon: Users, color: "text-accent" },
@@ -53,10 +56,11 @@ const TeacherDashboard = () => {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground mb-2">
-          Welcome back, Ms. Jane 👋
+          Welcome back, {user?.name || 'Teacher'} 👋
         </h1>
         <p className="text-muted-foreground">
           Here's what's happening with your classes today
+          {user?.isHeadClassTeacher && <span className="ml-1">(Head Class Teacher)</span>}
         </p>
       </div>
 

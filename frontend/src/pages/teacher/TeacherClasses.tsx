@@ -601,48 +601,68 @@ const TeacherClasses = () => {
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        <Target className="h-5 w-5" />
-                        Your Responsibilities
+                        <Users className="h-5 w-5" />
+                        Teaching Staff
                       </CardTitle>
                       <CardDescription>
-                        Detailed description of your role and responsibilities
-                        for this class
+                        All teachers responsible for Class {selectedClass?.class}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="prose prose-sm max-w-none">
-                        {(
-                          user as {
-                            employmentInfo?: { responsibilities?: string };
-                          }
-                        )?.employmentInfo?.responsibilities ? (
-                          <div className="bg-muted/50 p-4 rounded-lg">
-                            <p className="text-sm leading-relaxed">
-                              {
-                                (
-                                  user as {
-                                    employmentInfo?: {
-                                      responsibilities?: string;
-                                    };
-                                  }
-                                )?.employmentInfo?.responsibilities
-                              }
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="text-center py-8">
-                            <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                            <p className="text-muted-foreground">
-                              No specific responsibilities have been assigned
-                              yet.
-                            </p>
-                            <p className="text-sm text-muted-foreground mt-2">
-                              Contact your head teacher for detailed role
-                              assignment.
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Subject</TableHead>
+                            <TableHead>Teacher Name</TableHead>
+                            <TableHead>Role</TableHead>
+                            <TableHead>Contact</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <TableRow>
+                            <TableCell className="font-medium">Mathematics</TableCell>
+                            <TableCell>{user?.name || "Ms. Jane"}</TableCell>
+                            <TableCell>
+                              <Badge>Subject Teacher</Badge>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {user?.email || "teacher@school.edu"}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="font-medium">English</TableCell>
+                            <TableCell>Mr. David Smith</TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">Subject Teacher</Badge>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              david.smith@school.edu
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="font-medium">Science</TableCell>
+                            <TableCell>Dr. Emily Johnson</TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">Subject Teacher</Badge>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              emily.johnson@school.edu
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="bg-accent/5">
+                            <TableCell className="font-medium">
+                              Class Coordinator
+                            </TableCell>
+                            <TableCell>Ms. Sarah Williams</TableCell>
+                            <TableCell>
+                              <Badge variant="default">Head Class Teacher</Badge>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              sarah.williams@school.edu
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
                     </CardContent>
                   </Card>
                 </TabsContent>

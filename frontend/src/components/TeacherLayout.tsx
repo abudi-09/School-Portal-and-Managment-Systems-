@@ -31,8 +31,8 @@ const headTeacherNav = [
 
 const TeacherLayout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const isHeadTeacher = false; // This would come from auth/role system
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const isHeadTeacher = user?.isHeadClassTeacher || false;
 
   const allNavigation = isHeadTeacher
     ? [...navigation.slice(0, 3), ...headTeacherNav, ...navigation.slice(3)]
@@ -105,15 +105,16 @@ const TeacherLayout = () => {
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center">
                 <span className="text-sm font-semibold text-accent-foreground">
-                  MJ
+                  {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'T'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">
-                  Ms. Jane
+                  {user?.name || 'Teacher'}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Mathematics Dept.
+                  {user?.subject ? `${user.subject} Dept.` : 'Teacher'}
+                  {isHeadTeacher && <span className="ml-1">(Head)</span>}
                 </p>
               </div>
             </div>

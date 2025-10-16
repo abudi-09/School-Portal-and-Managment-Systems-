@@ -171,57 +171,6 @@ const TeacherAnnouncements = () => {
       content: "",
     });
   };
-    {
-      id: 1,
-      title: "Homework Reminder - Chapter 5",
-      author: "You",
-      audience: "Class 11A",
-      date: "2024-11-15",
-      category: "homework",
-      content: "Don't forget to complete exercises 5.1 to 5.5 by Friday.",
-      hasAttachment: false,
-    },
-    {
-      id: 2,
-      title: "Mid-Term Exam Schedule",
-      author: "Head of School",
-      audience: "All Teachers",
-      date: "2024-11-14",
-      category: "exam",
-      content: "Mid-term examinations will begin on November 20th. Please ensure all grades are updated.",
-      hasAttachment: true,
-    },
-    {
-      id: 3,
-      title: "Parent-Teacher Conference",
-      author: "Admin",
-      audience: "All Teachers",
-      date: "2024-11-13",
-      category: "event",
-      content: "Parent-teacher conferences scheduled for November 25-26. Please review your schedule.",
-      hasAttachment: false,
-    },
-    {
-      id: 4,
-      title: "Mathematics Department Meeting",
-      author: "Department Head",
-      audience: "Mathematics Dept",
-      date: "2024-11-12",
-      category: "meeting",
-      content: "Department meeting on Friday at 2 PM to discuss curriculum updates.",
-      hasAttachment: false,
-    },
-    {
-      id: 5,
-      title: "Assignment Extension Notice",
-      author: "You",
-      audience: "Class 12A",
-      date: "2024-11-11",
-      category: "assignment",
-      content: "Due to technical issues, the calculus assignment deadline has been extended to Monday.",
-      hasAttachment: false,
-    },
-  ];
 
   const getCategoryColor = (category: string) => {
     switch (category) {
@@ -259,37 +208,51 @@ const TeacherAnnouncements = () => {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={handleNewAnnouncement}>
               <Plus className="h-4 w-4" />
               New Announcement
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Create Announcement</DialogTitle>
+              <DialogTitle>
+                {isEditing ? "Edit Announcement" : "Create Announcement"}
+              </DialogTitle>
               <DialogDescription>
-                Post a new announcement for your class or students
+                {isEditing
+                  ? "Update your announcement"
+                  : "Post a new announcement for your class or students"}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="audience">Audience</Label>
-                <Select>
+                <Select
+                  value={formData.audience}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, audience: value })
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select class" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="10a">Class 10A</SelectItem>
-                    <SelectItem value="11a">Class 11A</SelectItem>
-                    <SelectItem value="11b">Class 11B</SelectItem>
-                    <SelectItem value="12a">Class 12A</SelectItem>
-                    <SelectItem value="all">All My Classes</SelectItem>
+                    <SelectItem value="Class 10A">Class 10A</SelectItem>
+                    <SelectItem value="Class 11A">Class 11A</SelectItem>
+                    <SelectItem value="Class 11B">Class 11B</SelectItem>
+                    <SelectItem value="Class 12A">Class 12A</SelectItem>
+                    <SelectItem value="All My Classes">All My Classes</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
-                <Select>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, category: value })
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
@@ -304,7 +267,14 @@ const TeacherAnnouncements = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
-                <Input id="title" placeholder="Enter announcement title" />
+                <Input
+                  id="title"
+                  placeholder="Enter announcement title"
+                  value={formData.title}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="content">Message</Label>
@@ -312,6 +282,10 @@ const TeacherAnnouncements = () => {
                   id="content"
                   placeholder="Write your announcement message"
                   rows={6}
+                  value={formData.content}
+                  onChange={(e) =>
+                    setFormData({ ...formData, content: e.target.value })
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -326,7 +300,9 @@ const TeacherAnnouncements = () => {
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={() => setOpen(false)}>Post Announcement</Button>
+              <Button onClick={handleSubmit}>
+                {isEditing ? "Update" : "Post"} Announcement
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -380,7 +356,13 @@ const TeacherAnnouncements = () => {
                 <div className="flex items-center justify-between pt-2 border-t">
                   <Badge variant="secondary">{announcement.audience}</Badge>
                   {announcement.author === "You" && (
-                    <Button variant="ghost" size="sm">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => handleEditAnnouncement(announcement)}
+                    >
+                      <Edit2 className="h-4 w-4" />
                       Edit
                     </Button>
                   )}

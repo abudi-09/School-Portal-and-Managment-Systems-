@@ -20,6 +20,8 @@ import TeacherClasses from "./pages/teacher/TeacherClasses";
 import TeacherAnnouncements from "./pages/teacher/TeacherAnnouncements";
 import TeacherProfile from "./pages/teacher/TeacherProfile";
 import TeacherAttendance from "./pages/teacher/TeacherAttendance";
+import HeadClassGradeManagement from "./pages/teacher/HeadClassGradeManagement";
+import HeadClassAttendance from "./pages/teacher/HeadClassAttendance";
 import HeadLayout from "./components/HeadLayout";
 import HeadDashboard from "./pages/head/HeadDashboard";
 import TeacherManagement from "./pages/head/TeacherManagement";
@@ -74,6 +76,8 @@ const App = () => (
               <Route path="classes" element={<TeacherClasses />} />
               <Route path="announcements" element={<TeacherAnnouncements />} />
               <Route path="attendance" element={<TeacherAttendance />} />
+              <Route path="head-grade-management" element={<HeadClassGradeManagement />} />
+              <Route path="head-attendance" element={<HeadClassAttendance />} />
               <Route path="profile" element={<TeacherProfile />} />
             </Route>
 

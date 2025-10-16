@@ -26,7 +26,8 @@ const navigation = [
 
 // Additional nav items for Head Class Teacher
 const headTeacherNav = [
-  { name: "Attendance", href: "/teacher/attendance", icon: Users },
+  { name: "Head Grade Mgmt", href: "/teacher/head-grade-management", icon: GraduationCap },
+  { name: "Head Attendance", href: "/teacher/head-attendance", icon: Users },
 ];
 
 const TeacherLayout = () => {

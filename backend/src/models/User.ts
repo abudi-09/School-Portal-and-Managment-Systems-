@@ -1,13 +1,18 @@
 import mongoose, { Document, Schema } from "mongoose";
 import bcrypt from "bcryptjs";
 
+export type UserRole = "admin" | "head" | "teacher" | "student";
+export type UserStatus = "pending" | "approved" | "deactivated";
+
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   email: string;
   password: string;
+  studentId?: string;
   firstName: string;
   lastName: string;
-  role: "admin" | "head" | "teacher" | "student";
+  role: UserRole;
+  status: UserStatus;
   isActive: boolean;
   profile: {
     phone?: string;
@@ -54,6 +59,12 @@ const userSchema = new Schema<IUser>(
       required: [true, "Password is required"],
       minlength: [6, "Password must be at least 6 characters long"],
     },
+    studentId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
     firstName: {
       type: String,
       required: [true, "First name is required"],
@@ -70,6 +81,15 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: ["admin", "head", "teacher", "student"],
       required: [true, "Role is required"],
+    },
+    status: {
+      type: String,
+      enum: ["pending", "approved", "deactivated"],
+      required: true,
+      default: function (this: IUser) {
+        return this.role === "admin" ? "approved" : "pending";
+      },
+      index: true,
     },
     isActive: {
       type: Boolean,
@@ -118,6 +138,8 @@ userSchema.virtual("fullName").get(function (this: IUser) {
 
 // Index for better query performance
 userSchema.index({ role: 1 });
+userSchema.index({ status: 1 });
+userSchema.index({ studentId: 1 });
 userSchema.index({ "academicInfo.studentId": 1 });
 userSchema.index({ "employmentInfo.employeeId": 1 });
 
@@ -133,6 +155,55 @@ userSchema.pre("save", async function (next) {
     next();
   } catch (error: any) {
     next(error);
+  }
+});
+
+// Pre-save middleware to generate unique student IDs
+userSchema.pre("save", async function (next) {
+  try {
+    if (this.role !== "student") {
+      // Ensure non-student roles do not accidentally retain a studentId
+      if (this.studentId) {
+        delete this.studentId;
+      }
+      if (this.academicInfo && this.academicInfo.studentId) {
+        delete this.academicInfo.studentId;
+      }
+      return next();
+    }
+
+    if (this.studentId) {
+      // Student already has an ID, keep it
+      this.academicInfo = this.academicInfo ?? {};
+      this.academicInfo.studentId = this.studentId;
+      return next();
+    }
+
+    const year = new Date().getFullYear();
+    const maxAttempts = 10;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const random = Math.floor(Math.random() * 1_000_000)
+        .toString()
+        .padStart(6, "0");
+      const candidate = `STU-${year}-${random}`;
+      const existing = await this.model("User").exists({
+        studentId: candidate,
+      });
+      if (!existing) {
+        this.studentId = candidate;
+        this.academicInfo = this.academicInfo ?? {};
+        this.academicInfo.studentId = candidate;
+        return next();
+      }
+    }
+
+    return next(
+      new Error(
+        "Unable to generate a unique student ID at this time. Please try again."
+      )
+    );
+  } catch (error) {
+    return next(error as Error);
   }
 });
 

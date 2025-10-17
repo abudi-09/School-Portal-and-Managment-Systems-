@@ -6,6 +6,7 @@ import {
   Settings,
   User,
   ClipboardCheck,
+  GraduationCap,
   LogOut,
   Menu,
   X,
@@ -21,6 +22,11 @@ const AdminLayout = () => {
   const navigation = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { name: "Student Management", href: "/admin/students", icon: Users },
+    {
+      name: "Head Management",
+      href: "/admin/head-management",
+      icon: GraduationCap,
+    },
     { name: "User Management", href: "/admin/users", icon: UserCog },
     {
       name: "Registration Control",

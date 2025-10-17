@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import User, { IUser } from "../models/User";
+import { env } from "../config/env";
 
 // Extend Express Request interface to include user
 declare global {
@@ -33,8 +34,7 @@ export const authMiddleware = async (
     }
 
     // Verify token
-    const secret = process.env.JWT_SECRET || "your-secret-key";
-    const decoded = jwt.verify(token, secret) as {
+    const decoded = jwt.verify(token, env.jwtSecret) as {
       userId: string;
       iat: number;
       exp: number;
@@ -84,7 +84,7 @@ export const authMiddleware = async (
     res.status(500).json({
       success: false,
       message: "Server error in authentication",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      error: env.nodeEnv === "development" ? error.message : undefined,
     });
   }
 };
@@ -126,8 +126,7 @@ export const optionalAuth = async (
         : null;
 
     if (token) {
-      const secret = process.env.JWT_SECRET || "your-secret-key";
-      const decoded = jwt.verify(token, secret) as { userId: string };
+      const decoded = jwt.verify(token, env.jwtSecret) as { userId: string };
 
       const user = await User.findById(decoded.userId);
       if (user && user.isActive) {

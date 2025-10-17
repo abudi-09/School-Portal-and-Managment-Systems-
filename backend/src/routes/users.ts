@@ -1,4 +1,5 @@
 import express from "express";
+import { body, validationResult } from "express-validator";
 import User from "../models/User";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
 import path from "path";
@@ -63,6 +64,20 @@ const upload =
     : multer();
 
 const router = express.Router();
+
+const createStudentValidators = [
+  body("firstName").trim().notEmpty().withMessage("First name is required"),
+  body("lastName").trim().notEmpty().withMessage("Last name is required"),
+  body("email")
+    .isEmail()
+    .withMessage("Valid email is required")
+    .normalizeEmail(),
+  body("password")
+    .isLength({ min: 6 })
+    .withMessage("Password must be at least 6 characters"),
+  body("profile").optional({ nullable: true }).isObject(),
+  body("academicInfo").optional({ nullable: true }).isObject(),
+];
 
 // @route   GET /api/users
 // @desc    Get all users (admin only)
@@ -400,6 +415,78 @@ router.get(
       res.status(500).json({
         success: false,
         message: "Server error retrieving users",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+// @route   POST /api/users/students
+// @desc    Create a new student (admin only)
+// @access  Private/Admin
+router.post(
+  "/students",
+  authMiddleware,
+  authorizeRoles("admin"),
+  createStudentValidators,
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input",
+        errors: errors.array(),
+      });
+    }
+
+    try {
+      const { firstName, lastName, email, password, profile, academicInfo } =
+        req.body;
+
+      const existingUser = await User.findOne({ email: email.toLowerCase() });
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          message: "A user with this email already exists",
+        });
+      }
+
+      const student = new User({
+        firstName,
+        lastName,
+        email,
+        password,
+        role: "student",
+        profile,
+        academicInfo,
+      });
+
+      await student.save();
+
+      const sanitizedStudent = student.toJSON();
+
+      res.status(201).json({
+        success: true,
+        message: "Student created successfully",
+        data: {
+          student: {
+            _id: sanitizedStudent._id,
+            firstName: sanitizedStudent.firstName,
+            lastName: sanitizedStudent.lastName,
+            email: sanitizedStudent.email,
+            role: sanitizedStudent.role,
+            studentId: sanitizedStudent.studentId,
+            academicInfo: sanitizedStudent.academicInfo,
+            profile: sanitizedStudent.profile,
+          },
+        },
+      });
+    } catch (error: any) {
+      console.error("Create student error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error creating student",
         error:
           process.env.NODE_ENV === "development" ? error.message : undefined,
       });

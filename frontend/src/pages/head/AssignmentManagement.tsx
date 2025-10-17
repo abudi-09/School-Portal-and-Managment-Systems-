@@ -221,24 +221,24 @@ const AssignmentManagement = () => {
   return (
     <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">
+      <div className="border-b border-gray-200 pb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Assignment Management
         </h1>
-        <p className="text-muted-foreground">
+        <p className="text-gray-600">
           Assign class teachers and subject teachers to classes
         </p>
       </div>
 
       {/* Alert for unassigned */}
       {unassignedCount > 0 && (
-        <Card className="border-warning bg-warning/5">
+        <Card className="border-amber-200 bg-amber-50">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-warning" />
+              <AlertCircle className="h-5 w-5 text-amber-600" />
               <div>
-                <p className="font-medium text-foreground">Action Required</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="font-medium text-gray-900">Action Required</p>
+                <p className="text-sm text-gray-600">
                   {unassignedCount} unassigned positions this term
                 </p>
               </div>
@@ -249,58 +249,94 @@ const AssignmentManagement = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
+        <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">
-                  Total Classes
-                </p>
-                <p className="text-3xl font-bold text-foreground">
+                <p className="text-sm text-gray-600 mb-1">Total Classes</p>
+                <p className="text-3xl font-bold text-gray-900">
                   {classes.length}
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-secondary text-primary">
+              <div className="p-3 rounded-lg bg-gray-100 text-gray-700">
                 <BookOpen className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">
-                  Total Teachers
-                </p>
-                <p className="text-3xl font-bold text-foreground">
+                <p className="text-sm text-gray-600 mb-1">Total Teachers</p>
+                <p className="text-3xl font-bold text-gray-900">
                   {teachers.length}
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-secondary text-accent">
+              <div className="p-3 rounded-lg bg-gray-100 text-gray-700">
                 <Users className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Unassigned</p>
-                <p className="text-3xl font-bold text-foreground">
+                <p className="text-sm text-gray-600 mb-1">Unassigned</p>
+                <p className="text-3xl font-bold text-gray-900">
                   {unassignedCount}
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-secondary text-warning">
+              <div className="p-3 rounded-lg bg-gray-100 text-gray-700">
                 <AlertCircle className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick Actions */}
+      <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
+        <CardHeader className="pb-6">
+          <CardTitle className="text-xl font-semibold text-gray-900">
+            Quick Actions
+          </CardTitle>
+          <CardDescription className="text-gray-600">
+            Frequently used assignment management tasks
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group">
+              <Users className="h-8 w-8 text-gray-400 group-hover:text-blue-500 mb-3" />
+              <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">
+                Assign Class Teacher
+              </span>
+            </button>
+            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all group">
+              <ClipboardList className="h-8 w-8 text-gray-400 group-hover:text-green-500 mb-3" />
+              <span className="text-sm font-medium text-gray-700 group-hover:text-green-700">
+                Assign Subject Teacher
+              </span>
+            </button>
+            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-all group">
+              <Eye className="h-8 w-8 text-gray-400 group-hover:text-purple-500 mb-3" />
+              <span className="text-sm font-medium text-gray-700 group-hover:text-purple-700">
+                View Teacher Details
+              </span>
+            </button>
+            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-all group">
+              <BookOpen className="h-8 w-8 text-gray-400 group-hover:text-orange-500 mb-3" />
+              <span className="text-sm font-medium text-gray-700 group-hover:text-orange-700">
+                Assignment Report
+              </span>
+            </button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Assignment Panels */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

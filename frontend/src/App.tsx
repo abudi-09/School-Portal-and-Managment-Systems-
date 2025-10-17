@@ -34,6 +34,7 @@ import AdminLayout from "./components/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminStudentManagement from "./pages/admin/AdminStudentManagement";
 import AdminUserManagement from "./pages/admin/AdminUserManagement";
+import AdminHeadManagement from "./pages/admin/AdminHeadManagement";
 import AdminRegistrationControl from "./pages/admin/AdminRegistrationControl";
 import AdminProfile from "./pages/admin/AdminProfile";
 import Login from "./pages/Login";
@@ -103,6 +104,7 @@ const App = () => (
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
               <Route path="students" element={<AdminStudentManagement />} />
+              <Route path="head-management" element={<AdminHeadManagement />} />
               <Route path="users" element={<AdminUserManagement />} />
               <Route
                 path="registration"

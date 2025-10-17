@@ -3,14 +3,15 @@ import { body, validationResult } from "express-validator";
 import jwt from "jsonwebtoken";
 import User, { IUser } from "../models/User";
 import { authMiddleware } from "../middleware/auth";
+import { env } from "../config/env";
 
 const router = express.Router();
 
 // Generate JWT token
 const generateToken = (userId: string): string => {
-  const secret: jwt.Secret = process.env.JWT_SECRET || "your-secret-key";
+  const secret: jwt.Secret = env.jwtSecret;
   return jwt.sign({ userId }, secret, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    expiresIn: env.jwtExpiresIn,
   } as jwt.SignOptions);
 };
 
@@ -36,8 +37,8 @@ router.post(
       .isLength({ min: 1 })
       .withMessage("Last name is required"),
     body("role")
-      .isIn(["admin", "head", "teacher", "student"])
-      .withMessage("Invalid role specified"),
+      .isIn(["head", "teacher"])
+      .withMessage("Only head or teacher registration is allowed"),
   ],
   async (req: express.Request, res: express.Response) => {
     try {
@@ -72,25 +73,24 @@ router.post(
       }
 
       // Create new user
-      const user = new User({
+      const user = await User.create({
         email,
         password,
         firstName,
         lastName,
         role,
+        status: "pending",
+        isActive: true,
         profile: profile || {},
         academicInfo: academicInfo || {},
         employmentInfo: employmentInfo || {},
       });
 
-      await user.save();
-
-      // Generate token
-      const token = generateToken(user._id.toString());
+      const approvalBy = role === "head" ? "admin" : "head";
 
       res.status(201).json({
         success: true,
-        message: "User registered successfully",
+        message: "Registration successful. Your account is pending approval.",
         data: {
           user: {
             id: user._id,
@@ -98,9 +98,9 @@ router.post(
             firstName: user.firstName,
             lastName: user.lastName,
             role: user.role,
-            profile: user.profile,
+            status: user.status,
           },
-          token,
+          pendingApprovalBy: approvalBy,
         },
       });
     } catch (error: any) {
@@ -155,6 +155,16 @@ router.post(
         return res.status(401).json({
           success: false,
           message: "Account is deactivated",
+        });
+      }
+
+      if (user.status !== "approved") {
+        return res.status(403).json({
+          success: false,
+          message:
+            user.status === "pending"
+              ? "Account pending approval. Please wait for confirmation."
+              : "Account is not approved for access.",
         });
       }
 

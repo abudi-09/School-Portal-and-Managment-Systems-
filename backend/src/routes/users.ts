@@ -2,6 +2,7 @@ import express from "express";
 import { body, validationResult } from "express-validator";
 import User from "../models/User";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
+import { StudentService } from "../services/student.service";
 import path from "path";
 
 let multer: any;
@@ -444,49 +445,81 @@ router.post(
       const { firstName, lastName, email, password, profile, academicInfo } =
         req.body;
 
-      const existingUser = await User.findOne({ email: email.toLowerCase() });
-      if (existingUser) {
-        return res.status(409).json({
-          success: false,
-          message: "A user with this email already exists",
-        });
-      }
-
-      const student = new User({
+      const student = await StudentService.createStudent({
         firstName,
         lastName,
         email,
         password,
-        role: "student",
         profile,
         academicInfo,
       });
-
-      await student.save();
-
-      const sanitizedStudent = student.toJSON();
 
       res.status(201).json({
         success: true,
         message: "Student created successfully",
         data: {
           student: {
-            _id: sanitizedStudent._id,
-            firstName: sanitizedStudent.firstName,
-            lastName: sanitizedStudent.lastName,
-            email: sanitizedStudent.email,
-            role: sanitizedStudent.role,
-            studentId: sanitizedStudent.studentId,
-            academicInfo: sanitizedStudent.academicInfo,
-            profile: sanitizedStudent.profile,
+            _id: student._id,
+            firstName: student.firstName,
+            lastName: student.lastName,
+            email: student.email,
+            role: student.role,
+            studentId: student.studentId,
+            academicInfo: student.academicInfo,
+            profile: student.profile,
           },
         },
       });
     } catch (error: any) {
       console.error("Create student error:", error);
+
+      if (error.message === "A user with this email already exists") {
+        return res.status(409).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
       res.status(500).json({
         success: false,
         message: "Server error creating student",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+// @route   GET /api/users/students
+// @desc    Get students with pagination and filters
+// @access  Private/Admin
+router.get(
+  "/students",
+  authMiddleware,
+  authorizeRoles("admin"),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = (req.query.search as string) || undefined;
+      const status = (req.query.status as "active" | "inactive") || undefined;
+
+      const result = await StudentService.getStudents({
+        page,
+        limit,
+        search,
+        status,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      console.error("Get students error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error retrieving students",
         error:
           process.env.NODE_ENV === "development" ? error.message : undefined,
       });

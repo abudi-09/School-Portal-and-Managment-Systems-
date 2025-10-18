@@ -137,9 +137,9 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50/50">
-      <div className="max-w-7xl mx-auto p-6 lg:p-8 space-y-8">
+      <div className="max-w-7xl mx-auto p-2 lg:p-4 space-y-4">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white rounded-2xl p-3 shadow-sm border border-gray-100">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               Admin Dashboard
@@ -275,13 +275,13 @@ const AdminDashboard = () => {
           </Alert>
         )}
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {stats.map((stat) => (
             <Card
               key={stat.title}
               className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
             >
-              <CardContent className="p-6">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-600 mb-2">
@@ -308,10 +308,10 @@ const AdminDashboard = () => {
           ))}
         </div>
         {/* Two Column Layout */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {/* Pending Actions */}
           <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
-            <CardHeader className="pb-4">
+            <CardHeader className="pb-3">
               <CardTitle className="text-xl font-semibold text-gray-900">
                 Pending Actions
               </CardTitle>
@@ -319,11 +319,20 @@ const AdminDashboard = () => {
                 Items requiring your attention
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3">
               {pendingActions.map((item, index) => (
                 <div
                   key={item.type}
-                  className={`flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:shadow-sm transition-all cursor-pointer ${
+                  onClick={() => {
+                    if (item.type === "Registration Approval") {
+                      navigate("/admin/head-management");
+                    } else if (item.type === "Account Activation") {
+                      navigate("/admin/users");
+                    } else if (item.type === "ID Generation") {
+                      navigate("/admin/students");
+                    }
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:shadow-sm transition-all cursor-pointer ${
                     index % 2 === 0 ? "bg-gray-50/50" : "bg-white"
                   }`}
                 >
@@ -354,7 +363,7 @@ const AdminDashboard = () => {
 
           {/* Recent Activity */}
           <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
-            <CardHeader className="pb-4">
+            <CardHeader className="pb-3">
               <CardTitle className="text-xl font-semibold text-gray-900">
                 Recent Activity
               </CardTitle>
@@ -362,11 +371,11 @@ const AdminDashboard = () => {
                 Latest system actions
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-3">
               {recentActivity.map((activity, index) => (
                 <div
                   key={index}
-                  className={`flex items-start gap-4 p-4 rounded-xl ${
+                  className={`flex items-start gap-4 p-3 rounded-xl ${
                     index % 2 === 0 ? "bg-gray-50/50" : "bg-white"
                   }`}
                 >
@@ -387,7 +396,7 @@ const AdminDashboard = () => {
         </div>{" "}
         {/* System Status */}
         <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
-          <CardHeader className="pb-6">
+          <CardHeader className="pb-4">
             <CardTitle className="text-xl font-semibold text-gray-900">
               System Status
             </CardTitle>
@@ -414,7 +423,7 @@ const AdminDashboard = () => {
         </Card>
         {/* Quick Actions */}
         <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
-          <CardHeader className="pb-6">
+          <CardHeader className="pb-4">
             <CardTitle className="text-xl font-semibold text-gray-900">
               Quick Actions
             </CardTitle>
@@ -424,30 +433,42 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group">
+              <div
+                onClick={() => navigate("/admin/students")}
+                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group cursor-pointer"
+              >
                 <Users className="h-8 w-8 text-gray-400 group-hover:text-blue-500 mb-3" />
                 <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">
                   Add Student
                 </span>
-              </button>
-              <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all group">
+              </div>
+              <div
+                onClick={() => navigate("/admin/head-management")}
+                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all group cursor-pointer"
+              >
                 <UserCheck className="h-8 w-8 text-gray-400 group-hover:text-green-500 mb-3" />
                 <span className="text-sm font-medium text-gray-700 group-hover:text-green-700">
                   Approve User
                 </span>
-              </button>
-              <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-all group">
+              </div>
+              <div
+                onClick={() => navigate("/admin/users")}
+                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-all group cursor-pointer"
+              >
                 <UserX className="h-8 w-8 text-gray-400 group-hover:text-purple-500 mb-3" />
                 <span className="text-sm font-medium text-gray-700 group-hover:text-purple-700">
                   Manage Access
                 </span>
-              </button>
-              <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-all group">
+              </div>
+              <div
+                onClick={() => navigate("/admin/registration")}
+                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-all group cursor-pointer"
+              >
                 <AlertCircle className="h-8 w-8 text-gray-400 group-hover:text-orange-500 mb-3" />
                 <span className="text-sm font-medium text-gray-700 group-hover:text-orange-700">
                   System Alerts
                 </span>
-              </button>
+              </div>
             </div>
           </CardContent>
         </Card>

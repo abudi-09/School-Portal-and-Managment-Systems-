@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search,
   Eye,
@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Table,
   TableBody,
@@ -20,14 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +54,23 @@ type Head = {
   notes?: string;
 };
 
+type ApiHeadUser = {
+  _id: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  status: "pending" | "approved" | "deactivated";
+  isActive: boolean;
+  createdAt: string;
+  employmentInfo?: {
+    department?: string;
+    responsibilities?: string;
+  };
+  profile?: {
+    phone?: string;
+  };
+};
+
 type ActionType = "approve" | "activate" | "deactivate";
 
 type PendingAction = {
@@ -67,48 +78,7 @@ type PendingAction = {
   type: ActionType;
 };
 
-const INITIAL_HEADS: Head[] = [
-  {
-    id: "1",
-    fullName: "Amelia Martinez",
-    email: "amelia.martinez@school.edu",
-    status: "pending",
-    createdAt: "2025-09-08T09:15:00.000Z",
-    department: "STEM Programs",
-    phone: "+1 (555) 010-2010",
-    notes: "Experienced district leader transitioning into the role.",
-  },
-  {
-    id: "2",
-    fullName: "Jordan Blake",
-    email: "jordan.blake@school.edu",
-    status: "active",
-    createdAt: "2025-07-22T13:30:00.000Z",
-    department: "Academic Affairs",
-    phone: "+1 (555) 010-2004",
-    notes: "Focuses on curriculum modernization and teacher mentorship.",
-  },
-  {
-    id: "3",
-    fullName: "Priya Desai",
-    email: "priya.desai@school.edu",
-    status: "inactive",
-    createdAt: "2025-04-11T16:45:00.000Z",
-    department: "Community Partnerships",
-    phone: "+1 (555) 010-1988",
-    notes: "On extended leave through the end of the semester.",
-  },
-  {
-    id: "4",
-    fullName: "Marcus Lee",
-    email: "marcus.lee@school.edu",
-    status: "active",
-    createdAt: "2025-06-01T10:10:00.000Z",
-    department: "Operations",
-    phone: "+1 (555) 010-1975",
-    notes: "Leads campus-wide safety initiatives and facility upgrades.",
-  },
-];
+const INITIAL_HEADS: Head[] = [];
 
 const STATUS_LABELS: Record<HeadStatus, string> = {
   pending: "Pending",
@@ -162,6 +132,21 @@ const ACTION_COPY: Record<
   },
 };
 
+const mapUserStatus = (
+  status: "pending" | "approved" | "deactivated",
+  isActive: boolean
+): HeadStatus => {
+  if (status === "pending") {
+    return "pending";
+  }
+
+  if (status === "approved" && isActive) {
+    return "active";
+  }
+
+  return "inactive";
+};
+
 const formatDate = (date: string) =>
   new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -171,6 +156,8 @@ const formatDate = (date: string) =>
 
 const AdminHeadManagement = () => {
   const [heads, setHeads] = useState<Head[]>(INITIAL_HEADS);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<HeadStatus>("pending");
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(
@@ -179,7 +166,70 @@ const AdminHeadManagement = () => {
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsHead, setDetailsHead] = useState<Head | null>(null);
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
   const { toast } = useToast();
+  const apiBaseUrl =
+    import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  const fetchHeads = useCallback(async () => {
+    if (!token) {
+      setError("Authentication required. Please log in again.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/api/admin/users?role=head&limit=100`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to load head accounts");
+      }
+
+      const payload = await response.json();
+      const users = (payload?.data?.users ?? []) as ApiHeadUser[];
+
+      const mapped: Head[] = users.map((user) => {
+        const status = mapUserStatus(user.status, user.isActive);
+        return {
+          id: user._id,
+          fullName: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
+          email: user.email,
+          status,
+          createdAt: user.createdAt,
+          department: user.employmentInfo?.department,
+          phone: user.profile?.phone,
+          notes: user.employmentInfo?.responsibilities,
+        };
+      });
+
+      setHeads(mapped);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Unexpected error loading heads";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [apiBaseUrl, token]);
+
+  useEffect(() => {
+    fetchHeads().catch(() => {
+      setError("Unable to fetch head accounts.");
+      setIsLoading(false);
+    });
+  }, [fetchHeads]);
 
   const statusCounts = useMemo(
     () =>
@@ -213,27 +263,66 @@ const AdminHeadManagement = () => {
     setConfirmationOpen(true);
   };
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = async () => {
     if (!pendingAction) {
+      return;
+    }
+
+    if (!token) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in again to manage accounts.",
+        variant: "destructive",
+      });
       return;
     }
 
     const { head, type } = pendingAction;
     const config = ACTION_COPY[type];
 
-    setHeads((prev) =>
-      prev.map((item) =>
-        item.id === head.id ? { ...item, status: config.nextStatus } : item
-      )
-    );
+    setIsProcessingAction(true);
 
-    toast({
-      title: config.successTitle,
-      description: config.successDescription(head.fullName),
-    });
+    try {
+      const statusPayload = type === "deactivate" ? "deactivated" : "approved";
 
-    setConfirmationOpen(false);
-    setPendingAction(null);
+      const response = await fetch(
+        `${apiBaseUrl}/api/admin/users/${head.id}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: statusPayload }),
+        }
+      );
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => undefined);
+        const message = payload?.message ?? "Failed to update account status";
+        throw new Error(message);
+      }
+
+      await fetchHeads();
+
+      toast({
+        title: config.successTitle,
+        description: config.successDescription(head.fullName),
+      });
+
+      setConfirmationOpen(false);
+      setPendingAction(null);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Unable to update account";
+      toast({
+        title: "Action failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingAction(false);
+    }
   };
 
   const handleCancelAction = () => {
@@ -356,6 +445,20 @@ const AdminHeadManagement = () => {
         </Badge>
       </div>
 
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {isLoading && heads.length === 0 && (
+        <Card className="border-dashed border-gray-300 bg-muted/40">
+          <CardContent className="py-6 text-center text-sm text-muted-foreground">
+            Loading head accounts...
+          </CardContent>
+        </Card>
+      )}
+
       <div className="bg-white border border-gray-200 rounded-2xl p-4 md:p-6 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="relative w-full md:max-w-md">
@@ -465,11 +568,26 @@ const AdminHeadManagement = () => {
                 </TableCell>
               </TableRow>
             )}
+            {isLoading && (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="text-center text-sm text-muted-foreground"
+                >
+                  Loading head accounts...
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>
 
       <div className="grid gap-4 lg:hidden">
+        {isLoading && (
+          <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-6 text-center text-muted-foreground">
+            Loading head accounts...
+          </div>
+        )}
         {filteredHeads.map((head) => (
           <div
             key={head.id}
@@ -529,16 +647,19 @@ const AdminHeadManagement = () => {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
+              onClick={handleConfirmAction}
+              disabled={isProcessingAction}
               className={
                 pendingAction?.type === "deactivate"
                   ? "bg-rose-600 hover:bg-rose-700"
                   : "bg-emerald-600 hover:bg-emerald-700"
               }
-              onClick={handleConfirmAction}
             >
-              {pendingAction
-                ? ACTION_COPY[pendingAction.type].confirmLabel
-                : "Confirm"}
+              {isProcessingAction
+                ? "Processing..."
+                : pendingAction?.type === "deactivate"
+                ? ACTION_COPY.deactivate.confirmLabel
+                : ACTION_COPY.approve.confirmLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

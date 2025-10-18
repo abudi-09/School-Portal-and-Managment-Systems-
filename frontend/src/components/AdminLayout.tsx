@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navbar } from "./Navbar";
+import { cn } from "@/lib/utils";
 
 const AdminLayout = () => {
   const location = useLocation();
@@ -45,14 +46,14 @@ const AdminLayout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex w-full">
+    <div className="min-h-screen bg-background">
       {/* Navbar */}
       <Navbar title="Admin Portal" />
 
       {/* Mobile Menu Button */}
       <button
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-card border border-border"
+        className="lg:hidden fixed top-14 left-4 z-50 p-2 rounded-lg bg-card border border-border"
       >
         {mobileMenuOpen ? (
           <X className="h-5 w-5" />
@@ -63,26 +64,14 @@ const AdminLayout = () => {
 
       {/* Sidebar */}
       <aside
-        className={`${
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 w-64 bg-card border-r border-border transform transition-transform duration-300 ease-in-out lg:translate-x-0 pt-14",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-40 w-64 bg-card border-r border-border transition-transform duration-300 ease-in-out`}
+        )}
       >
         <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="p-6 border-b border-border">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-                <Settings className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-foreground">Admin Portal</h2>
-                <p className="text-xs text-muted-foreground">System Control</p>
-              </div>
-            </div>
-          </div>
-
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
             {navigation.map((item) => {
               const Icon = item.icon;
               return (
@@ -117,8 +106,10 @@ const AdminLayout = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <Outlet />
+      <main className="lg:ml-64 pt-14 min-h-screen">
+        <div className="p-3">
+          <Outlet />
+        </div>
       </main>
 
       {/* Mobile Overlay */}

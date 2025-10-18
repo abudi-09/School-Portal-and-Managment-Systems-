@@ -60,7 +60,7 @@ const TeacherLayout = () => {
       <Navbar title="Teacher Portal" />
 
       {/* Mobile menu button */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
+      <div className="lg:hidden fixed top-14 left-4 z-50">
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           className="p-2 rounded-lg bg-card shadow-md border border-border"
@@ -76,26 +76,11 @@ const TeacherLayout = () => {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-64 bg-card border-r border-border transform transition-transform duration-300 ease-in-out lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 w-64 bg-card border-r border-border transform transition-transform duration-300 ease-in-out lg:translate-x-0 pt-14",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center gap-2 px-6 py-6 border-b border-border">
-            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-              <GraduationCap className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="font-bold text-lg text-foreground">
-                Teacher Portal
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                Academic Management
-              </p>
-            </div>
-          </div>
-
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1">
             {baseNavigation.map((item) => (
@@ -198,8 +183,8 @@ const TeacherLayout = () => {
       </aside>
 
       {/* Main content */}
-      <div className="lg:pl-64">
-        <main className="min-h-screen">
+      <div className="lg:pl-64 pt-14">
+        <main className="min-h-screen p-3">
           <Outlet />
         </main>
       </div>

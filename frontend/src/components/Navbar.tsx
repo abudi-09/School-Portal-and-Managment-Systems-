@@ -79,7 +79,7 @@ export const Navbar = ({ title = "Pathways" }: NavbarProps) => {
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 max-w-screen-2xl items-center justify-between px-4">
+      <div className="flex h-14 max-w-screen-2xl items-center justify-between px-4 mx-auto">
         {/* Logo/Title */}
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">

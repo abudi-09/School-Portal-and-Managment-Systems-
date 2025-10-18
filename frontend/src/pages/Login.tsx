@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -103,6 +103,14 @@ const Login = () => {
         toast({ title: "Login successful", description: "Welcome back!" });
         const redirectPath = getRoleBasedRedirect(result.user.role);
         navigate(redirectPath);
+      } else if (result.pending) {
+        toast({
+          title: "Account pending approval",
+          description:
+            result.message ||
+            "Your account is awaiting approval. You'll be able to log in once approved.",
+        });
+        navigate("/pending-approval", { state: { email: data.email } });
       } else {
         toast({
           title: "Login failed",

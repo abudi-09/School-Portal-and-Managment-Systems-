@@ -22,7 +22,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
+import type { User as AuthUser } from "@/contexts/auth-types";
 
 const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
@@ -31,21 +32,16 @@ const Profile = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   useEffect(() => {
-    try {
-      const profile = (authUser as unknown) && (authUser as unknown).profile;
-      if (profile && typeof profile.avatar === "string") {
-        const avatarPath = profile.avatar;
-        // import.meta.env typing can be strict in some toolchains, so safely access.
-        const base =
-          typeof (import.meta as unknown)?.env?.VITE_API_BASE_URL === "string"
-            ? (import.meta as unknown).env.VITE_API_BASE_URL
-            : "http://localhost:5000";
-        setAvatarPreview(
-          avatarPath.startsWith("http") ? avatarPath : `${base}${avatarPath}`
-        );
-      }
-    } catch (e) {
-      // ignore any runtime/typing issues
+    const avatarPath = (
+      authUser as (AuthUser & { profile?: { avatar?: string } }) | null
+    )?.profile?.avatar;
+    const base =
+      (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env
+        ?.VITE_API_BASE_URL || "http://localhost:5000";
+    if (typeof avatarPath === "string" && avatarPath.length > 0) {
+      setAvatarPreview(
+        avatarPath.startsWith("http") ? avatarPath : `${base}${avatarPath}`
+      );
     }
   }, [authUser]);
 
@@ -137,8 +133,11 @@ const Profile = () => {
                       const userId =
                         authUser?.id || studentInfo.studentId || "";
                       const base =
-                        (import.meta as any).env?.VITE_API_BASE_URL ||
-                        "http://localhost:5000";
+                        (
+                          import.meta as unknown as {
+                            env?: { VITE_API_BASE_URL?: string };
+                          }
+                        ).env?.VITE_API_BASE_URL || "http://localhost:5000";
                       const token = localStorage.getItem("token");
                       const res = await fetch(
                         `${base}/api/users/${userId}/avatar`,
@@ -175,8 +174,10 @@ const Profile = () => {
                         }
                       }
                       setSelectedFile(null);
-                    } catch (err: any) {
-                      toast.error(err.message || "Upload error");
+                    } catch (err) {
+                      const message =
+                        err instanceof Error ? err.message : "Upload error";
+                      toast.error(message);
                     }
                   }}
                 >

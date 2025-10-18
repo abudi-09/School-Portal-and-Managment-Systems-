@@ -177,6 +177,10 @@ const AdminHeadManagement = () => {
   const fetchHeads = useCallback(async () => {
     if (!token) {
       setError("Authentication required. Please log in again.");
+      // Redirect to login after a short delay
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 2000);
       return;
     }
 
@@ -430,8 +434,9 @@ const AdminHeadManagement = () => {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
+      <section className="space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Head Management
           </h1>
@@ -440,10 +445,33 @@ const AdminHeadManagement = () => {
             School access aligned with current roles.
           </p>
         </div>
-        <Badge className="bg-amber-100 text-amber-700 px-4 py-2 text-sm font-medium">
-          {statusCounts.pending} Pending
-        </Badge>
-      </div>
+          <Badge className="bg-amber-100 text-amber-700 px-4 py-2 text-sm font-medium">
+            {statusCounts.pending} Pending
+          </Badge>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {summaryCards.map(({ label, value, icon: Icon, accent }) => (
+            <Card key={label} className="border-none shadow-sm bg-white">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between pb-6">
+                <div>
+                  <span className="text-3xl font-semibold text-gray-900">
+                    {value}
+                  </span>
+                </div>
+                <div className={`rounded-full p-3 ${accent}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
 
       {error && (
         <Alert variant="destructive">
@@ -493,29 +521,6 @@ const AdminHeadManagement = () => {
           </TabsList>
         </Tabs>
       </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {summaryCards.map(({ label, value, icon: Icon, accent }) => (
-          <Card key={label} className="border-none shadow-sm bg-white">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex items-center justify-between pb-6">
-              <div>
-                <span className="text-3xl font-semibold text-gray-900">
-                  {value}
-                </span>
-              </div>
-              <div className={`rounded-full p-3 ${accent}`}>
-                <Icon className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       <div className="hidden lg:block bg-white border border-gray-200 rounded-2xl shadow-sm">
         <Table>
           <TableHeader>

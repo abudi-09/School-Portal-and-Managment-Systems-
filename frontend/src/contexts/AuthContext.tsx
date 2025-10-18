@@ -1,45 +1,15 @@
-﻿import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  ReactNode,
-} from "react";
+﻿import { createContext, useState, useEffect, ReactNode } from "react";
 
-export type UserRole = "student" | "teacher" | "head" | "admin";
+import { AuthContextType, SignupData, User, UserRole } from "./auth-types";
 
-export interface User {
-  id: string;
-  name: string;
-  email?: string;
-  studentId?: string;
-  role: UserRole;
-  subject?: string;
-  position?: string;
-  // Optional flag: a teacher who is also a head/class lead
-  isHeadClassTeacher?: boolean;
-}
-
-interface AuthContextType {
-  user: User | null;
-  login: (credentials: {
-    email?: string;
-    password: string;
-    studentId?: string;
-  }) => Promise<{ success: boolean; user?: User }>;
-  signup: (data: SignupData) => Promise<boolean>;
-  logout: () => void;
-  isAuthenticated: boolean;
-  getRoleBasedRedirect: (role: UserRole) => string;
-}
-
-interface SignupData {
-  name: string;
+interface RegisterPayload {
   email: string;
   password: string;
+  firstName: string;
+  lastName: string;
   role: "teacher" | "head";
-  subject?: string;
-  position?: string;
+  academicInfo?: { subjects?: string[] };
+  employmentInfo?: { position?: string };
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -70,17 +40,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const storedUser = localStorage.getItem("currentUser");
-    if (storedUser) {
+    const storedToken = localStorage.getItem("token");
+    if (storedUser && storedToken) {
       setUser(JSON.parse(storedUser));
     } else {
-      // Auto-login as Sarah Teacher (Head Class Teacher) for testing
-      const sarahTeacher = MOCK_USERS.find(
-        (u) => u.email === "sarah@school.edu"
-      );
-      if (sarahTeacher) {
-        setUser(sarahTeacher);
-        localStorage.setItem("currentUser", JSON.stringify(sarahTeacher));
-      }
+      // Clear any stale user data if token is missing
+      setUser(null);
+      localStorage.removeItem("currentUser");
+      localStorage.removeItem("token");
     }
   }, []);
 
@@ -88,10 +55,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email?: string;
     password: string;
     studentId?: string;
-  }): Promise<{ success: boolean; user?: User }> => {
+  }): Promise<{
+    success: boolean;
+    user?: User;
+    pending?: boolean;
+    message?: string;
+  }> => {
     try {
       const apiBaseUrl =
         import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+
+      // For student ID login, backend may not support it yet; keep mock fallback
+      if (!credentials.email && credentials.studentId) {
+        return mockLogin(credentials);
+      }
 
       const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
         method: "POST",
@@ -128,16 +105,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return { success: true, user };
       } else {
-        console.warn("API login failed, falling back to mock authentication");
-        // Fallback to mock authentication if API fails
-        return mockLogin(credentials);
+        // Handle known auth states without falling back to mock
+        const message: string | undefined = data?.message;
+        const isPending =
+          typeof message === "string" &&
+          message.toLowerCase().includes("pending");
+        return { success: false, pending: isPending, message };
       }
     } catch (error) {
       console.warn(
-        "API call failed, falling back to mock authentication:",
+        "API call failed, using mock authentication only for local dev:",
         error
       );
-      // Fallback to mock authentication if API is not available
+      // Fallback to mock authentication only when API is unreachable (e.g., local dev)
       return mockLogin(credentials);
     }
   };
@@ -181,27 +161,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (data: SignupData): Promise<boolean> => {
-    // Mock signup - in production, this would call an API
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    const apiBaseUrl =
+      import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+    try {
+      const [firstName, ...rest] = data.name.trim().split(" ");
+      const lastName = rest.join(" ") || "";
 
-    const newUser: User = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: data.name,
-      email: data.email,
-      role: data.role,
-      subject: data.subject,
-      position: data.position,
-    };
+      const payload: RegisterPayload = {
+        email: data.email,
+        password: data.password,
+        firstName,
+        lastName,
+        role: data.role,
+      };
 
-    // In production, this would require admin approval
-    // For now, we'll just add to pending users
-    const pendingUsers = JSON.parse(
-      localStorage.getItem("pendingUsers") || "[]"
-    );
-    pendingUsers.push(newUser);
-    localStorage.setItem("pendingUsers", JSON.stringify(pendingUsers));
+      // Optional structured info
+      if (data.role === "teacher" && data.subject) {
+        payload.academicInfo = { subjects: [data.subject] };
+      }
+      if (data.role === "head" && data.position) {
+        payload.employmentInfo = { position: data.position };
+      }
 
-    return true;
+      const response = await fetch(`${apiBaseUrl}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      if (response.ok && result.success) {
+        return true; // account created in pending state
+      }
+
+      console.warn("Signup failed:", result?.message || response.statusText);
+      return false;
+    } catch (err) {
+      console.warn(
+        "Signup API unavailable, storing locally as pending (dev-only)",
+        err
+      );
+      // Dev fallback - mimic pending registration
+      const newUser: User = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: data.name,
+        email: data.email,
+        role: data.role,
+        subject: data.subject,
+        position: data.position,
+      };
+      const pendingUsers = JSON.parse(
+        localStorage.getItem("pendingUsers") || "[]"
+      );
+      pendingUsers.push(newUser);
+      localStorage.setItem("pendingUsers", JSON.stringify(pendingUsers));
+      return true;
+    }
   };
 
   const logout = () => {
@@ -241,11 +256,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-}
+export { AuthContext };

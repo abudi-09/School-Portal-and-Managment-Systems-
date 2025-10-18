@@ -14,7 +14,7 @@ import {
   Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { Navbar } from "./Navbar";
 
 const TeacherLayout = () => {

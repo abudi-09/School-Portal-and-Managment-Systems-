@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Power, CheckCircle, XCircle, Clock, FileText } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -112,74 +118,93 @@ const AdminRegistrationControl = () => {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">Registration Control</h1>
-        <p className="text-muted-foreground">
-          Manage student admissions and registration system
-        </p>
-      </div>
+      <section className="space-y-4">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            Registration Control
+          </h1>
+          <p className="text-muted-foreground">
+            Manage student admissions and registration system
+          </p>
+        </div>
 
-      {/* Registration Control Card */}
-      <Card className="border-primary">
-        <CardHeader>
-          <CardTitle>System Registration Control</CardTitle>
-          <CardDescription>
-            Enable or disable new student registrations system-wide
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between p-6 bg-muted rounded-lg">
-            <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-lg ${registrationEnabled ? "bg-success text-success-foreground" : "bg-muted-foreground text-foreground"}`}>
-                <Power className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="font-semibold text-foreground text-lg">
-                  Registration Status
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Currently {registrationEnabled ? "accepting" : "not accepting"} new applications
-                </p>
-              </div>
-            </div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <div className="flex items-center gap-3">
-                  <Label htmlFor="registration-toggle" className="cursor-pointer">
-                    {registrationEnabled ? "Enabled" : "Disabled"}
-                  </Label>
-                  <Switch
-                    id="registration-toggle"
-                    checked={registrationEnabled}
-                    onCheckedChange={() => {}}
-                  />
+        {/* Registration Control Card */}
+        <Card className="border-primary">
+          <CardHeader>
+            <CardTitle>System Registration Control</CardTitle>
+            <CardDescription>
+              Enable or disable new student registrations system-wide
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between p-6 bg-muted rounded-lg">
+              <div className="flex items-center gap-4">
+                <div
+                  className={`p-3 rounded-lg ${
+                    registrationEnabled
+                      ? "bg-success text-success-foreground"
+                      : "bg-muted-foreground text-foreground"
+                  }`}
+                >
+                  <Power className="h-6 w-6" />
                 </div>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    {registrationEnabled ? "Disable Registration?" : "Enable Registration?"}
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {registrationEnabled
-                      ? "This will prevent new students from registering. Existing registrations will not be affected."
-                      : "This will allow new students to register for admission."}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => handleToggleRegistration(!registrationEnabled)}
-                  >
-                    Confirm
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </CardContent>
-      </Card>
+                <div>
+                  <p className="font-semibold text-foreground text-lg">
+                    Registration Status
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Currently{" "}
+                    {registrationEnabled ? "accepting" : "not accepting"} new
+                    applications
+                  </p>
+                </div>
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <div className="flex items-center gap-3">
+                    <Label
+                      htmlFor="registration-toggle"
+                      className="cursor-pointer"
+                    >
+                      {registrationEnabled ? "Enabled" : "Disabled"}
+                    </Label>
+                    <Switch
+                      id="registration-toggle"
+                      checked={registrationEnabled}
+                      onCheckedChange={() => {}}
+                    />
+                  </div>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {registrationEnabled
+                        ? "Disable Registration?"
+                        : "Enable Registration?"}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {registrationEnabled
+                        ? "This will prevent new students from registering. Existing registrations will not be affected."
+                        : "This will allow new students to register for admission."}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() =>
+                        handleToggleRegistration(!registrationEnabled)
+                      }
+                    >
+                      Confirm
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -188,7 +213,9 @@ const AdminRegistrationControl = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Pending</p>
-                <p className="text-3xl font-bold text-foreground">{pendingRegistrations.length}</p>
+                <p className="text-3xl font-bold text-foreground">
+                  {pendingRegistrations.length}
+                </p>
               </div>
               <Clock className="h-6 w-6 text-primary" />
             </div>
@@ -199,7 +226,9 @@ const AdminRegistrationControl = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Approved</p>
-                <p className="text-3xl font-bold text-success">{approvedRegistrations.length}</p>
+                <p className="text-3xl font-bold text-success">
+                  {approvedRegistrations.length}
+                </p>
               </div>
               <CheckCircle className="h-6 w-6 text-success" />
             </div>
@@ -221,7 +250,9 @@ const AdminRegistrationControl = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Returning</p>
-                <p className="text-3xl font-bold text-foreground">{returningStudents.length}</p>
+                <p className="text-3xl font-bold text-foreground">
+                  {returningStudents.length}
+                </p>
               </div>
               <FileText className="h-6 w-6 text-primary" />
             </div>
@@ -236,7 +267,6 @@ const AdminRegistrationControl = () => {
           <TabsTrigger value="approved">Approved</TabsTrigger>
           <TabsTrigger value="returning">Returning</TabsTrigger>
         </TabsList>
-
         {/* Pending Tab */}
         <TabsContent value="pending">
           <Card>
@@ -376,7 +406,9 @@ const AdminRegistrationControl = () => {
                       <TableCell className="font-mono text-sm">
                         {student.studentId}
                       </TableCell>
-                      <TableCell className="font-medium">{student.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {student.name}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline">{student.previousGrade}</Badge>
                       </TableCell>

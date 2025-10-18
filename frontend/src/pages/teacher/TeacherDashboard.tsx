@@ -2,7 +2,7 @@ import { BookOpen, Users, ClipboardCheck, Calendar, Bell, TrendingUp } from "luc
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 
 const TeacherDashboard = () => {
   const { user } = useAuth();

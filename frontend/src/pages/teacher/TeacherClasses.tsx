@@ -25,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { useState } from "react";
 import {
   Table,
@@ -605,7 +605,8 @@ const TeacherClasses = () => {
                         Teaching Staff
                       </CardTitle>
                       <CardDescription>
-                        All teachers responsible for Class {selectedClass?.class}
+                        All teachers responsible for Class{" "}
+                        {selectedClass?.class}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -620,7 +621,9 @@ const TeacherClasses = () => {
                         </TableHeader>
                         <TableBody>
                           <TableRow>
-                            <TableCell className="font-medium">Mathematics</TableCell>
+                            <TableCell className="font-medium">
+                              Mathematics
+                            </TableCell>
                             <TableCell>{user?.name || "Ms. Jane"}</TableCell>
                             <TableCell>
                               <Badge>Subject Teacher</Badge>
@@ -630,7 +633,9 @@ const TeacherClasses = () => {
                             </TableCell>
                           </TableRow>
                           <TableRow>
-                            <TableCell className="font-medium">English</TableCell>
+                            <TableCell className="font-medium">
+                              English
+                            </TableCell>
                             <TableCell>Mr. David Smith</TableCell>
                             <TableCell>
                               <Badge variant="secondary">Subject Teacher</Badge>
@@ -640,7 +645,9 @@ const TeacherClasses = () => {
                             </TableCell>
                           </TableRow>
                           <TableRow>
-                            <TableCell className="font-medium">Science</TableCell>
+                            <TableCell className="font-medium">
+                              Science
+                            </TableCell>
                             <TableCell>Dr. Emily Johnson</TableCell>
                             <TableCell>
                               <Badge variant="secondary">Subject Teacher</Badge>
@@ -655,7 +662,9 @@ const TeacherClasses = () => {
                             </TableCell>
                             <TableCell>Ms. Sarah Williams</TableCell>
                             <TableCell>
-                              <Badge variant="default">Head Class Teacher</Badge>
+                              <Badge variant="default">
+                                Head Class Teacher
+                              </Badge>
                             </TableCell>
                             <TableCell className="text-muted-foreground">
                               sarah.williams@school.edu

@@ -328,87 +328,165 @@ const AdminStudentManagement = () => {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Student Management
-          </h1>
-          <p className="text-gray-600">Add, manage, and generate student IDs</p>
-        </div>
-        <Dialog
-          open={dialogOpen}
-          onOpenChange={(open) => {
-            setDialogOpen(open);
-            if (!open) {
-              resetNewStudentForm();
-              setIsSubmitting(false);
-            }
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-gray-600 hover:bg-gray-700 text-white border-gray-600">
-              <UserPlus className="h-4 w-4" />
-              Add New Student
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <form onSubmit={handleAddStudent} className="space-y-6">
-              <DialogHeader>
-                <DialogTitle>Add New Student</DialogTitle>
-                <DialogDescription>
-                  Enter student information to create a new account
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
+      <section className="space-y-4">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Student Management
+            </h1>
+            <p className="text-gray-600">
+              Add, manage, and generate student IDs
+            </p>
+          </div>
+          <Dialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (!open) {
+                resetNewStudentForm();
+                setIsSubmitting(false);
+              }
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-gray-600 hover:bg-gray-700 text-white border-gray-600">
+                <UserPlus className="h-4 w-4" />
+                Add New Student
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <form onSubmit={handleAddStudent} className="space-y-6">
+                <DialogHeader>
+                  <DialogTitle>Add New Student</DialogTitle>
+                  <DialogDescription>
+                    Enter student information to create a new account
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName">First Name</Label>
+                      <Input
+                        id="firstName"
+                        value={newStudentForm.firstName}
+                        onChange={(event) =>
+                          handleNewStudentChange(
+                            "firstName",
+                            event.target.value
+                          )
+                        }
+                        placeholder="Enter first name"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName">Last Name</Label>
+                      <Input
+                        id="lastName"
+                        value={newStudentForm.lastName}
+                        onChange={(event) =>
+                          handleNewStudentChange("lastName", event.target.value)
+                        }
+                        placeholder="Enter last name"
+                        required
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
+                    <Label htmlFor="email">Email</Label>
                     <Input
-                      id="firstName"
-                      value={newStudentForm.firstName}
+                      id="email"
+                      type="email"
+                      value={newStudentForm.email}
                       onChange={(event) =>
-                        handleNewStudentChange("firstName", event.target.value)
+                        handleNewStudentChange("email", event.target.value)
                       }
-                      placeholder="Enter first name"
+                      placeholder="student@school.com"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input
-                      id="lastName"
-                      value={newStudentForm.lastName}
-                      onChange={(event) =>
-                        handleNewStudentChange("lastName", event.target.value)
+                    <Label htmlFor="grade">Grade/Class</Label>
+                    <Select
+                      value={newStudentForm.grade}
+                      onValueChange={(value) =>
+                        handleNewStudentChange("grade", value)
                       }
-                      placeholder="Enter last name"
-                      required
+                    >
+                      <SelectTrigger id="grade" className="border-gray-300">
+                        <SelectValue placeholder="Select grade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10a">10A</SelectItem>
+                        <SelectItem value="10b">10B</SelectItem>
+                        <SelectItem value="11a">11A</SelectItem>
+                        <SelectItem value="11b">11B</SelectItem>
+                        <SelectItem value="12a">12A</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      value={newStudentForm.phone}
+                      onChange={(event) =>
+                        handleNewStudentChange("phone", event.target.value)
+                      }
+                      placeholder="+1234567890"
                     />
                   </div>
                 </div>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      resetNewStudentForm();
+                      setDialogOpen(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Adding..." : "Add Student & Generate ID"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* Edit Student Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Student Information</DialogTitle>
+              <DialogDescription>
+                Update student details and account information
+              </DialogDescription>
+            </DialogHeader>
+            {selectedStudent && (
+              <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="edit-name">Full Name</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    value={newStudentForm.email}
-                    onChange={(event) =>
-                      handleNewStudentChange("email", event.target.value)
-                    }
-                    placeholder="student@school.com"
-                    required
+                    id="edit-name"
+                    defaultValue={getStudentFullName(selectedStudent)}
+                    placeholder="Enter student name"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="grade">Grade/Class</Label>
+                  <Label htmlFor="edit-grade">Grade/Class</Label>
                   <Select
-                    value={newStudentForm.grade}
-                    onValueChange={(value) =>
-                      handleNewStudentChange("grade", value)
+                    defaultValue={
+                      selectedStudent.grade
+                        ? selectedStudent.grade.toLowerCase()
+                        : undefined
                     }
                   >
-                    <SelectTrigger id="grade" className="border-gray-300">
+                    <SelectTrigger id="edit-grade">
                       <SelectValue placeholder="Select grade" />
                     </SelectTrigger>
                     <SelectContent>
@@ -421,137 +499,69 @@ const AdminStudentManagement = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
+                  <Label htmlFor="edit-email">Email</Label>
                   <Input
-                    id="phone"
-                    value={newStudentForm.phone}
-                    onChange={(event) =>
-                      handleNewStudentChange("phone", event.target.value)
-                    }
+                    id="edit-email"
+                    type="email"
+                    defaultValue={selectedStudent.email}
+                    placeholder="student@school.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-phone">Phone Number</Label>
+                  <Input
+                    id="edit-phone"
+                    defaultValue={selectedStudent.phone}
                     placeholder="+1234567890"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-status">Status</Label>
+                  <Select defaultValue={selectedStudent.status}>
+                    <SelectTrigger id="edit-status">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    resetNewStudentForm();
-                    setDialogOpen(false);
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Adding..." : "Add Student & Generate ID"}
-                </Button>
-              </DialogFooter>
-            </form>
+            )}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setEditDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateStudent}>Update Student</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
 
-      {/* Edit Student Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Student Information</DialogTitle>
-            <DialogDescription>
-              Update student details and account information
-            </DialogDescription>
-          </DialogHeader>
-          {selectedStudent && (
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-name">Full Name</Label>
-                <Input
-                  id="edit-name"
-                  defaultValue={getStudentFullName(selectedStudent)}
-                  placeholder="Enter student name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-grade">Grade/Class</Label>
-                <Select
-                  defaultValue={
-                    selectedStudent.grade
-                      ? selectedStudent.grade.toLowerCase()
-                      : undefined
-                  }
-                >
-                  <SelectTrigger id="edit-grade">
-                    <SelectValue placeholder="Select grade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10a">10A</SelectItem>
-                    <SelectItem value="10b">10B</SelectItem>
-                    <SelectItem value="11a">11A</SelectItem>
-                    <SelectItem value="11b">11B</SelectItem>
-                    <SelectItem value="12a">12A</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-email">Email</Label>
-                <Input
-                  id="edit-email"
-                  type="email"
-                  defaultValue={selectedStudent.email}
-                  placeholder="student@school.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-phone">Phone Number</Label>
-                <Input
-                  id="edit-phone"
-                  defaultValue={selectedStudent.phone}
-                  placeholder="+1234567890"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Select defaultValue={selectedStudent.status}>
-                  <SelectTrigger id="edit-status">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpdateStudent}>Update Student</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <Card key={stat.title} className="border-gray-200">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">{stat.title}</p>
-                  <p className="text-3xl font-bold text-gray-900">
-                    {stat.value}
-                  </p>
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {stats.map((stat) => (
+            <Card key={stat.title} className="border-gray-200">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">{stat.title}</p>
+                    <p className="text-3xl font-bold text-gray-900">
+                      {stat.value}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-gray-100 text-gray-600">
+                    <stat.icon className="h-6 w-6" />
+                  </div>
                 </div>
-                <div className="p-3 rounded-lg bg-gray-100 text-gray-600">
-                  <stat.icon className="h-6 w-6" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
 
       {/* Search and Filter */}
       <div className="flex flex-col md:flex-row gap-4">

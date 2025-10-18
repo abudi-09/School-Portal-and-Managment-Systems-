@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -119,7 +119,7 @@ const Signup = () => {
           description:
             "Your account is pending approval. You will be notified once approved.",
         });
-        navigate("/login");
+        navigate("/pending-approval", { state: { email: step1Data.email } });
       } else {
         toast({
           title: "Registration failed",

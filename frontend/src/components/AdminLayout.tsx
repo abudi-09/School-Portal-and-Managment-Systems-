@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { Navbar } from "./Navbar";
 import { cn } from "@/lib/utils";
 

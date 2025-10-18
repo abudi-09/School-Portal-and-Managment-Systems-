@@ -504,12 +504,16 @@ router.get(
       const search = (req.query.search as string) || undefined;
       const status = (req.query.status as "active" | "inactive") || undefined;
 
-      const result = await StudentService.getStudents({
+      const studentQueryOptions: Parameters<
+        typeof StudentService.getStudents
+      >[0] = {
         page,
         limit,
-        search,
-        status,
-      });
+        ...(search ? { search } : {}),
+        ...(status ? { status } : {}),
+      };
+
+      const result = await StudentService.getStudents(studentQueryOptions);
 
       res.json({
         success: true,

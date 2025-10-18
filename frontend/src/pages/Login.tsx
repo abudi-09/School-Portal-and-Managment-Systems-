@@ -48,7 +48,7 @@ type StaffLoginForm = z.infer<typeof staffLoginSchema>;
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user, getRoleBasedRedirect } = useAuth();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -70,9 +70,10 @@ const Login = () => {
         studentId: data.studentId,
         password: data.password,
       });
-      if (success) {
+      if (success && user) {
         toast({ title: "Login successful", description: "Welcome back!" });
-        navigate("/dashboard");
+        const redirectPath = getRoleBasedRedirect(user.role);
+        navigate(redirectPath);
       } else {
         toast({
           title: "Login failed",
@@ -98,12 +99,10 @@ const Login = () => {
         email: data.email,
         password: data.password,
       });
-      if (success) {
+      if (success && user) {
         toast({ title: "Login successful", description: "Welcome back!" });
-        // Route based on role
-        if (data.email.includes("admin")) navigate("/admin");
-        else if (data.email.includes("head")) navigate("/head");
-        else navigate("/teacher");
+        const redirectPath = getRoleBasedRedirect(user.role);
+        navigate(redirectPath);
       } else {
         toast({
           title: "Login failed",

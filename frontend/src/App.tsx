@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { PrivateRoute } from "./components/PrivateRoute";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Scores from "./pages/Scores";
@@ -57,7 +58,13 @@ const App = () => (
             <Route path="/signup" element={<Signup />} />
 
             {/* Student Portal Routes */}
-            <Route element={<Layout />}>
+            <Route
+              element={
+                <PrivateRoute allowedRoles={["student"]}>
+                  <Layout />
+                </PrivateRoute>
+              }
+            >
               <Route path="/" element={<Dashboard />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/scores" element={<Scores />} />
@@ -70,7 +77,14 @@ const App = () => (
             </Route>
 
             {/* Teacher Portal Routes */}
-            <Route path="/teacher" element={<TeacherLayout />}>
+            <Route
+              path="/teacher"
+              element={
+                <PrivateRoute allowedRoles={["teacher"]}>
+                  <TeacherLayout />
+                </PrivateRoute>
+              }
+            >
               <Route index element={<TeacherDashboard />} />
               <Route path="assignments" element={<TeacherAssignments />} />
               <Route path="grades" element={<TeacherGrades />} />
@@ -90,7 +104,14 @@ const App = () => (
             </Route>
 
             {/* Head of School Portal Routes */}
-            <Route path="/head" element={<HeadLayout />}>
+            <Route
+              path="/head"
+              element={
+                <PrivateRoute allowedRoles={["head"]}>
+                  <HeadLayout />
+                </PrivateRoute>
+              }
+            >
               <Route index element={<HeadDashboard />} />
               <Route path="teachers" element={<TeacherManagement />} />
               <Route path="students" element={<StudentManagement />} />
@@ -101,7 +122,14 @@ const App = () => (
             </Route>
 
             {/* Admin Portal Routes */}
-            <Route path="/admin" element={<AdminLayout />}>
+            <Route
+              path="/admin"
+              element={
+                <PrivateRoute allowedRoles={["admin"]}>
+                  <AdminLayout />
+                </PrivateRoute>
+              }
+            >
               <Route index element={<AdminDashboard />} />
               <Route path="students" element={<AdminStudentManagement />} />
               <Route path="head-management" element={<AdminHeadManagement />} />

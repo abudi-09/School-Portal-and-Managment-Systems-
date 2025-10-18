@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { Navbar } from "./Navbar";
 
 const TeacherLayout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -55,6 +56,9 @@ const TeacherLayout = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Navbar */}
+      <Navbar title="Teacher Portal" />
+
       {/* Mobile menu button */}
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <button

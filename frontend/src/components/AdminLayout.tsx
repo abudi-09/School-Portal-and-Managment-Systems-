@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { Navbar } from "./Navbar";
 
 const AdminLayout = () => {
   const location = useLocation();
@@ -45,6 +46,9 @@ const AdminLayout = () => {
 
   return (
     <div className="min-h-screen bg-background flex w-full">
+      {/* Navbar */}
+      <Navbar title="Admin Portal" />
+
       {/* Mobile Menu Button */}
       <button
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

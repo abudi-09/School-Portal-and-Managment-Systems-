@@ -30,6 +30,7 @@ interface AuthContextType {
   signup: (data: SignupData) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
+  getRoleBasedRedirect: (role: UserRole) => string;
 }
 
 interface SignupData {
@@ -137,7 +138,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem("currentUser");
+    // Use React Router navigation instead of window.location
     window.location.href = "/login";
+  };
+
+  const getRoleBasedRedirect = (role: UserRole): string => {
+    switch (role) {
+      case "admin":
+        return "/admin";
+      case "head":
+        return "/head";
+      case "teacher":
+        return "/teacher";
+      case "student":
+      default:
+        return "/";
+    }
   };
 
   return (
@@ -148,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signup,
         logout,
         isAuthenticated: !!user,
+        getRoleBasedRedirect,
       }}
     >
       {children}
@@ -156,7 +173,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
-   
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");

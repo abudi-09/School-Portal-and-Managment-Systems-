@@ -6,6 +6,8 @@ import morgan from "morgan";
 import connectDB from "./config/database";
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
+import adminRoutes from "./routes/admin";
+import headRoutes from "./routes/head";
 import { errorHandler } from "./middleware/errorHandler";
 import { env } from "./config/env";
 import { seedSuperAdmin } from "./utils/seedSuperAdmin";
@@ -35,7 +37,6 @@ app.use(morgan("combined"));
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
-
 // Health check endpoint
 app.get("/api/health", (req, res) => {
   res.status(200).json({
@@ -49,6 +50,8 @@ app.get("/api/health", (req, res) => {
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/head", headRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -68,8 +71,6 @@ const startServer = async () => {
 
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📱 Frontend URL: ${env.frontendUrl}`);
-      console.log(`🌍 Environment: ${env.nodeEnv}`);
     });
   } catch (error) {
     console.error("❌ Failed to start server", error);

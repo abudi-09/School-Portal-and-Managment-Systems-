@@ -49,10 +49,7 @@ const userSchema = new Schema<IUser>(
       unique: true,
       lowercase: true,
       trim: true,
-      match: [
-        /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
-        "Please enter a valid email",
-      ],
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, "Please enter a valid email"],
     },
     password: {
       type: String,
@@ -63,7 +60,6 @@ const userSchema = new Schema<IUser>(
       type: String,
       unique: true,
       sparse: true,
-      index: true,
     },
     firstName: {
       type: String,
@@ -89,7 +85,6 @@ const userSchema = new Schema<IUser>(
       default: function (this: IUser) {
         return this.role === "admin" ? "approved" : "pending";
       },
-      index: true,
     },
     isActive: {
       type: Boolean,
@@ -139,7 +134,6 @@ userSchema.virtual("fullName").get(function (this: IUser) {
 // Index for better query performance
 userSchema.index({ role: 1 });
 userSchema.index({ status: 1 });
-userSchema.index({ studentId: 1 });
 userSchema.index({ "academicInfo.studentId": 1 });
 userSchema.index({ "employmentInfo.employeeId": 1 });
 

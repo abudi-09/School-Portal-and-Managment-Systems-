@@ -66,13 +66,13 @@ const Login = () => {
   const handleStudentLogin = async (data: StudentLoginForm) => {
     setLoading(true);
     try {
-      const success = await login({
+      const result = await login({
         studentId: data.studentId,
         password: data.password,
       });
-      if (success && user) {
+      if (result.success && result.user) {
         toast({ title: "Login successful", description: "Welcome back!" });
-        const redirectPath = getRoleBasedRedirect(user.role);
+        const redirectPath = getRoleBasedRedirect(result.user.role);
         navigate(redirectPath);
       } else {
         toast({
@@ -95,13 +95,13 @@ const Login = () => {
   const handleStaffLogin = async (data: StaffLoginForm) => {
     setLoading(true);
     try {
-      const success = await login({
+      const result = await login({
         email: data.email,
         password: data.password,
       });
-      if (success && user) {
+      if (result.success && result.user) {
         toast({ title: "Login successful", description: "Welcome back!" });
-        const redirectPath = getRoleBasedRedirect(user.role);
+        const redirectPath = getRoleBasedRedirect(result.user.role);
         navigate(redirectPath);
       } else {
         toast({

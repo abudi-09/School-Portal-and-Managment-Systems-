@@ -262,7 +262,7 @@ const AdminStudentManagement = () => {
         phone: created.profile?.phone ?? payload.profile?.phone,
       };
 
-  await queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
 
       toast({
         title: "Student Added",
@@ -317,63 +317,94 @@ const AdminStudentManagement = () => {
 
   const activateMutation = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
-      const url = `${apiBaseUrl}/api/users/students/${id}/${active ? "activate" : "deactivate"}`;
+      const url = `${apiBaseUrl}/api/users/students/${id}/${
+        active ? "activate" : "deactivate"
+      }`;
       const res = await fetch(url, { method: "PATCH", headers: authHeaders() });
       const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to toggle status");
+      if (!res.ok || !data?.success)
+        throw new Error(data?.message || "Failed to toggle status");
       return data;
     },
     onSuccess: async (_data, variables) => {
       toast({
         title: variables.active ? "Account Activated" : "Account Deactivated",
-        description: `The student's account has been ${variables.active ? "activated" : "deactivated"}.`,
+        description: `The student's account has been ${
+          variables.active ? "activated" : "deactivated"
+        }.`,
       });
       await queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : "Please try again.";
-      toast({ title: "Action failed", description: message, variant: "destructive" });
+      toast({
+        title: "Action failed",
+        description: message,
+        variant: "destructive",
+      });
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: async (payload: { id: string; body: UpdateStudentBody }) => {
-      const res = await fetch(`${apiBaseUrl}/api/users/students/${payload.id}`, {
-        method: "PUT",
-        headers: authHeaders(),
-        body: JSON.stringify(payload.body),
-      });
+      const res = await fetch(
+        `${apiBaseUrl}/api/users/students/${payload.id}`,
+        {
+          method: "PUT",
+          headers: authHeaders(),
+          body: JSON.stringify(payload.body),
+        }
+      );
       const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to update student");
+      if (!res.ok || !data?.success)
+        throw new Error(data?.message || "Failed to update student");
       return data;
     },
     onSuccess: async () => {
-      toast({ title: "Student Updated", description: "Student information has been updated successfully." });
+      toast({
+        title: "Student Updated",
+        description: "Student information has been updated successfully.",
+      });
       await queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : "Please try again.";
-      toast({ title: "Update failed", description: message, variant: "destructive" });
+      toast({
+        title: "Update failed",
+        description: message,
+        variant: "destructive",
+      });
     },
   });
 
   const resetPasswordMutation = useMutation({
     mutationFn: async ({ id, password }: { id: string; password: string }) => {
-      const res = await fetch(`${apiBaseUrl}/api/users/students/${id}/reset-password`, {
-        method: "PATCH",
-        headers: authHeaders(),
-        body: JSON.stringify({ password }),
-      });
+      const res = await fetch(
+        `${apiBaseUrl}/api/users/students/${id}/reset-password`,
+        {
+          method: "PATCH",
+          headers: authHeaders(),
+          body: JSON.stringify({ password }),
+        }
+      );
       const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to reset password");
+      if (!res.ok || !data?.success)
+        throw new Error(data?.message || "Failed to reset password");
       return data;
     },
     onSuccess: () => {
-      toast({ title: "Password Reset", description: "A new password has been set for the student." });
+      toast({
+        title: "Password Reset",
+        description: "A new password has been set for the student.",
+      });
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : "Please try again.";
-      toast({ title: "Reset failed", description: message, variant: "destructive" });
+      toast({
+        title: "Reset failed",
+        description: message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -780,7 +811,10 @@ const AdminStudentManagement = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() =>
-                          activateMutation.mutate({ id: student.id, active: student.status !== "active" })
+                          activateMutation.mutate({
+                            id: student.id,
+                            active: student.status !== "active",
+                          })
                         }
                         className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                       >

@@ -38,7 +38,10 @@ const connectWithRetry = async (retries = 0): Promise<void> => {
       process.exit(0);
     });
   } catch (error) {
-    console.error(`❌ Error connecting to MongoDB (attempt ${retries + 1}):`, error);
+    console.error(
+      `❌ Error connecting to MongoDB (attempt ${retries + 1}):`,
+      error
+    );
 
     if (retries < MAX_RETRIES - 1) {
       const jitter = Math.floor(Math.random() * 250); // 0-250ms jitter

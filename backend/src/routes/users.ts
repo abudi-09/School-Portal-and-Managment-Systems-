@@ -150,7 +150,11 @@ router.post(
       if (!errors.isEmpty()) {
         return res
           .status(400)
-          .json({ success: false, message: "Invalid input", errors: errors.array() });
+          .json({
+            success: false,
+            message: "Invalid input",
+            errors: errors.array(),
+          });
       }
       // Permission check
       if (
@@ -210,7 +214,11 @@ router.put(
       if (!errors.isEmpty()) {
         return res
           .status(400)
-          .json({ success: false, message: "Invalid input", errors: errors.array() });
+          .json({
+            success: false,
+            message: "Invalid input",
+            errors: errors.array(),
+          });
       }
       // Users can only update their own profile unless they're admin
       if (
@@ -281,7 +289,11 @@ router.put(
       if (!errors.isEmpty()) {
         return res
           .status(400)
-          .json({ success: false, message: "Invalid input", errors: errors.array() });
+          .json({
+            success: false,
+            message: "Invalid input",
+            errors: errors.array(),
+          });
       }
       const { responsibilities } = req.body;
 
@@ -344,7 +356,11 @@ router.delete(
       if (!errors.isEmpty()) {
         return res
           .status(400)
-          .json({ success: false, message: "Invalid input", errors: errors.array() });
+          .json({
+            success: false,
+            message: "Invalid input",
+            errors: errors.array(),
+          });
       }
       const user = await User.findById(req.params.id);
 
@@ -533,17 +549,34 @@ router.put(
   [
     param("id").isMongoId().withMessage("Invalid student ID"),
     gmailEmailValidator("email").optional(),
-    body("email").optional().isEmail().withMessage("Invalid email").normalizeEmail(),
+    body("email")
+      .optional()
+      .isEmail()
+      .withMessage("Invalid email")
+      .normalizeEmail(),
   ],
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, message: "Invalid input", errors: errors.array() });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Invalid input",
+          errors: errors.array(),
+        });
     }
 
     try {
-  const updated = await StudentService.updateStudent(req.params.id as string, req.body);
-      res.json({ success: true, message: "Student updated successfully", data: { student: updated } });
+      const updated = await StudentService.updateStudent(
+        req.params.id as string,
+        req.body
+      );
+      res.json({
+        success: true,
+        message: "Student updated successfully",
+        data: { student: updated },
+      });
     } catch (error: any) {
       if (error.message === "Student not found") {
         return res.status(404).json({ success: false, message: error.message });
@@ -552,7 +585,9 @@ router.put(
         return res.status(409).json({ success: false, message: error.message });
       }
       console.error("Update student error:", error);
-      res.status(500).json({ success: false, message: "Server error updating student" });
+      res
+        .status(500)
+        .json({ success: false, message: "Server error updating student" });
     }
   }
 );
@@ -568,17 +603,32 @@ router.patch(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, message: "Invalid input", errors: errors.array() });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Invalid input",
+          errors: errors.array(),
+        });
     }
     try {
-  const student = await StudentService.setActive(req.params.id as string, true);
-      res.json({ success: true, message: "Student activated", data: { student } });
+      const student = await StudentService.setActive(
+        req.params.id as string,
+        true
+      );
+      res.json({
+        success: true,
+        message: "Student activated",
+        data: { student },
+      });
     } catch (error: any) {
       if (error.message === "Student not found") {
         return res.status(404).json({ success: false, message: error.message });
       }
       console.error("Activate student error:", error);
-      res.status(500).json({ success: false, message: "Server error activating student" });
+      res
+        .status(500)
+        .json({ success: false, message: "Server error activating student" });
     }
   }
 );
@@ -594,17 +644,32 @@ router.patch(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, message: "Invalid input", errors: errors.array() });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Invalid input",
+          errors: errors.array(),
+        });
     }
     try {
-  const student = await StudentService.setActive(req.params.id as string, false);
-      res.json({ success: true, message: "Student deactivated", data: { student } });
+      const student = await StudentService.setActive(
+        req.params.id as string,
+        false
+      );
+      res.json({
+        success: true,
+        message: "Student deactivated",
+        data: { student },
+      });
     } catch (error: any) {
       if (error.message === "Student not found") {
         return res.status(404).json({ success: false, message: error.message });
       }
       console.error("Deactivate student error:", error);
-      res.status(500).json({ success: false, message: "Server error deactivating student" });
+      res
+        .status(500)
+        .json({ success: false, message: "Server error deactivating student" });
     }
   }
 );
@@ -618,22 +683,35 @@ router.patch(
   authorizeRoles("admin"),
   [
     param("id").isMongoId().withMessage("Invalid student ID"),
-    body("password").isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
+    body("password")
+      .isLength({ min: 6 })
+      .withMessage("Password must be at least 6 characters"),
   ],
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, message: "Invalid input", errors: errors.array() });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Invalid input",
+          errors: errors.array(),
+        });
     }
     try {
-  await StudentService.resetPassword(req.params.id as string, req.body.password);
+      await StudentService.resetPassword(
+        req.params.id as string,
+        req.body.password
+      );
       res.json({ success: true, message: "Student password reset" });
     } catch (error: any) {
       if (error.message === "Student not found") {
         return res.status(404).json({ success: false, message: error.message });
       }
       console.error("Reset password error:", error);
-      res.status(500).json({ success: false, message: "Server error resetting password" });
+      res
+        .status(500)
+        .json({ success: false, message: "Server error resetting password" });
     }
   }
 );
@@ -653,7 +731,11 @@ router.get(
       if (!errors.isEmpty()) {
         return res
           .status(400)
-          .json({ success: false, message: "Invalid input", errors: errors.array() });
+          .json({
+            success: false,
+            message: "Invalid input",
+            errors: errors.array(),
+          });
       }
 
       const user = await User.findById(req.params.id).select("-password");

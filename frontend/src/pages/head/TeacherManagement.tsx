@@ -1,6 +1,19 @@
 import { useMemo, useState } from "react";
-import { Users, Search, Filter, CheckCircle, XCircle, UserPlus } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Users,
+  Search,
+  Filter,
+  CheckCircle,
+  XCircle,
+  UserPlus,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -63,7 +76,8 @@ type ApiActionResponse = {
   data?: { teacher: Teacher };
 };
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string) ?? "http://localhost:5000";
+const apiBaseUrl =
+  (import.meta.env.VITE_API_BASE_URL as string) ?? "http://localhost:5000";
 
 const authHeaders = () => {
   const token = localStorage.getItem("token");
@@ -98,9 +112,12 @@ const TeacherManagement = () => {
   const approvedQuery = useQuery({
     queryKey: ["head", "approved-teachers"],
     queryFn: async (): Promise<Teacher[]> => {
-      const res = await fetch(`${apiBaseUrl}/api/head/teachers?status=approved`, {
-        headers: authHeaders(),
-      });
+      const res = await fetch(
+        `${apiBaseUrl}/api/head/teachers?status=approved`,
+        {
+          headers: authHeaders(),
+        }
+      );
       const data = (await res.json()) as ApiTeachersListResponse;
       if (!res.ok || !data.success) {
         throw new Error(data?.message || "Failed to load teachers");
@@ -110,8 +127,14 @@ const TeacherManagement = () => {
     },
   });
 
-  const pendingTeachers = useMemo(() => pendingQuery.data ?? [], [pendingQuery.data]);
-  const activeTeachers = useMemo(() => approvedQuery.data ?? [], [approvedQuery.data]);
+  const pendingTeachers = useMemo(
+    () => pendingQuery.data ?? [],
+    [pendingQuery.data]
+  );
+  const activeTeachers = useMemo(
+    () => approvedQuery.data ?? [],
+    [approvedQuery.data]
+  );
 
   const handleApprove = (teacher: Teacher) => {
     setSelectedTeacher(teacher);
@@ -120,10 +143,13 @@ const TeacherManagement = () => {
 
   const approveMutation = useMutation({
     mutationFn: async (teacherId: string) => {
-      const res = await fetch(`${apiBaseUrl}/api/head/teachers/${teacherId}/approve`, {
-        method: "PATCH",
-        headers: authHeaders(),
-      });
+      const res = await fetch(
+        `${apiBaseUrl}/api/head/teachers/${teacherId}/approve`,
+        {
+          method: "PATCH",
+          headers: authHeaders(),
+        }
+      );
       const data = (await res.json()) as ApiActionResponse;
       if (!res.ok || !data.success) {
         throw new Error(data?.message || "Failed to approve teacher");
@@ -131,24 +157,38 @@ const TeacherManagement = () => {
       return data;
     },
     onSuccess: () => {
-      toast({ title: "Teacher approved", description: "The teacher can now log in." });
+      toast({
+        title: "Teacher approved",
+        description: "The teacher can now log in.",
+      });
       setDialogOpen(false);
       setSelectedTeacher(null);
-      void queryClient.invalidateQueries({ queryKey: ["head", "pending-teachers"] });
-      void queryClient.invalidateQueries({ queryKey: ["head", "approved-teachers"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["head", "pending-teachers"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["head", "approved-teachers"],
+      });
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : "Please try again.";
-      toast({ title: "Approval failed", description: message, variant: "destructive" });
+      toast({
+        title: "Approval failed",
+        description: message,
+        variant: "destructive",
+      });
     },
   });
 
   const rejectMutation = useMutation({
     mutationFn: async (teacherId: string) => {
-      const res = await fetch(`${apiBaseUrl}/api/head/teachers/${teacherId}/reject`, {
-        method: "PATCH",
-        headers: authHeaders(),
-      });
+      const res = await fetch(
+        `${apiBaseUrl}/api/head/teachers/${teacherId}/reject`,
+        {
+          method: "PATCH",
+          headers: authHeaders(),
+        }
+      );
       const data = (await res.json()) as ApiActionResponse;
       if (!res.ok || !data.success) {
         throw new Error(data?.message || "Failed to reject teacher");
@@ -156,25 +196,46 @@ const TeacherManagement = () => {
       return data;
     },
     onSuccess: () => {
-      toast({ title: "Teacher rejected", description: "The teacher cannot log in." });
-      void queryClient.invalidateQueries({ queryKey: ["head", "pending-teachers"] });
+      toast({
+        title: "Teacher rejected",
+        description: "The teacher cannot log in.",
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["head", "pending-teachers"],
+      });
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : "Please try again.";
-      toast({ title: "Rejection failed", description: message, variant: "destructive" });
+      toast({
+        title: "Rejection failed",
+        description: message,
+        variant: "destructive",
+      });
     },
   });
 
   const stats = [
-    { title: "Total Active", value: activeTeachers.length, icon: Users, color: "text-success" },
-    { title: "Pending Approval", value: pendingTeachers.length, icon: UserPlus, color: "text-warning" },
+    {
+      title: "Total Active",
+      value: activeTeachers.length,
+      icon: Users,
+      color: "text-success",
+    },
+    {
+      title: "Pending Approval",
+      value: pendingTeachers.length,
+      icon: UserPlus,
+      color: "text-warning",
+    },
   ];
 
   return (
     <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">Teacher Management</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-2">
+          Teacher Management
+        </h1>
         <p className="text-muted-foreground">
           Manage teacher accounts, approvals, and assignments
         </p>
@@ -187,8 +248,12 @@ const TeacherManagement = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">{stat.title}</p>
-                  <p className="text-3xl font-bold text-foreground">{stat.value}</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    {stat.title}
+                  </p>
+                  <p className="text-3xl font-bold text-foreground">
+                    {stat.value}
+                  </p>
                 </div>
                 <div className={`p-3 rounded-lg bg-secondary ${stat.color}`}>
                   <stat.icon className="h-6 w-6" />
@@ -238,68 +303,83 @@ const TeacherManagement = () => {
           <Card>
             <CardHeader>
               <CardTitle>Active Teachers</CardTitle>
-              <CardDescription>All approved and active teacher accounts</CardDescription>
+              <CardDescription>
+                All approved and active teacher accounts
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {approvedQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading teachers...</p>
+                <p className="text-sm text-muted-foreground">
+                  Loading teachers...
+                </p>
               ) : approvedQuery.isError ? (
-                <p className="text-sm text-destructive">{(approvedQuery.error as Error).message}</p>
+                <p className="text-sm text-destructive">
+                  {(approvedQuery.error as Error).message}
+                </p>
               ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Subject(s)</TableHead>
-                    <TableHead>Contact</TableHead>
-                    <TableHead>Date Joined</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activeTeachers.map((t) => {
-                    const id = (t._id || t.id) as string;
-                    const name = `${t.firstName} ${t.lastName}`;
-                    const subjects = t.academicInfo?.subjects ?? (t.employmentInfo?.position ? [t.employmentInfo.position] : []);
-                    const dateJoined = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : "—";
-                    return (
-                    <TableRow key={id}>
-                      <TableCell className="font-medium">{name}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {subjects.length === 0 ? (
-                            <span className="text-sm text-muted-foreground">—</span>
-                          ) : (
-                            subjects.map((subject) => (
-                              <Badge key={subject} variant="secondary">
-                                {subject}
-                              </Badge>
-                            ))
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <p>{t.email}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>{dateJoined}</TableCell>
-                      <TableCell>
-                        <Badge variant="default">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Active
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                         <Button variant="outline" size="sm">
-                          Deactivate
-                        </Button>
-                      </TableCell>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Subject(s)</TableHead>
+                      <TableHead>Contact</TableHead>
+                      <TableHead>Date Joined</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  );})}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {activeTeachers.map((t) => {
+                      const id = (t._id || t.id) as string;
+                      const name = `${t.firstName} ${t.lastName}`;
+                      const subjects =
+                        t.academicInfo?.subjects ??
+                        (t.employmentInfo?.position
+                          ? [t.employmentInfo.position]
+                          : []);
+                      const dateJoined = t.createdAt
+                        ? new Date(t.createdAt).toLocaleDateString()
+                        : "—";
+                      return (
+                        <TableRow key={id}>
+                          <TableCell className="font-medium">{name}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {subjects.length === 0 ? (
+                                <span className="text-sm text-muted-foreground">
+                                  —
+                                </span>
+                              ) : (
+                                subjects.map((subject) => (
+                                  <Badge key={subject} variant="secondary">
+                                    {subject}
+                                  </Badge>
+                                ))
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              <p>{t.email}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>{dateJoined}</TableCell>
+                          <TableCell>
+                            <Badge variant="default">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Active
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="outline" size="sm">
+                              Deactivate
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>
@@ -315,69 +395,86 @@ const TeacherManagement = () => {
             </CardHeader>
             <CardContent>
               {pendingQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading pending teachers...</p>
+                <p className="text-sm text-muted-foreground">
+                  Loading pending teachers...
+                </p>
               ) : pendingQuery.isError ? (
-                <p className="text-sm text-destructive">{(pendingQuery.error as Error).message}</p>
+                <p className="text-sm text-destructive">
+                  {(pendingQuery.error as Error).message}
+                </p>
               ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Subject(s)</TableHead>
-                    <TableHead>Contact</TableHead>
-                    <TableHead>Date Applied</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingTeachers.map((t) => {
-                    const id = (t._id || t.id) as string;
-                    const name = `${t.firstName} ${t.lastName}`;
-                    const subjects = t.academicInfo?.subjects ?? (t.employmentInfo?.position ? [t.employmentInfo.position] : []);
-                    const dateApplied = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : "—";
-                    return (
-                    <TableRow key={id}>
-                      <TableCell className="font-medium">{name}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {subjects.length === 0 ? (
-                            <span className="text-sm text-muted-foreground">—</span>
-                          ) : (
-                            subjects.map((subject) => (
-                              <Badge key={subject} variant="secondary">
-                                {subject}
-                              </Badge>
-                            ))
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <p>{t.email}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>{dateApplied}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={rejectMutation.isPending}
-                            onClick={() => rejectMutation.mutate(id)}
-                          >
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Reject
-                          </Button>
-                          <Button size="sm" onClick={() => handleApprove(t)} disabled={approveMutation.isPending}>
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </Button>
-                        </div>
-                      </TableCell>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Subject(s)</TableHead>
+                      <TableHead>Contact</TableHead>
+                      <TableHead>Date Applied</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  );})}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingTeachers.map((t) => {
+                      const id = (t._id || t.id) as string;
+                      const name = `${t.firstName} ${t.lastName}`;
+                      const subjects =
+                        t.academicInfo?.subjects ??
+                        (t.employmentInfo?.position
+                          ? [t.employmentInfo.position]
+                          : []);
+                      const dateApplied = t.createdAt
+                        ? new Date(t.createdAt).toLocaleDateString()
+                        : "—";
+                      return (
+                        <TableRow key={id}>
+                          <TableCell className="font-medium">{name}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {subjects.length === 0 ? (
+                                <span className="text-sm text-muted-foreground">
+                                  —
+                                </span>
+                              ) : (
+                                subjects.map((subject) => (
+                                  <Badge key={subject} variant="secondary">
+                                    {subject}
+                                  </Badge>
+                                ))
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              <p>{t.email}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>{dateApplied}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={rejectMutation.isPending}
+                                onClick={() => rejectMutation.mutate(id)}
+                              >
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Reject
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleApprove(t)}
+                                disabled={approveMutation.isPending}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Approve
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>
@@ -390,24 +487,34 @@ const TeacherManagement = () => {
           <DialogHeader>
             <DialogTitle>Approve Teacher Registration</DialogTitle>
             <DialogDescription>
-              Confirm approval for {selectedTeacher ? `${selectedTeacher.firstName} ${selectedTeacher.lastName}` : ""}
+              Confirm approval for{" "}
+              {selectedTeacher
+                ? `${selectedTeacher.firstName} ${selectedTeacher.lastName}`
+                : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Teacher Name</p>
-              <p className="font-medium">{selectedTeacher ? `${selectedTeacher.firstName} ${selectedTeacher.lastName}` : ""}</p>
+              <p className="font-medium">
+                {selectedTeacher
+                  ? `${selectedTeacher.firstName} ${selectedTeacher.lastName}`
+                  : ""}
+              </p>
             </div>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Subject(s)</p>
               <div className="flex flex-wrap gap-1">
-                {(selectedTeacher?.academicInfo?.subjects ?? (selectedTeacher?.employmentInfo?.position ? [selectedTeacher.employmentInfo.position] : [])).map(
-                  (subject) => (
-                    <Badge key={subject} variant="secondary">
-                      {subject}
-                    </Badge>
-                  )
-                )}
+                {(
+                  selectedTeacher?.academicInfo?.subjects ??
+                  (selectedTeacher?.employmentInfo?.position
+                    ? [selectedTeacher.employmentInfo.position]
+                    : [])
+                ).map((subject) => (
+                  <Badge key={subject} variant="secondary">
+                    {subject}
+                  </Badge>
+                ))}
               </div>
             </div>
             <div className="space-y-2">
@@ -422,7 +529,8 @@ const TeacherManagement = () => {
             <Button
               onClick={() => {
                 if (selectedTeacher) {
-                  const id = (selectedTeacher._id || selectedTeacher.id) as string;
+                  const id = (selectedTeacher._id ||
+                    selectedTeacher.id) as string;
                   approveMutation.mutate(id);
                 }
               }}

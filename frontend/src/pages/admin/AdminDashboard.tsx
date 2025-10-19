@@ -6,6 +6,9 @@ import {
   AlertCircle,
   Bell,
   X,
+  Award,
+  Trophy,
+  ClipboardList,
 } from "lucide-react";
 import {
   Card,
@@ -25,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import StatCard from "@/components/StatCard";
 
 type Notification = {
   id: number;

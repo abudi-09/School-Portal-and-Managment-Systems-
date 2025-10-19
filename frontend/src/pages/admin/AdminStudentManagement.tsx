@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
   UserPlus,
@@ -47,11 +47,13 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 type StudentStatus = "active" | "inactive";
 type RegistrationType = "New" | "Returning";
 
 type Student = {
+  _id?: string;
   id: string;
   firstName: string;
   lastName: string;
@@ -63,6 +65,33 @@ type Student = {
   phone?: string;
 };
 
+type ApiStudentsListResponse = {
+  success: boolean;
+  data: {
+    students: Array<{
+      _id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      studentId: string;
+      isActive: boolean;
+      academicInfo?: { grade?: string; class?: string };
+      profile?: { phone?: string };
+    }>;
+    pagination: { page: number; limit: number; total: number; pages: number };
+  };
+  message?: string;
+};
+
+type UpdateStudentBody = Partial<{
+  firstName: string;
+  lastName: string;
+  email: string;
+  profile: { phone?: string; address?: string };
+  academicInfo: { grade?: string; class?: string };
+  isActive: boolean;
+}>;
+
 type StudentFormState = {
   firstName: string;
   lastName: string;
@@ -71,52 +100,7 @@ type StudentFormState = {
   phone: string;
 };
 
-const INITIAL_STUDENTS: Student[] = [
-  {
-    id: "1",
-    firstName: "John",
-    lastName: "Smith",
-    email: "john.smith@school.edu",
-    studentId: "STU-2024-001",
-    grade: "11A",
-    registrationType: "New",
-    status: "active",
-    phone: "+1 (555) 010-1001",
-  },
-  {
-    id: "2",
-    firstName: "Emma",
-    lastName: "Wilson",
-    email: "emma.wilson@school.edu",
-    studentId: "STU-2024-002",
-    grade: "11A",
-    registrationType: "Returning",
-    status: "active",
-    phone: "+1 (555) 010-1002",
-  },
-  {
-    id: "3",
-    firstName: "Michael",
-    lastName: "Brown",
-    email: "michael.brown@school.edu",
-    studentId: "STU-2024-003",
-    grade: "11B",
-    registrationType: "New",
-    status: "inactive",
-    phone: "+1 (555) 010-1003",
-  },
-  {
-    id: "4",
-    firstName: "Sarah",
-    lastName: "Davis",
-    email: "sarah.davis@school.edu",
-    studentId: "STU-2024-004",
-    grade: "10A",
-    registrationType: "Returning",
-    status: "active",
-    phone: "+1 (555) 010-1004",
-  },
-];
+const INITIAL_STUDENTS: Student[] = [];
 
 const EMPTY_STUDENT_FORM: StudentFormState = {
   firstName: "",
@@ -133,6 +117,7 @@ const AdminStudentManagement = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const queryClient = useQueryClient();
   const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
   const [newStudentForm, setNewStudentForm] =
     useState<StudentFormState>(EMPTY_STUDENT_FORM);
@@ -140,6 +125,44 @@ const AdminStudentManagement = () => {
   const { toast } = useToast();
   const apiBaseUrl =
     import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+
+  const authHeaders = () => {
+    const token = localStorage.getItem("token");
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    } as HeadersInit;
+  };
+
+  // Fetch students from API
+  const studentsQuery = useQuery({
+    queryKey: ["admin", "students"],
+    queryFn: async () => {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch(`${apiBaseUrl}/api/users/students?limit=100`, {
+        headers: authHeaders(),
+      });
+      const data = (await res.json()) as ApiStudentsListResponse;
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || "Failed to load students");
+      }
+      const list = data.data.students.map((s) => ({
+        id: s._id,
+        _id: s._id,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        email: s.email,
+        studentId: s.studentId,
+        grade: s.academicInfo?.grade ?? s.academicInfo?.class,
+        registrationType: "New" as RegistrationType,
+        status: s.isActive ? "active" : "inactive",
+        phone: s.profile?.phone,
+      })) as Student[];
+      setStudents(list);
+      return list;
+    },
+  });
 
   const resetNewStudentForm = () => {
     setNewStudentForm(EMPTY_STUDENT_FORM);
@@ -203,10 +226,7 @@ const AdminStudentManagement = () => {
     try {
       const response = await fetch(`${apiBaseUrl}/api/users/students`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: authHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -242,7 +262,7 @@ const AdminStudentManagement = () => {
         phone: created.profile?.phone ?? payload.profile?.phone,
       };
 
-      setStudents((prev) => [...prev, newStudent]);
+  await queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
 
       toast({
         title: "Student Added",
@@ -290,14 +310,72 @@ const AdminStudentManagement = () => {
   };
 
   const handleUpdateStudent = () => {
-    // Update student logic here
+    // Placeholder open-dialog handler (UI wiring); below mutation handles save
     setEditDialogOpen(false);
     setSelectedStudent(null);
-    toast({
-      title: "Student Updated",
-      description: "Student information has been updated successfully.",
-    });
   };
+
+  const activateMutation = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const url = `${apiBaseUrl}/api/users/students/${id}/${active ? "activate" : "deactivate"}`;
+      const res = await fetch(url, { method: "PATCH", headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to toggle status");
+      return data;
+    },
+    onSuccess: async (_data, variables) => {
+      toast({
+        title: variables.active ? "Account Activated" : "Account Deactivated",
+        description: `The student's account has been ${variables.active ? "activated" : "deactivated"}.`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : "Please try again.";
+      toast({ title: "Action failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (payload: { id: string; body: UpdateStudentBody }) => {
+      const res = await fetch(`${apiBaseUrl}/api/users/students/${payload.id}`, {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify(payload.body),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to update student");
+      return data;
+    },
+    onSuccess: async () => {
+      toast({ title: "Student Updated", description: "Student information has been updated successfully." });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : "Please try again.";
+      toast({ title: "Update failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ id, password }: { id: string; password: string }) => {
+      const res = await fetch(`${apiBaseUrl}/api/users/students/${id}/reset-password`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to reset password");
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: "Password Reset", description: "A new password has been set for the student." });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : "Please try again.";
+      toast({ title: "Reset failed", description: message, variant: "destructive" });
+    },
+  });
 
   const stats = [
     {
@@ -701,21 +779,9 @@ const AdminStudentManagement = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          toast({
-                            title:
-                              student.status === "active"
-                                ? "Account Deactivated"
-                                : "Account Activated",
-                            description: `${getStudentFullName(
-                              student
-                            )}'s account has been ${
-                              student.status === "active"
-                                ? "deactivated"
-                                : "activated"
-                            }.`,
-                          });
-                        }}
+                        onClick={() =>
+                          activateMutation.mutate({ id: student.id, active: student.status !== "active" })
+                        }
                         className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                       >
                         {student.status === "active" ? (

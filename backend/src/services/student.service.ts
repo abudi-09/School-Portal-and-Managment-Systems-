@@ -2,15 +2,15 @@ import User, { IUser } from "../models/User";
 
 export class StudentService {
   /**
-   * Generate a unique student ID following the pattern STD-<YEAR>-<###>
+   * Generate a unique student ID following the pattern STU-<YEAR>-<####>
    */
   static async generateStudentId(): Promise<string> {
     const currentYear = new Date().getFullYear();
-    const prefix = `STD-${currentYear}`;
+    const prefix = `STU-${currentYear}`;
 
     const lastStudent = await User.findOne({
       role: "student",
-      studentId: { $regex: `^${prefix}-\\d{3}$` },
+      studentId: { $regex: `^${prefix}-\\d{4}$` },
     })
       .sort({ studentId: -1 })
       .select("studentId")
@@ -18,13 +18,13 @@ export class StudentService {
 
     let sequence = 1;
     if (lastStudent?.studentId) {
-      const match = lastStudent.studentId.match(/-(\d{3})$/);
+      const match = lastStudent.studentId.match(/-(\d{4})$/);
       if (match?.[1]) {
         sequence = parseInt(match[1], 10) + 1;
       }
     }
 
-    return `${prefix}-${sequence.toString().padStart(3, "0")}`;
+    return `${prefix}-${sequence.toString().padStart(4, "0")}`;
   }
 
   /**
@@ -103,5 +103,55 @@ export class StudentService {
         pages: Math.ceil(total / limit),
       },
     };
+  }
+
+  static async updateStudent(
+    id: string,
+    payload: Partial<{
+      firstName: string;
+      lastName: string;
+      email: string;
+      profile: IUser["profile"];
+      academicInfo: IUser["academicInfo"];
+      isActive: boolean;
+    }>
+  ) {
+    const student = await User.findOne({ _id: id, role: "student" });
+    if (!student) throw new Error("Student not found");
+
+    if (payload.email) {
+      const emailLower = payload.email.toLowerCase();
+      if (emailLower !== student.email) {
+        const exists = await User.findOne({ email: emailLower });
+        if (exists) throw new Error("A user with this email already exists");
+        student.email = emailLower;
+      }
+    }
+
+    if (payload.firstName !== undefined) student.firstName = payload.firstName;
+    if (payload.lastName !== undefined) student.lastName = payload.lastName;
+    if (payload.profile !== undefined) student.profile = payload.profile;
+    if (payload.academicInfo !== undefined)
+      student.academicInfo = payload.academicInfo;
+    if (payload.isActive !== undefined) student.isActive = payload.isActive;
+
+    await student.save();
+    return student.toJSON();
+  }
+
+  static async setActive(id: string, active: boolean) {
+    const student = await User.findOne({ _id: id, role: "student" });
+    if (!student) throw new Error("Student not found");
+    student.isActive = active;
+    await student.save();
+    return student.toJSON();
+  }
+
+  static async resetPassword(id: string, newPassword: string) {
+    const student = await User.findOne({ _id: id, role: "student" });
+    if (!student) throw new Error("Student not found");
+    student.password = newPassword; // will be hashed by pre-save hook
+    await student.save();
+    return { _id: student._id };
   }
 }

@@ -1,5 +1,5 @@
 import express from "express";
-import { body, validationResult } from "express-validator";
+import { body, param, validationResult } from "express-validator";
 import User from "../models/User";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
 import { StudentService } from "../services/student.service";
@@ -80,6 +80,11 @@ const createStudentValidators = [
   body("academicInfo").optional({ nullable: true }).isObject(),
 ];
 
+const gmailEmailValidator = (field = "email") =>
+  body(field)
+    .custom((value) => /@gmail\.com$/i.test(value))
+    .withMessage("Email must be a Gmail address");
+
 // @route   GET /api/users
 // @desc    Get all users (admin only)
 // @access  Private/Admin
@@ -125,49 +130,8 @@ router.get(
   }
 );
 
-// @route   GET /api/users/:id
-// @desc    Get user by ID
-// @access  Private
-router.get(
-  "/:id",
-  authMiddleware,
-  async (req: express.Request, res: express.Response) => {
-    try {
-      const user = await User.findById(req.params.id).select("-password");
-
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
-      }
-
-      // Users can only view their own profile unless they're admin
-      if (
-        req.user?._id.toString() !== req.params.id &&
-        req.user?.role !== "admin"
-      ) {
-        return res.status(403).json({
-          success: false,
-          message: "Access denied",
-        });
-      }
-
-      res.json({
-        success: true,
-        data: { user },
-      });
-    } catch (error: any) {
-      console.error("Get user error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Server error retrieving user",
-        error:
-          process.env.NODE_ENV === "development" ? error.message : undefined,
-      });
-    }
-  }
-);
+// NOTE: The generic "/:id" routes are declared AFTER specific routes like "/students" and "/role/:role"
+// to prevent accidental matches such as GET /api/users/students being treated as an ID.
 
 // @route   POST /api/users/:id/avatar
 // @desc    Upload avatar for user (owner or admin)
@@ -175,12 +139,19 @@ router.get(
 router.post(
   "/:id/avatar",
   authMiddleware,
+  [param("id").isMongoId().withMessage("Invalid user ID")],
   upload.single("avatar"),
   async (
     req: express.Request & { user?: any; file?: { filename?: string } | null },
     res: express.Response
   ) => {
     try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid input", errors: errors.array() });
+      }
       // Permission check
       if (
         req.user?._id.toString() !== req.params.id &&
@@ -232,8 +203,15 @@ router.post(
 router.put(
   "/:id",
   authMiddleware,
+  [param("id").isMongoId().withMessage("Invalid user ID")],
   async (req: express.Request, res: express.Response) => {
     try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid input", errors: errors.array() });
+      }
       // Users can only update their own profile unless they're admin
       if (
         req.user?._id.toString() !== req.params.id &&
@@ -296,8 +274,15 @@ router.put(
   "/:id/responsibilities",
   authMiddleware,
   authorizeRoles("head", "admin"),
+  [param("id").isMongoId().withMessage("Invalid user ID")],
   async (req: express.Request, res: express.Response) => {
     try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid input", errors: errors.array() });
+      }
       const { responsibilities } = req.body;
 
       if (typeof responsibilities !== "string") {
@@ -352,8 +337,15 @@ router.delete(
   "/:id",
   authMiddleware,
   authorizeRoles("admin"),
+  [param("id").isMongoId().withMessage("Invalid user ID")],
   async (req: express.Request, res: express.Response) => {
     try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid input", errors: errors.array() });
+      }
       const user = await User.findById(req.params.id);
 
       if (!user) {
@@ -430,7 +422,7 @@ router.post(
   "/students",
   authMiddleware,
   authorizeRoles("admin"),
-  createStudentValidators,
+  [...createStudentValidators, gmailEmailValidator("email")],
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -531,4 +523,171 @@ router.get(
   }
 );
 
+// @route   PUT /api/users/students/:id
+// @desc    Update a student (admin only)
+// @access  Private/Admin
+router.put(
+  "/students/:id",
+  authMiddleware,
+  authorizeRoles("admin"),
+  [
+    param("id").isMongoId().withMessage("Invalid student ID"),
+    gmailEmailValidator("email").optional(),
+    body("email").optional().isEmail().withMessage("Invalid email").normalizeEmail(),
+  ],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: "Invalid input", errors: errors.array() });
+    }
+
+    try {
+  const updated = await StudentService.updateStudent(req.params.id as string, req.body);
+      res.json({ success: true, message: "Student updated successfully", data: { student: updated } });
+    } catch (error: any) {
+      if (error.message === "Student not found") {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      if (error.message === "A user with this email already exists") {
+        return res.status(409).json({ success: false, message: error.message });
+      }
+      console.error("Update student error:", error);
+      res.status(500).json({ success: false, message: "Server error updating student" });
+    }
+  }
+);
+
+// @route   PATCH /api/users/students/:id/activate
+// @desc    Activate a student account (admin only)
+// @access  Private/Admin
+router.patch(
+  "/students/:id/activate",
+  authMiddleware,
+  authorizeRoles("admin"),
+  [param("id").isMongoId().withMessage("Invalid student ID")],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: "Invalid input", errors: errors.array() });
+    }
+    try {
+  const student = await StudentService.setActive(req.params.id as string, true);
+      res.json({ success: true, message: "Student activated", data: { student } });
+    } catch (error: any) {
+      if (error.message === "Student not found") {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      console.error("Activate student error:", error);
+      res.status(500).json({ success: false, message: "Server error activating student" });
+    }
+  }
+);
+
+// @route   PATCH /api/users/students/:id/deactivate
+// @desc    Deactivate a student account (admin only)
+// @access  Private/Admin
+router.patch(
+  "/students/:id/deactivate",
+  authMiddleware,
+  authorizeRoles("admin"),
+  [param("id").isMongoId().withMessage("Invalid student ID")],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: "Invalid input", errors: errors.array() });
+    }
+    try {
+  const student = await StudentService.setActive(req.params.id as string, false);
+      res.json({ success: true, message: "Student deactivated", data: { student } });
+    } catch (error: any) {
+      if (error.message === "Student not found") {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      console.error("Deactivate student error:", error);
+      res.status(500).json({ success: false, message: "Server error deactivating student" });
+    }
+  }
+);
+
+// @route   PATCH /api/users/students/:id/reset-password
+// @desc    Reset a student's password (admin only)
+// @access  Private/Admin
+router.patch(
+  "/students/:id/reset-password",
+  authMiddleware,
+  authorizeRoles("admin"),
+  [
+    param("id").isMongoId().withMessage("Invalid student ID"),
+    body("password").isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
+  ],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: "Invalid input", errors: errors.array() });
+    }
+    try {
+  await StudentService.resetPassword(req.params.id as string, req.body.password);
+      res.json({ success: true, message: "Student password reset" });
+    } catch (error: any) {
+      if (error.message === "Student not found") {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      console.error("Reset password error:", error);
+      res.status(500).json({ success: false, message: "Server error resetting password" });
+    }
+  }
+);
+
 export default router;
+// Place generic ID route handlers at the end to avoid conflicting with more specific routes
+// @route   GET /api/users/:id
+// @desc    Get user by ID
+// @access  Private
+router.get(
+  "/:id",
+  authMiddleware,
+  [param("id").isMongoId().withMessage("Invalid user ID")],
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid input", errors: errors.array() });
+      }
+
+      const user = await User.findById(req.params.id).select("-password");
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Users can only view their own profile unless they're admin
+      if (
+        req.user?._id.toString() !== req.params.id &&
+        req.user?.role !== "admin"
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: { user },
+      });
+    } catch (error: any) {
+      console.error("Get user error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error retrieving user",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);

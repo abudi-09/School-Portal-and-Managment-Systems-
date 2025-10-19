@@ -16,7 +16,7 @@ async function updatePassword() {
       })
     );
 
-    const hashedPassword = await bcrypt.hash("Admin@12345", 10);
+    const hashedPassword = await bcrypt.hash("Admin@12345", 12);
 
     console.log("Generated hash for Admin@12345:", hashedPassword);
 

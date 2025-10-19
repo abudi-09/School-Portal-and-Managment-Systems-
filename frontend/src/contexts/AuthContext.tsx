@@ -70,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return mockLogin(credentials);
       }
 
+      // For staff login, try API first
+      console.log("Trying API login for staff:", credentials.email);
       const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
         method: "POST",
         headers: {
@@ -82,8 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       const data = await response.json();
+      console.log("API response:", response.status, data);
 
       if (response.ok && data.success) {
+        console.log("API login success, token:", data.data.token);
         // Transform backend user data to frontend format
         const user: User = {
           id: data.data.user.id,
@@ -103,10 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("currentUser", JSON.stringify(user));
         localStorage.setItem("token", data.data.token);
 
-        console.log("Login successful for", user.email);
-
         return { success: true, user };
       } else {
+        console.log("API login failed, response not ok or success false");
         // Handle known auth states without falling back to mock
         const message: string | undefined = data?.message;
         const isPending =
@@ -115,10 +118,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, pending: isPending, message };
       }
     } catch (error) {
-      console.warn(
-        "API call failed, using mock authentication only for local dev:",
-        error
-      );
+      console.warn("API call failed:", error);
+      console.log("API login failed with network error, using mock");
       // Fallback to mock authentication only when API is unreachable (e.g., local dev)
       return mockLogin(credentials);
     }

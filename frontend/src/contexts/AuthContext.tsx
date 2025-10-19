@@ -126,12 +126,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const useMock = (import.meta.env.VITE_USE_MOCK as string) === "true";
 
       if (useMock) {
-        console.log("API login failed with network error, using mock because VITE_USE_MOCK=true");
+        console.log(
+          "API login failed with network error, using mock because VITE_USE_MOCK=true"
+        );
         return mockLogin(credentials);
       }
 
       // Don't silently succeed with mock in normal runs; surface the error to caller.
-      return { success: false, message: "Network error: failed to reach authentication API." };
+      return {
+        success: false,
+        message: "Network error: failed to reach authentication API.",
+      };
     }
   };
 

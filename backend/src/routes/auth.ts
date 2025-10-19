@@ -141,17 +141,25 @@ router.post(
 
       const { email, password } = req.body;
 
+      console.log(`Login attempt for email: ${email}`);
+
       // Find user by email
       const user = await User.findOne({ email });
       if (!user) {
+        console.log(`User not found for email: ${email}`);
         return res.status(401).json({
           success: false,
           message: "Invalid credentials",
         });
       }
 
+      console.log(
+        `User found: ${user.email}, role: ${user.role}, status: ${user.status}, isActive: ${user.isActive}`
+      );
+
       // Check if user is active
       if (!user.isActive) {
+        console.log(`User ${email} is not active`);
         return res.status(401).json({
           success: false,
           message: "Account is deactivated",
@@ -159,6 +167,7 @@ router.post(
       }
 
       if (user.status !== "approved") {
+        console.log(`User ${email} status is ${user.status}, not approved`);
         return res.status(403).json({
           success: false,
           message:
@@ -170,6 +179,7 @@ router.post(
 
       // Check password
       const isMatch = await user.comparePassword(password);
+      console.log(`Password match for ${email}: ${isMatch}`);
       if (!isMatch) {
         return res.status(401).json({
           success: false,

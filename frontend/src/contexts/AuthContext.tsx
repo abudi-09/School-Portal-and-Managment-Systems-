@@ -103,6 +103,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("currentUser", JSON.stringify(user));
         localStorage.setItem("token", data.data.token);
 
+        console.log("Login successful for", user.email);
+
         return { success: true, user };
       } else {
         // Handle known auth states without falling back to mock
@@ -140,11 +142,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Teacher/Head/Admin login - include the Super Admin
       foundUser = MOCK_USERS.find((u) => u.email === credentials.email);
       // Also check for Super Admin
-      if (!foundUser && credentials.email === "superadmin.pathways@gmail.com") {
+      if (!foundUser && credentials.email === "superadmin@pathways.local") {
         foundUser = {
           id: "super-admin",
           name: "Super Admin",
-          email: "superadmin.pathways@gmail.com",
+          email: "superadmin@pathways.local",
           role: "admin",
           position: "Super Administrator",
         };
@@ -154,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (foundUser) {
       setUser(foundUser);
       localStorage.setItem("currentUser", JSON.stringify(foundUser));
+      localStorage.setItem("token", "mock-token");
       return { success: true, user: foundUser };
     }
 

@@ -175,6 +175,7 @@ const AdminHeadManagement = () => {
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
   const fetchHeads = useCallback(async () => {
+    console.log("fetchHeads called, apiBaseUrl:", apiBaseUrl, "token:", token);
     if (!token) {
       setError("Authentication required. Please log in again.");
       // Redirect to login after a short delay
@@ -188,17 +189,43 @@ const AdminHeadManagement = () => {
     setError(null);
 
     try {
-      const response = await fetch(
-        `${apiBaseUrl}/api/admin/users?role=head&limit=100`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      // perform the fetch and capture any network-level errors
+      const url = `${apiBaseUrl}/api/admin/users?role=head&limit=100`;
+      console.log("fetching heads url:", url);
 
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      // If the response is an HTTP error, try to read the body to log it
       if (!response.ok) {
-        throw new Error("Failed to load head accounts");
+        let bodyText = "";
+        try {
+          bodyText = await response.text();
+        } catch (e) {
+          console.error("Failed reading error body:", e);
+        }
+        console.error(
+          "Head fetch failed",
+          response.status,
+          response.statusText,
+          bodyText
+        );
+
+        if (response.status === 401) {
+          console.log("401 received in fetchHeads, logging out");
+          localStorage.removeItem("currentUser");
+          localStorage.removeItem("token");
+          window.location.href = "/login";
+          return;
+        }
+
+        throw new Error(
+          `Failed to load head accounts: ${response.status} ${response.statusText}`
+        );
       }
 
       const payload = await response.json();
@@ -301,6 +328,15 @@ const AdminHeadManagement = () => {
         }
       );
 
+      if (response.status === 401) {
+        console.log("401 received in approveHead, logging out");
+        // Token invalid, logout
+        localStorage.removeItem("currentUser");
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+        return;
+      }
+
       if (!response.ok) {
         const payload = await response.json().catch(() => undefined);
         const message = payload?.message ?? "Failed to update account status";
@@ -361,22 +397,23 @@ const AdminHeadManagement = () => {
         </Button>
       );
     }
-
     if (head.status === "inactive") {
+      // offer to activate an inactive account
       actions.push(
         <Button
           key="activate"
           variant="outline"
-          className="border-blue-200 text-blue-600 hover:bg-blue-50"
+          className="border-slate-200 text-slate-700 hover:bg-slate-50"
           onClick={() => handleActionRequest(head, "activate")}
         >
-          <UserCheck className="mr-2 h-4 w-4" />
+          <ShieldCheck className="mr-2 h-4 w-4" />
           Activate
         </Button>
       );
     }
 
     if (head.status === "active") {
+      // allow deactivation of active accounts
       actions.push(
         <Button
           key="deactivate"
@@ -437,14 +474,14 @@ const AdminHeadManagement = () => {
       <section className="space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Head Management
-          </h1>
-          <p className="text-gray-600 max-w-2xl">
-            Review onboarding progress, activate accounts, and keep Head of
-            School access aligned with current roles.
-          </p>
-        </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Head Management
+            </h1>
+            <p className="text-gray-600 max-w-2xl">
+              Review onboarding progress, activate accounts, and keep Head of
+              School access aligned with current roles.
+            </p>
+          </div>
           <Badge className="bg-amber-100 text-amber-700 px-4 py-2 text-sm font-medium">
             {statusCounts.pending} Pending
           </Badge>

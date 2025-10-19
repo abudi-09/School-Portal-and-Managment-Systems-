@@ -21,7 +21,9 @@ app.use(helmet());
 // CORS configuration
 app.use(
   cors({
-    origin: env.frontendUrl,
+    // In development allow the request origin (reflect) so local tooling/ports don't block.
+    // In production, restrict to the configured frontend URL.
+    origin: env.nodeEnv === "development" ? true : env.frontendUrl,
     credentials: true,
   })
 );

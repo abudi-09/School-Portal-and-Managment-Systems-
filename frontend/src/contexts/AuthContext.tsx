@@ -37,6 +37,7 @@ const MOCK_USERS: User[] = [
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("currentUser");
@@ -49,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("currentUser");
       localStorage.removeItem("token");
     }
+    setIsLoading(false);
   }, []);
 
   const login = async (credentials: {
@@ -119,9 +121,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.warn("API call failed:", error);
-      console.log("API login failed with network error, using mock");
-      // Fallback to mock authentication only when API is unreachable (e.g., local dev)
-      return mockLogin(credentials);
+
+      // Make mock fallback opt-in. Use VITE_USE_MOCK=true in frontend .env to enable.
+      const useMock = (import.meta.env.VITE_USE_MOCK as string) === "true";
+
+      if (useMock) {
+        console.log("API login failed with network error, using mock because VITE_USE_MOCK=true");
+        return mockLogin(credentials);
+      }
+
+      // Don't silently succeed with mock in normal runs; surface the error to caller.
+      return { success: false, message: "Network error: failed to reach authentication API." };
     }
   };
 
@@ -253,6 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signup,
         logout,
         isAuthenticated: !!user,
+        isLoading,
         getRoleBasedRedirect,
       }}
     >

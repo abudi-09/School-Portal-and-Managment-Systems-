@@ -35,5 +35,6 @@ export interface AuthContextType {
   signup: (data: SignupData) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
   getRoleBasedRedirect: (role: UserRole) => string;
 }

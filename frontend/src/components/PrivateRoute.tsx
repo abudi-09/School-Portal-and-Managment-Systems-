@@ -14,8 +14,12 @@ export const PrivateRoute = ({
   allowedRoles = [],
   requireAuth = true,
 }: PrivateRouteProps) => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
+
+  if (isLoading) {
+    return null;
+  }
 
   // If authentication is required but user is not authenticated
   if (requireAuth && !isAuthenticated) {

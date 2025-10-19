@@ -2,7 +2,7 @@ import mongoose, { Document, Schema } from "mongoose";
 import bcrypt from "bcryptjs";
 
 export type UserRole = "admin" | "head" | "teacher" | "student";
-export type UserStatus = "pending" | "approved" | "deactivated";
+export type UserStatus = "pending" | "approved" | "deactivated" | "rejected";
 
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
@@ -13,6 +13,7 @@ export interface IUser extends Document {
   lastName: string;
   role: UserRole;
   status: UserStatus;
+  isApproved: boolean;
   isActive: boolean;
   profile: {
     phone?: string;
@@ -80,10 +81,16 @@ const userSchema = new Schema<IUser>(
     },
     status: {
       type: String,
-      enum: ["pending", "approved", "deactivated"],
+      enum: ["pending", "approved", "deactivated", "rejected"],
       required: true,
       default: function (this: IUser) {
         return this.role === "admin" ? "approved" : "pending";
+      },
+    },
+    isApproved: {
+      type: Boolean,
+      default: function (this: IUser) {
+        return this.role === "admin";
       },
     },
     isActive: {
@@ -207,6 +214,19 @@ userSchema.methods.comparePassword = async function (
 ): Promise<boolean> {
   return bcrypt.compare(candidatePassword, this.password);
 };
+
+userSchema.pre("save", function (next) {
+  if (this.isModified("status")) {
+    this.isApproved = this.status === "approved";
+    // If rejected or deactivated ensure not active
+    if (this.status === "rejected" || this.status === "deactivated") {
+      this.isActive = false;
+    } else if (this.status === "approved") {
+      this.isActive = true;
+    }
+  }
+  next();
+});
 
 // Remove password from JSON output
 userSchema.methods.toJSON = function () {

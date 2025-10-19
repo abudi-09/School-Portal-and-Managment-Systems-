@@ -129,7 +129,7 @@ router.patch(
         });
       }
 
-      const teacher = await ApprovalService.deactivateUser(teacherId);
+      const teacher = await ApprovalService.rejectUser(teacherId);
 
       // Verify it was actually a pending teacher
       if (teacher.role !== "teacher") {
@@ -141,7 +141,7 @@ router.patch(
 
       res.json({
         success: true,
-        message: "Teacher rejected and account deactivated",
+        message: "Teacher rejected successfully",
         data: { teacher },
       });
     } catch (error: any) {
@@ -169,13 +169,23 @@ router.get(
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
 
-      const teachers = await User.find({ role: "teacher" })
+      const filter: Record<string, unknown> = { role: "teacher" };
+
+      if (req.query.status) {
+        filter.status = req.query.status;
+      }
+
+      if (req.query.isApproved !== undefined) {
+        filter.isApproved = req.query.isApproved === "true";
+      }
+
+      const teachers = await User.find(filter)
         .select("-password")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
 
-      const total = await User.countDocuments({ role: "teacher" });
+      const total = await User.countDocuments(filter);
 
       res.json({
         success: true,

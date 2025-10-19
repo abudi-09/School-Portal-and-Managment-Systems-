@@ -7,7 +7,7 @@ export class ApprovalService {
   static async approveUser(userId: string): Promise<any> {
     const user = await User.findByIdAndUpdate(
       userId,
-      { status: "approved", isActive: true },
+      { status: "approved", isActive: true, isApproved: true },
       { new: true, runValidators: true }
     ).select("-password");
 
@@ -24,7 +24,24 @@ export class ApprovalService {
   static async deactivateUser(userId: string): Promise<any> {
     const user = await User.findByIdAndUpdate(
       userId,
-      { status: "deactivated", isActive: false },
+      { status: "deactivated", isActive: false, isApproved: false },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    return user;
+  }
+
+  /**
+   * Reject a user registration
+   */
+  static async rejectUser(userId: string): Promise<any> {
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { status: "rejected", isActive: false, isApproved: false },
       { new: true, runValidators: true }
     ).select("-password");
 

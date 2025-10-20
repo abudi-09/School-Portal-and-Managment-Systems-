@@ -124,15 +124,12 @@ const AdminStudentManagement = () => {
   const [newStudentForm, setNewStudentForm] =
     useState<StudentFormState>(EMPTY_STUDENT_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [generatedCredentials, setGeneratedCredentials] = useState<
-    | {
-        studentId: string;
-        password: string;
-        fullName: string;
-        action: "created" | "reset";
-      }
-    | null
-  >(null);
+  const [generatedCredentials, setGeneratedCredentials] = useState<{
+    studentId: string;
+    password: string;
+    fullName: string;
+    action: "created" | "reset";
+  } | null>(null);
   const { toast } = useToast();
   const apiBaseUrl =
     import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
@@ -434,7 +431,9 @@ const AdminStudentManagement = () => {
       if (!res.ok || !data?.success)
         throw new Error(data?.message || "Failed to reset password");
       return data as {
-        data?: { credentials?: { studentId?: string; temporaryPassword?: string } };
+        data?: {
+          credentials?: { studentId?: string; temporaryPassword?: string };
+        };
       };
     },
     onSuccess: (data, variables) => {
@@ -747,8 +746,8 @@ const AdminStudentManagement = () => {
                   : "Student Credentials"}
               </DialogTitle>
               <DialogDescription>
-                Share these credentials securely with the student. They won't
-                be shown again.
+                Share these credentials securely with the student. They won't be
+                shown again.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -792,7 +791,10 @@ const AdminStudentManagement = () => {
                 <Copy className="h-4 w-4 mr-2" />
                 Copy credentials
               </Button>
-              <Button type="button" onClick={() => setGeneratedCredentials(null)}>
+              <Button
+                type="button"
+                onClick={() => setGeneratedCredentials(null)}
+              >
                 Close
               </Button>
             </DialogFooter>

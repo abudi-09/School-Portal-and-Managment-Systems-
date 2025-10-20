@@ -32,10 +32,7 @@ const studentLoginSchema = z.object({
   studentId: z
     .string()
     .min(1, "Student ID is required")
-    .regex(
-      /^STU-\d{4}-\d{4}$/i,
-      "Student ID must look like STU-2024-0001"
-    ),
+    .regex(/^STU-\d{4}-\d{4}$/i, "Student ID must look like STU-2024-0001"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   rememberMe: z.boolean().optional(),
 });

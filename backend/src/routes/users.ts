@@ -109,13 +109,11 @@ router.post(
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Invalid input",
-            errors: errors.array(),
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid input",
+          errors: errors.array(),
+        });
       }
       // Permission check
       if (
@@ -173,13 +171,11 @@ router.put(
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Invalid input",
-            errors: errors.array(),
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid input",
+          errors: errors.array(),
+        });
       }
       // Users can only update their own profile unless they're admin
       if (
@@ -248,13 +244,11 @@ router.put(
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Invalid input",
-            errors: errors.array(),
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid input",
+          errors: errors.array(),
+        });
       }
       const { responsibilities } = req.body;
 
@@ -315,13 +309,11 @@ router.delete(
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Invalid input",
-            errors: errors.array(),
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid input",
+          errors: errors.array(),
+        });
       }
       const user = await User.findById(req.params.id);
 
@@ -518,13 +510,11 @@ router.put(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid input",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input",
+        errors: errors.array(),
+      });
     }
 
     try {
@@ -563,13 +553,11 @@ router.patch(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid input",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input",
+        errors: errors.array(),
+      });
     }
     try {
       const student = await StudentService.setActive(
@@ -604,13 +592,11 @@ router.patch(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid input",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input",
+        errors: errors.array(),
+      });
     }
     try {
       const student = await StudentService.setActive(
@@ -645,13 +631,11 @@ router.delete(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid input",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input",
+        errors: errors.array(),
+      });
     }
 
     try {
@@ -698,13 +682,11 @@ router.patch(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid input",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input",
+        errors: errors.array(),
+      });
     }
     try {
       const { credentials } = await StudentService.resetPassword(
@@ -740,13 +722,11 @@ router.get(
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Invalid input",
-            errors: errors.array(),
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid input",
+          errors: errors.array(),
+        });
       }
 
       const user = await User.findById(req.params.id).select("-password");

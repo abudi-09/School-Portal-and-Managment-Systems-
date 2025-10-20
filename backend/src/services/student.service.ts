@@ -38,9 +38,8 @@ export class StudentService {
     const symbols = "!@#$%^&*";
     const all = lower + upper + digits + symbols;
 
-    const pick = (source: string) => source.charAt(
-      crypto.randomInt(0, source.length)
-    );
+    const pick = (source: string) =>
+      source.charAt(crypto.randomInt(0, source.length));
 
     const required: string[] = [
       pick(lower),
@@ -79,8 +78,8 @@ export class StudentService {
     profile?: IUser["profile"];
     academicInfo?: IUser["academicInfo"];
   }) {
-  const normalizedEmail = payload.email.toLowerCase();
-  const existingUser = await User.findOne({ email: normalizedEmail });
+    const normalizedEmail = payload.email.toLowerCase();
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       throw new Error("A user with this email already exists");
     }
@@ -89,8 +88,8 @@ export class StudentService {
     const temporaryPassword = this.generateTemporaryPassword();
 
     const student = new User({
-  ...payload,
-  email: normalizedEmail,
+      ...payload,
+      email: normalizedEmail,
       role: "student",
       status: "approved",
       isActive: true,

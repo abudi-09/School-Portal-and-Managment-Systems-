@@ -115,11 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const user: User = {
           id: userData.id,
-          name:
-            fullName ||
-            userData.email ||
-            userData.studentId ||
-            "User",
+          name: fullName || userData.email || userData.studentId || "User",
           email: userData.email,
           studentId: userData.studentId,
           role: userData.role,
@@ -176,9 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .trim()
         .toUpperCase();
       // Student login
-      foundUser = MOCK_USERS.find(
-        (u) => u.studentId === normalizedStudentId
-      );
+      foundUser = MOCK_USERS.find((u) => u.studentId === normalizedStudentId);
     } else if (credentials.email) {
       // Teacher/Head/Admin login - include the Super Admin
       foundUser = MOCK_USERS.find((u) => u.email === credentials.email);

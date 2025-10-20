@@ -181,7 +181,9 @@ router.post(
       }
 
       console.log(
-        `User found: ${user.email ?? user.studentId}, role: ${user.role}, status: ${user.status}, isActive: ${user.isActive}`
+        `User found: ${user.email ?? user.studentId}, role: ${
+          user.role
+        }, status: ${user.status}, isActive: ${user.isActive}`
       );
 
       // Check if user is active

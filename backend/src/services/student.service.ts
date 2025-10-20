@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import User, { IUser } from "../models/User";
+import Counter from "../models/Counter";
 
 export class StudentService {
   /**
@@ -7,25 +8,15 @@ export class StudentService {
    */
   static async generateStudentId(): Promise<string> {
     const currentYear = new Date().getFullYear();
-    const prefix = `STU-${currentYear}`;
-
-    const lastStudent = await User.findOne({
-      role: "student",
-      studentId: { $regex: `^${prefix}-\\d{4}$` },
-    })
-      .sort({ studentId: -1 })
-      .select("studentId")
-      .lean();
-
-    let sequence = 1;
-    if (lastStudent?.studentId) {
-      const match = lastStudent.studentId.match(/-(\d{4})$/);
-      if (match?.[1]) {
-        sequence = parseInt(match[1], 10) + 1;
-      }
-    }
-
-    return `${prefix}-${sequence.toString().padStart(4, "0")}`;
+    const key = `studentId:${currentYear}`;
+    // Atomic increment per year
+    const counter = await Counter.findOneAndUpdate(
+      { key },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    ).lean();
+    const seq = Math.max(1, counter?.seq ?? 1);
+    return `STU-${currentYear}-${seq.toString().padStart(4, "0")}`;
   }
 
   /**
@@ -83,23 +74,46 @@ export class StudentService {
     if (existingUser) {
       throw new Error("A user with this email already exists");
     }
-
-    const studentId = await this.generateStudentId();
     const temporaryPassword = this.generateTemporaryPassword();
 
-    const student = new User({
-      ...payload,
-      email: normalizedEmail,
-      role: "student",
-      status: "approved",
-      isActive: true,
-      studentId,
-      password: temporaryPassword,
-    });
+    // Retry loop to handle rare duplicate studentId collisions
+    const maxRetries = 5;
+    let attempts = 0;
+    let student: IUser | null = null;
+    let studentId = "";
+    // eslint-disable-next-line no-constant-condition
+    while (attempts < maxRetries) {
+      attempts += 1;
+      studentId = await this.generateStudentId();
+      try {
+        student = new User({
+          ...payload,
+          email: normalizedEmail,
+          role: "student",
+          status: "approved",
+          isActive: true,
+          studentId,
+          password: temporaryPassword,
+        }) as unknown as IUser;
+        await (student as any).save();
+        break; // success
+      } catch (err: any) {
+        const isDupKey =
+          err?.code === 11000 &&
+          (err?.keyPattern?.studentId || err?.keyValue?.studentId);
+        if (isDupKey && attempts < maxRetries) {
+          // try again with a new generated id
+          continue;
+        }
+        throw err;
+      }
+    }
 
-    await student.save();
-    const studentData = student.toJSON();
+    if (!student) {
+      throw new Error("Unable to create student after multiple attempts");
+    }
 
+    const studentData = (student as any).toJSON();
     return {
       student: studentData,
       credentials: {

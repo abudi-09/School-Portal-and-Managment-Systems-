@@ -119,6 +119,7 @@ const AdminStudentManagement = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
   const [newStudentForm, setNewStudentForm] =
@@ -223,6 +224,28 @@ const AdminStudentManagement = () => {
       return;
     }
 
+    // Client-side validations to match server rules and avoid generic 500s
+    const emailTrimmed = email.trim().toLowerCase();
+    if (!/@gmail\.com$/i.test(emailTrimmed)) {
+      toast({
+        title: "Invalid email",
+        description: "Email must be a Gmail address (ends with @gmail.com).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const phoneTrimmed = phone.trim();
+    if (phoneTrimmed && !/^\+?[\d\s\-()]+$/.test(phoneTrimmed)) {
+      toast({
+        title: "Invalid phone number",
+        description:
+          "Please enter a valid phone number (digits, spaces, +, -, parentheses).",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const token = localStorage.getItem("token");
     if (!token) {
       toast({
@@ -241,8 +264,8 @@ const AdminStudentManagement = () => {
     const payload = {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
-      email: email.trim().toLowerCase(),
-      profile: phone.trim() ? { phone: phone.trim() } : undefined,
+      email: emailTrimmed,
+      profile: phoneTrimmed ? { phone: phoneTrimmed } : undefined,
       academicInfo: normalizedGrade
         ? { grade: normalizedGrade, class: normalizedGrade }
         : undefined,
@@ -307,6 +330,12 @@ const AdminStudentManagement = () => {
           fullName: getStudentFullName(newStudent),
           action: "created",
         });
+        const sid =
+          credentials.studentId ?? newStudent.studentId ?? "Unknown ID";
+        setCredentialsMap((m) => ({
+          ...m,
+          [sid]: credentials.temporaryPassword!,
+        }));
       }
 
       resetNewStudentForm();
@@ -332,11 +361,50 @@ const AdminStudentManagement = () => {
   };
 
   const handleViewStudent = (student: Student) => {
-    // View student details logic here
-    toast({
-      title: "Student Details",
-      description: `Viewing details for ${getStudentFullName(student)}`,
-    });
+    setSelectedStudent(student);
+    setViewDialogOpen(true);
+  };
+
+  const [passwordRevealed, setPasswordRevealed] = useState(false);
+  const [credentialsMap, setCredentialsMap] = useState<Record<string, string>>(
+    {}
+  );
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(
+      () => setDebouncedSearch(searchTerm.trim().toLowerCase()),
+      300
+    );
+    return () => clearTimeout(t);
+  }, [searchTerm, setDebouncedSearch]);
+
+  // helpers for the View dialog: prefer the most-recent generatedCredentials, fall back to the session map
+  const viewedStudentId =
+    selectedStudent?.studentId ?? generatedCredentials?.studentId ?? undefined;
+  const viewedPassword =
+    selectedStudent &&
+    generatedCredentials?.studentId === selectedStudent.studentId
+      ? generatedCredentials.password
+      : selectedStudent
+      ? credentialsMap[selectedStudent.studentId]
+      : undefined;
+
+  const handleCopyStudentId = async (studentId?: string) => {
+    if (!studentId) return;
+    try {
+      await navigator.clipboard.writeText(studentId);
+      toast({
+        title: "Copied",
+        description: "Student ID copied to clipboard.",
+      });
+    } catch (err) {
+      toast({
+        title: "Copy failed",
+        description: "Unable to copy Student ID.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDeleteStudent = (studentId: string) => {
@@ -446,6 +514,12 @@ const AdminStudentManagement = () => {
           fullName: target ? getStudentFullName(target) : "The student",
           action: "reset",
         });
+        if (credentials.studentId) {
+          setCredentialsMap((m) => ({
+            ...m,
+            [credentials.studentId!]: credentials.temporaryPassword!,
+          }));
+        }
       }
       toast({
         title: "Password Reset",
@@ -490,122 +564,212 @@ const AdminStudentManagement = () => {
     },
   });
 
+  const filteredStudents = students.filter((s) => {
+    if (!debouncedSearch) return true;
+    const q = debouncedSearch;
+    const name = `${s.firstName} ${s.lastName}`.toLowerCase();
+    return (
+      (s.studentId || "").toLowerCase().includes(q) ||
+      name.includes(q) ||
+      (s.email || "").toLowerCase().includes(q) ||
+      (s.grade || "").toLowerCase().includes(q) ||
+      (s.phone || "").toLowerCase().includes(q)
+    );
+  });
+
   const stats = [
     {
       title: "Total Students",
-      value: students.length,
+      value: filteredStudents.length,
       icon: UserPlus,
       color: "text-gray-600",
     },
     {
       title: "Active",
-      value: students.filter((s) => s.status === "active").length,
+      value: filteredStudents.filter((s) => s.status === "active").length,
       icon: CheckCircle,
       color: "text-gray-600",
     },
     {
       title: "Inactive",
-      value: students.filter((s) => s.status === "inactive").length,
+      value: filteredStudents.filter((s) => s.status === "inactive").length,
       icon: XCircle,
       color: "text-gray-600",
     },
     {
       title: "New This Term",
-      value: students.filter((s) => s.registrationType === "New").length,
+      value: filteredStudents.filter((s) => s.registrationType === "New")
+        .length,
       icon: Hash,
       color: "text-gray-600",
     },
   ];
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      <section className="space-y-4">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Student Management
-            </h1>
-            <p className="text-gray-600">
-              Add, manage, and generate student IDs
-            </p>
-          </div>
-          <Dialog
-            open={dialogOpen}
-            onOpenChange={(open) => {
-              setDialogOpen(open);
-              if (!open) {
-                resetNewStudentForm();
-                setIsSubmitting(false);
-              }
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button className="gap-2 bg-gray-600 hover:bg-gray-700 text-white border-gray-600">
-                <UserPlus className="h-4 w-4" />
-                Add New Student
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={handleAddStudent} className="space-y-6">
-                <DialogHeader>
-                  <DialogTitle>Add New Student</DialogTitle>
-                  <DialogDescription>
-                    Enter student information to create a new account
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
+    <>
+      <div className="p-4 md:p-8 space-y-6">
+        <section className="space-y-4">
+          {/* Header */}
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                Student Management
+              </h1>
+              <p className="text-gray-600">
+                Add, manage, and generate student IDs
+              </p>
+            </div>
+            <Dialog
+              open={dialogOpen}
+              onOpenChange={(open) => {
+                setDialogOpen(open);
+                if (!open) {
+                  resetNewStudentForm();
+                  setIsSubmitting(false);
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button className="gap-2 bg-gray-600 hover:bg-gray-700 text-white border-gray-600">
+                  <UserPlus className="h-4 w-4" />
+                  Add New Student
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleAddStudent} className="space-y-6">
+                  <DialogHeader>
+                    <DialogTitle>Add New Student</DialogTitle>
+                    <DialogDescription>
+                      Enter student information to create a new account
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="firstName">First Name</Label>
+                        <Input
+                          id="firstName"
+                          value={newStudentForm.firstName}
+                          onChange={(event) =>
+                            handleNewStudentChange(
+                              "firstName",
+                              event.target.value
+                            )
+                          }
+                          placeholder="Enter first name"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName">Last Name</Label>
+                        <Input
+                          id="lastName"
+                          value={newStudentForm.lastName}
+                          onChange={(event) =>
+                            handleNewStudentChange(
+                              "lastName",
+                              event.target.value
+                            )
+                          }
+                          placeholder="Enter last name"
+                          required
+                        />
+                      </div>
+                    </div>
                     <div className="space-y-2">
-                      <Label htmlFor="firstName">First Name</Label>
+                      <Label htmlFor="email">Email</Label>
                       <Input
-                        id="firstName"
-                        value={newStudentForm.firstName}
+                        id="email"
+                        type="email"
+                        value={newStudentForm.email}
                         onChange={(event) =>
-                          handleNewStudentChange(
-                            "firstName",
-                            event.target.value
-                          )
+                          handleNewStudentChange("email", event.target.value)
                         }
-                        placeholder="Enter first name"
+                        placeholder="student@school.com"
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lastName">Last Name</Label>
-                      <Input
-                        id="lastName"
-                        value={newStudentForm.lastName}
-                        onChange={(event) =>
-                          handleNewStudentChange("lastName", event.target.value)
+                      <Label htmlFor="grade">Grade/Class</Label>
+                      <Select
+                        value={newStudentForm.grade}
+                        onValueChange={(value) =>
+                          handleNewStudentChange("grade", value)
                         }
-                        placeholder="Enter last name"
-                        required
+                      >
+                        <SelectTrigger id="grade" className="border-gray-300">
+                          <SelectValue placeholder="Select grade" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10a">10A</SelectItem>
+                          <SelectItem value="10b">10B</SelectItem>
+                          <SelectItem value="11a">11A</SelectItem>
+                          <SelectItem value="11b">11B</SelectItem>
+                          <SelectItem value="12a">12A</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <Input
+                        id="phone"
+                        value={newStudentForm.phone}
+                        onChange={(event) =>
+                          handleNewStudentChange("phone", event.target.value)
+                        }
+                        placeholder="+1234567890"
                       />
                     </div>
                   </div>
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        resetNewStudentForm();
+                        setDialogOpen(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? "Adding..." : "Add Student & Generate ID"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Edit Student Dialog */}
+          <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Edit Student Information</DialogTitle>
+                <DialogDescription>
+                  Update student details and account information
+                </DialogDescription>
+              </DialogHeader>
+              {selectedStudent && (
+                <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="edit-name">Full Name</Label>
                     <Input
-                      id="email"
-                      type="email"
-                      value={newStudentForm.email}
-                      onChange={(event) =>
-                        handleNewStudentChange("email", event.target.value)
-                      }
-                      placeholder="student@school.com"
-                      required
+                      id="edit-name"
+                      defaultValue={getStudentFullName(selectedStudent)}
+                      placeholder="Enter student name"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="grade">Grade/Class</Label>
+                    <Label htmlFor="edit-grade">Grade/Class</Label>
                     <Select
-                      value={newStudentForm.grade}
-                      onValueChange={(value) =>
-                        handleNewStudentChange("grade", value)
+                      defaultValue={
+                        selectedStudent.grade
+                          ? selectedStudent.grade.toLowerCase()
+                          : undefined
                       }
                     >
-                      <SelectTrigger id="grade" className="border-gray-300">
+                      <SelectTrigger id="edit-grade">
                         <SelectValue placeholder="Select grade" />
                       </SelectTrigger>
                       <SelectContent>
@@ -618,404 +782,542 @@ const AdminStudentManagement = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
+                    <Label htmlFor="edit-email">Email</Label>
                     <Input
-                      id="phone"
-                      value={newStudentForm.phone}
-                      onChange={(event) =>
-                        handleNewStudentChange("phone", event.target.value)
-                      }
+                      id="edit-email"
+                      type="email"
+                      defaultValue={selectedStudent.email}
+                      placeholder="student@school.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-phone">Phone Number</Label>
+                    <Input
+                      id="edit-phone"
+                      defaultValue={selectedStudent.phone}
                       placeholder="+1234567890"
                     />
                   </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      resetNewStudentForm();
-                      setDialogOpen(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Adding..." : "Add Student & Generate ID"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        {/* Edit Student Dialog */}
-        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Student Information</DialogTitle>
-              <DialogDescription>
-                Update student details and account information
-              </DialogDescription>
-            </DialogHeader>
-            {selectedStudent && (
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-name">Full Name</Label>
-                  <Input
-                    id="edit-name"
-                    defaultValue={getStudentFullName(selectedStudent)}
-                    placeholder="Enter student name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-grade">Grade/Class</Label>
-                  <Select
-                    defaultValue={
-                      selectedStudent.grade
-                        ? selectedStudent.grade.toLowerCase()
-                        : undefined
-                    }
-                  >
-                    <SelectTrigger id="edit-grade">
-                      <SelectValue placeholder="Select grade" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10a">10A</SelectItem>
-                      <SelectItem value="10b">10B</SelectItem>
-                      <SelectItem value="11a">11A</SelectItem>
-                      <SelectItem value="11b">11B</SelectItem>
-                      <SelectItem value="12a">12A</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-email">Email</Label>
-                  <Input
-                    id="edit-email"
-                    type="email"
-                    defaultValue={selectedStudent.email}
-                    placeholder="student@school.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-phone">Phone Number</Label>
-                  <Input
-                    id="edit-phone"
-                    defaultValue={selectedStudent.phone}
-                    placeholder="+1234567890"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-status">Status</Label>
-                  <Select defaultValue={selectedStudent.status}>
-                    <SelectTrigger id="edit-status">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setEditDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleUpdateStudent}>Update Student</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog
-          open={Boolean(generatedCredentials)}
-          onOpenChange={(open) => {
-            if (!open) setGeneratedCredentials(null);
-          }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {generatedCredentials?.action === "reset"
-                  ? "Temporary Password Generated"
-                  : "Student Credentials"}
-              </DialogTitle>
-              <DialogDescription>
-                Share these credentials securely with the student. They won't be
-                shown again.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              {generatedCredentials?.fullName && (
-                <div className="space-y-1">
-                  <Label>Student</Label>
-                  <p className="font-semibold text-gray-900">
-                    {generatedCredentials.fullName}
-                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-status">Status</Label>
+                    <Select defaultValue={selectedStudent.status}>
+                      <SelectTrigger id="edit-status">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
-              <div className="space-y-1">
-                <Label>Student ID</Label>
-                <code className="inline-block rounded bg-gray-100 px-2 py-1 text-sm text-gray-900">
-                  {generatedCredentials?.studentId}
-                </code>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setEditDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdateStudent}>Update Student</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={Boolean(generatedCredentials)}
+            onOpenChange={(open) => {
+              if (!open) setGeneratedCredentials(null);
+            }}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {generatedCredentials?.action === "reset"
+                    ? "Temporary Password Generated"
+                    : "Student Credentials"}
+                </DialogTitle>
+                <DialogDescription>
+                  Share these credentials securely with the student. They won't
+                  be shown again.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                {generatedCredentials?.fullName && (
+                  <div className="space-y-1">
+                    <Label>Student</Label>
+                    <p className="font-semibold text-gray-900">
+                      {generatedCredentials.fullName}
+                    </p>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label>Student ID</Label>
+                  <code className="inline-block rounded bg-gray-100 px-2 py-1 text-sm text-gray-900">
+                    {generatedCredentials?.studentId}
+                  </code>
+                </div>
+                <div className="space-y-1">
+                  <Label>Temporary Password</Label>
+                  <code className="inline-block rounded bg-gray-100 px-2 py-1 text-sm text-gray-900">
+                    {generatedCredentials?.password}
+                  </code>
+                  <p className="text-xs text-gray-500">
+                    Ask the student to reset their password after signing in.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label>Temporary Password</Label>
-                <code className="inline-block rounded bg-gray-100 px-2 py-1 text-sm text-gray-900">
-                  {generatedCredentials?.password}
-                </code>
-                <p className="text-xs text-gray-500">
-                  Ask the student to reset their password after signing in.
-                </p>
-              </div>
+              <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    generatedCredentials &&
+                    handleCopyCredentials(
+                      generatedCredentials.studentId,
+                      generatedCredentials.password
+                    )
+                  }
+                  className="justify-center sm:justify-start"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy credentials
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setGeneratedCredentials(null)}
+                >
+                  Close
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {stats.map((stat) => (
+              <Card key={stat.title} className="border-gray-200">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">{stat.title}</p>
+                      <p className="text-3xl font-bold text-gray-900">
+                        {stat.value}
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-100 text-gray-600">
+                      <stat.icon className="h-6 w-6" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* Search and Filter */}
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-600" />
+            <Input
+              placeholder="Search students..."
+              className="pl-10 border-gray-300"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <Select>
+            <SelectTrigger className="w-full md:w-48 border-gray-300">
+              <Filter className="h-4 w-4 mr-2 text-gray-600" />
+              <SelectValue placeholder="Filter by grade" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Grades</SelectItem>
+              <SelectItem value="10a">Grade 10A</SelectItem>
+              <SelectItem value="10b">Grade 10B</SelectItem>
+              <SelectItem value="11a">Grade 11A</SelectItem>
+              <SelectItem value="11b">Grade 11B</SelectItem>
+              <SelectItem value="12a">Grade 12A</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select>
+            <SelectTrigger className="w-full md:w-48 border-gray-300">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="new">New</SelectItem>
+              <SelectItem value="returning">Returning</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Students Table */}
+        <Card className="border-gray-200">
+          <CardHeader className="bg-gray-50 border-b border-gray-200">
+            <CardTitle className="text-gray-900">All Students</CardTitle>
+            <CardDescription className="text-gray-600">
+              Manage student accounts and generate unique IDs
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow className="border-gray-200 hover:bg-gray-50">
+                  <TableHead className="text-gray-700 font-semibold">
+                    Student ID
+                  </TableHead>
+                  <TableHead className="text-gray-700 font-semibold">
+                    Name
+                  </TableHead>
+                  <TableHead className="text-gray-700 font-semibold">
+                    Grade
+                  </TableHead>
+                  <TableHead className="text-gray-700 font-semibold">
+                    Registration
+                  </TableHead>
+                  <TableHead className="text-gray-700 font-semibold">
+                    Status
+                  </TableHead>
+                  <TableHead className="text-gray-700 font-semibold text-right">
+                    Actions
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredStudents.map((student) => (
+                  <TableRow
+                    key={student.id}
+                    className="border-gray-200 hover:bg-gray-50"
+                  >
+                    <TableCell className="font-mono text-sm text-gray-900">
+                      {student.studentId}
+                    </TableCell>
+                    <TableCell className="font-medium text-gray-900">
+                      {getStudentFullName(student)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className="border-gray-300 text-gray-700"
+                      >
+                        {student.grade ? student.grade.toUpperCase() : "—"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          student.registrationType === "New"
+                            ? "default"
+                            : "secondary"
+                        }
+                        className="bg-gray-100 text-gray-800 border-gray-300"
+                      >
+                        {student.registrationType}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          student.status === "active" ? "default" : "outline"
+                        }
+                        className={
+                          student.status === "active"
+                            ? "bg-gray-100 text-gray-800 border-gray-300"
+                            : "border-gray-300 text-gray-700"
+                        }
+                      >
+                        {student.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditStudent(student)}
+                          className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewStudent(student)}
+                          className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            activateMutation.mutate({
+                              id: student.id,
+                              active: student.status !== "active",
+                            })
+                          }
+                          className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        >
+                          {student.status === "active" ? (
+                            <>
+                              <XCircle className="h-4 w-4 mr-1" />
+                              Deactivate
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Activate
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const confirmed = window.confirm(
+                              `Generate a new password for ${getStudentFullName(
+                                student
+                              )}?`
+                            );
+                            if (!confirmed) return;
+                            resetPasswordMutation.mutate({ id: student.id });
+                          }}
+                          className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        >
+                          <RefreshCcw className="h-4 w-4 mr-1" />
+                          Reset Password
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteStudent(student.id)}
+                          className="text-gray-600 hover:bg-gray-50 hover:text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+      {/* View Student Dialog (pro-level) */}
+      <Dialog
+        open={viewDialogOpen}
+        onOpenChange={(open) => setViewDialogOpen(open)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex flex-col">
+              <DialogTitle className="text-lg">Student Details</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground">
+                {selectedStudent ? getStudentFullName(selectedStudent) : "—"}
+              </DialogDescription>
             </div>
-            <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  generatedCredentials &&
-                  handleCopyCredentials(
-                    generatedCredentials.studentId,
-                    generatedCredentials.password
-                  )
-                }
-                className="justify-center sm:justify-start"
+          </DialogHeader>
+
+          <div className="grid gap-6 md:grid-cols-2 py-4">
+            {/* Primary Info */}
+            <section aria-labelledby="primary-info" className="space-y-3">
+              <h3
+                id="primary-info"
+                className="text-sm font-semibold text-gray-700"
               >
-                <Copy className="h-4 w-4 mr-2" />
-                Copy credentials
-              </Button>
+                Primary Information
+              </h3>
+              <div className="rounded border border-gray-100 bg-white p-4 shadow-sm">
+                <dl className="grid gap-y-2">
+                  <div className="flex items-center justify-between">
+                    <dt className="text-xs text-gray-500">Student ID</dt>
+                    <dd className="flex items-center gap-2">
+                      <code className="font-mono text-sm text-gray-900">
+                        {selectedStudent?.studentId ?? "—"}
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          handleCopyStudentId(selectedStudent?.studentId)
+                        }
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </dd>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <dt className="text-xs text-gray-500">Full name</dt>
+                    <dd className="text-sm font-medium text-gray-900">
+                      {selectedStudent
+                        ? getStudentFullName(selectedStudent)
+                        : "—"}
+                    </dd>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <dt className="text-xs text-gray-500">Email</dt>
+                    <dd className="text-sm text-gray-700 break-words">
+                      {selectedStudent?.email ?? "—"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </section>
+
+            {/* Academic & Contact */}
+            <section aria-labelledby="academic-contact" className="space-y-3">
+              <h3
+                id="academic-contact"
+                className="text-sm font-semibold text-gray-700"
+              >
+                Academic & Contact
+              </h3>
+              <div className="rounded border border-gray-100 bg-white p-4 shadow-sm space-y-2">
+                <div className="flex items-center justify-between">
+                  <dt className="text-xs text-gray-500">Grade / Class</dt>
+                  <dd className="text-sm font-medium text-gray-900">
+                    {selectedStudent?.grade ?? "—"}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <dt className="text-xs text-gray-500">Phone</dt>
+                  <dd className="text-sm text-gray-700">
+                    {selectedStudent?.phone ?? "—"}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <dt className="text-xs text-gray-500">Status</dt>
+                  <dd>
+                    <Badge
+                      variant={
+                        selectedStudent?.status === "active"
+                          ? "default"
+                          : "outline"
+                      }
+                      className="border-gray-300"
+                    >
+                      {selectedStudent?.status ?? "—"}
+                    </Badge>
+                  </dd>
+                </div>
+              </div>
+            </section>
+
+            {/* Generated Credentials */}
+            <section
+              aria-labelledby="credentials"
+              className="space-y-3 md:col-span-2"
+            >
+              <h3
+                id="credentials"
+                className="text-sm font-semibold text-gray-700"
+              >
+                Credentials
+              </h3>
+              <div className="rounded border border-gray-100 bg-white p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <p className="text-xs text-gray-500">
+                    Temporary credentials (visible immediately after
+                    create/reset)
+                  </p>
+                  {selectedStudent &&
+                  (generatedCredentials?.studentId ===
+                    selectedStudent.studentId ||
+                    credentialsMap[selectedStudent.studentId]) ? (
+                    <div className="mt-2">
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <p className="text-xs text-gray-500">Student ID</p>
+                          <p className="font-mono text-sm">{viewedStudentId}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">
+                            Temporary Password
+                          </p>
+                          <p className="font-mono text-sm">
+                            {passwordRevealed ? viewedPassword : "••••••••"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-600">
+                      No temporary credentials available for this student.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPasswordRevealed((v) => !v)}
+                  >
+                    {passwordRevealed ? "Hide" : "Reveal"}
+                  </Button>
+                  {selectedStudent && viewedPassword && (
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          handleCopyCredentials(
+                            viewedStudentId ?? "",
+                            viewedPassword ?? ""
+                          )
+                        }
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy credentials
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (!selectedStudent) return;
+                      const confirmed = window.confirm(
+                        `Generate a new temporary password for ${getStudentFullName(
+                          selectedStudent
+                        )}?`
+                      );
+                      if (!confirmed) return;
+                      resetPasswordMutation.mutate({ id: selectedStudent.id });
+                    }}
+                  >
+                    <RefreshCcw className="h-4 w-4 mr-2" />
+                    Reset Password
+                  </Button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <DialogFooter className="flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              Last updated: not tracked
+            </div>
+            <div className="flex items-center gap-2">
               <Button
-                type="button"
-                onClick={() => setGeneratedCredentials(null)}
+                variant="outline"
+                onClick={() => setViewDialogOpen(false)}
               >
                 Close
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {stats.map((stat) => (
-            <Card key={stat.title} className="border-gray-200">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">{stat.title}</p>
-                    <p className="text-3xl font-bold text-gray-900">
-                      {stat.value}
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-gray-100 text-gray-600">
-                    <stat.icon className="h-6 w-6" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* Search and Filter */}
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-600" />
-          <Input
-            placeholder="Search students..."
-            className="pl-10 border-gray-300"
-          />
-        </div>
-        <Select>
-          <SelectTrigger className="w-full md:w-48 border-gray-300">
-            <Filter className="h-4 w-4 mr-2 text-gray-600" />
-            <SelectValue placeholder="Filter by grade" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Grades</SelectItem>
-            <SelectItem value="10a">Grade 10A</SelectItem>
-            <SelectItem value="10b">Grade 10B</SelectItem>
-            <SelectItem value="11a">Grade 11A</SelectItem>
-            <SelectItem value="11b">Grade 11B</SelectItem>
-            <SelectItem value="12a">Grade 12A</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select>
-          <SelectTrigger className="w-full md:w-48 border-gray-300">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-            <SelectItem value="new">New</SelectItem>
-            <SelectItem value="returning">Returning</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Students Table */}
-      <Card className="border-gray-200">
-        <CardHeader className="bg-gray-50 border-b border-gray-200">
-          <CardTitle className="text-gray-900">All Students</CardTitle>
-          <CardDescription className="text-gray-600">
-            Manage student accounts and generate unique IDs
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="border-gray-200 hover:bg-gray-50">
-                <TableHead className="text-gray-700 font-semibold">
-                  Student ID
-                </TableHead>
-                <TableHead className="text-gray-700 font-semibold">
-                  Name
-                </TableHead>
-                <TableHead className="text-gray-700 font-semibold">
-                  Grade
-                </TableHead>
-                <TableHead className="text-gray-700 font-semibold">
-                  Registration
-                </TableHead>
-                <TableHead className="text-gray-700 font-semibold">
-                  Status
-                </TableHead>
-                <TableHead className="text-gray-700 font-semibold text-right">
-                  Actions
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {students.map((student) => (
-                <TableRow
-                  key={student.id}
-                  className="border-gray-200 hover:bg-gray-50"
-                >
-                  <TableCell className="font-mono text-sm text-gray-900">
-                    {student.studentId}
-                  </TableCell>
-                  <TableCell className="font-medium text-gray-900">
-                    {getStudentFullName(student)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className="border-gray-300 text-gray-700"
-                    >
-                      {student.grade ? student.grade.toUpperCase() : "—"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        student.registrationType === "New"
-                          ? "default"
-                          : "secondary"
-                      }
-                      className="bg-gray-100 text-gray-800 border-gray-300"
-                    >
-                      {student.registrationType}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        student.status === "active" ? "default" : "outline"
-                      }
-                      className={
-                        student.status === "active"
-                          ? "bg-gray-100 text-gray-800 border-gray-300"
-                          : "border-gray-300 text-gray-700"
-                      }
-                    >
-                      {student.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEditStudent(student)}
-                        className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                      >
-                        <Edit className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleViewStudent(student)}
-                        className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          activateMutation.mutate({
-                            id: student.id,
-                            active: student.status !== "active",
-                          })
-                        }
-                        className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                      >
-                        {student.status === "active" ? (
-                          <>
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Deactivate
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Activate
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          const confirmed = window.confirm(
-                            `Generate a new password for ${getStudentFullName(
-                              student
-                            )}?`
-                          );
-                          if (!confirmed) return;
-                          resetPasswordMutation.mutate({ id: student.id });
-                        }}
-                        className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                      >
-                        <RefreshCcw className="h-4 w-4 mr-1" />
-                        Reset Password
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteStudent(student.id)}
-                        className="text-gray-600 hover:bg-gray-50 hover:text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4 mr-1" />
-                        Delete
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

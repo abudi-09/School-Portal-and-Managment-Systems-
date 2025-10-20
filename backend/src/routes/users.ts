@@ -433,10 +433,35 @@ router.post(
     } catch (error: any) {
       console.error("Create student error:", error);
 
+      // Duplicate email (from service pre-check)
       if (error.message === "A user with this email already exists") {
         return res.status(409).json({
           success: false,
           message: error.message,
+        });
+      }
+
+      // Mongoose validation error (e.g., invalid phone format)
+      if (error?.name === "ValidationError" && error?.errors) {
+        const errors = Object.values(error.errors).map((e: any) => ({
+          msg: e?.message || "Invalid value",
+          path: e?.path || e?.properties?.path,
+        }));
+        return res.status(400).json({
+          success: false,
+          message: "Invalid input",
+          errors,
+        });
+      }
+
+      // Duplicate key (e.g., studentId unique collision or email)
+      if (error?.code === 11000) {
+        const field = Object.keys(error?.keyPattern || {})[0] || "field";
+        return res.status(409).json({
+          success: false,
+          message: `${field} already exists`,
+          error:
+            process.env.NODE_ENV === "development" ? error.message : undefined,
         });
       }
 

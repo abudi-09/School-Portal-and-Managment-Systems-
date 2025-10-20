@@ -32,7 +32,10 @@ const studentLoginSchema = z.object({
   studentId: z
     .string()
     .min(1, "Student ID is required")
-    .regex(/^STU\d{3}$/, "Invalid student ID format"),
+    .regex(
+      /^STU-\d{4}-\d{4}$/i,
+      "Student ID must look like STU-2024-0001"
+    ),
   password: z.string().min(6, "Password must be at least 6 characters"),
   rememberMe: z.boolean().optional(),
 });
@@ -66,8 +69,9 @@ const Login = () => {
   const handleStudentLogin = async (data: StudentLoginForm) => {
     setLoading(true);
     try {
+      const normalizedStudentId = data.studentId.trim().toUpperCase();
       const result = await login({
-        studentId: data.studentId,
+        studentId: normalizedStudentId,
         password: data.password,
       });
       if (result.success && result.user) {
@@ -77,7 +81,7 @@ const Login = () => {
       } else {
         toast({
           title: "Login failed",
-          description: "Invalid credentials. Try STU001 for demo.",
+          description: result.message || "Invalid student ID or password.",
           variant: "destructive",
         });
       }
@@ -194,7 +198,7 @@ const Login = () => {
                       <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="studentId"
-                        placeholder="Enter your student ID"
+                        placeholder="STU-2024-0001"
                         className="pl-10"
                         {...studentForm.register("studentId")}
                         aria-describedby={
@@ -288,7 +292,7 @@ const Login = () => {
                     </button>
                   </div>
                   <p className="text-xs text-center text-muted-foreground">
-                    Demo: Use "STU001" as Student ID
+                    Demo: Ask admin for your generated student credentials.
                   </p>
                 </form>
               </TabsContent>

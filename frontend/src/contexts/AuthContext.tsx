@@ -16,7 +16,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Mock users database
 const MOCK_USERS: User[] = [
-  { id: "1", name: "John Student", studentId: "STU001", role: "student" },
+  {
+    id: "1",
+    name: "John Student",
+    studentId: "STU-2024-0001",
+    role: "student",
+  },
   {
     id: "2",
     name: "Sarah Teacher",
@@ -63,46 +68,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     pending?: boolean;
     message?: string;
   }> => {
-    try {
-      const apiBaseUrl =
-        import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+    const apiBaseUrl =
+      import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+    const useMock = (import.meta.env.VITE_USE_MOCK as string) === "true";
 
-      // For student ID login, backend may not support it yet; keep mock fallback
-      if (!credentials.email && credentials.studentId) {
-        return mockLogin(credentials);
+    try {
+      const payload: Record<string, string> = {
+        password: credentials.password,
+      };
+
+      if (credentials.email) {
+        payload.email = credentials.email;
       }
 
-      // For staff login, try API first
-      console.log("Trying API login for staff:", credentials.email);
+      const normalizedStudentId = credentials.studentId
+        ?.toString()
+        .trim()
+        .toUpperCase();
+      if (normalizedStudentId) {
+        payload.studentId = normalizedStudentId;
+      }
+
+      console.log(
+        "Attempting API login:",
+        payload.email ?? payload.studentId ?? "unknown"
+      );
+
       const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          email: credentials.email,
-          password: credentials.password,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
       console.log("API response:", response.status, data);
 
       if (response.ok && data.success) {
-        console.log("API login success, token:", data.data.token);
-        // Transform backend user data to frontend format
+        const userData = data.data.user;
+        const fullName = `${userData.firstName ?? ""} ${
+          userData.lastName ?? ""
+        }`
+          .trim()
+          .replace(/\s+/g, " ");
+
         const user: User = {
-          id: data.data.user.id,
-          name: `${data.data.user.firstName} ${data.data.user.lastName}`,
-          email: data.data.user.email,
-          role: data.data.user.role,
-          subject:
-            data.data.user.academicInfo?.subjects?.[0] ||
-            data.data.user.employmentInfo?.position,
-          position: data.data.user.employmentInfo?.position,
+          id: userData.id,
+          name:
+            fullName ||
+            userData.email ||
+            userData.studentId ||
+            "User",
+          email: userData.email,
+          studentId: userData.studentId,
+          role: userData.role,
+          subject: userData.academicInfo?.subjects?.[0],
+          position: userData.employmentInfo?.position,
           isHeadClassTeacher:
-            data.data.user.role === "teacher" &&
-            data.data.user.employmentInfo?.position?.includes("Head"),
+            userData.role === "teacher" &&
+            Boolean(userData.employmentInfo?.position?.includes("Head")),
         };
 
         setUser(user);
@@ -110,20 +135,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("token", data.data.token);
 
         return { success: true, user };
-      } else {
-        console.log("API login failed, response not ok or success false");
-        // Handle known auth states without falling back to mock
-        const message: string | undefined = data?.message;
-        const isPending =
-          typeof message === "string" &&
-          message.toLowerCase().includes("pending");
-        return { success: false, pending: isPending, message };
       }
+
+      const message: string | undefined = data?.message;
+      const isPending =
+        typeof message === "string" &&
+        message.toLowerCase().includes("pending");
+      return { success: false, pending: isPending, message };
     } catch (error) {
       console.warn("API call failed:", error);
-
-      // Make mock fallback opt-in. Use VITE_USE_MOCK=true in frontend .env to enable.
-      const useMock = (import.meta.env.VITE_USE_MOCK as string) === "true";
 
       if (useMock) {
         console.log(
@@ -132,7 +152,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return mockLogin(credentials);
       }
 
-      // Don't silently succeed with mock in normal runs; surface the error to caller.
       return {
         success: false,
         message: "Network error: failed to reach authentication API.",
@@ -152,8 +171,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let foundUser: User | undefined;
 
     if (credentials.studentId) {
+      const normalizedStudentId = credentials.studentId
+        ?.toString()
+        .trim()
+        .toUpperCase();
       // Student login
-      foundUser = MOCK_USERS.find((u) => u.studentId === credentials.studentId);
+      foundUser = MOCK_USERS.find(
+        (u) => u.studentId === normalizedStudentId
+      );
     } else if (credentials.email) {
       // Teacher/Head/Admin login - include the Super Admin
       foundUser = MOCK_USERS.find((u) => u.email === credentials.email);

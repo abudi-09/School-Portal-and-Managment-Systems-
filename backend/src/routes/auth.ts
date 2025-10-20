@@ -122,10 +122,20 @@ router.post(
   "/login",
   [
     body("email")
+      .optional({ checkFalsy: true })
       .isEmail()
       .normalizeEmail()
       .withMessage("Please provide a valid email"),
-    body("password").exists().withMessage("Password is required"),
+    body("studentId")
+      .optional({ checkFalsy: true })
+      .matches(/^STU-\d{4}-\d{4}$/i)
+      .withMessage("Student ID must follow STU-YYYY-0001 format"),
+    body("password")
+      .isLength({ min: 6 })
+      .withMessage("Password must be at least 6 characters long"),
+    body()
+      .custom((value) => value.email || value.studentId)
+      .withMessage("Email or student ID is required"),
   ],
   async (req: express.Request, res: express.Response) => {
     try {
@@ -139,14 +149,31 @@ router.post(
         });
       }
 
-      const { email, password } = req.body;
+      const { email, password } = req.body as {
+        email?: string;
+        password: string;
+        studentId?: string;
+      };
 
-      console.log(`Login attempt for email: ${email}`);
+      const studentId = (req.body.studentId as string | undefined)
+        ?.toString()
+        .trim()
+        .toUpperCase();
 
-      // Find user by email
-      const user = await User.findOne({ email });
+      console.log(
+        `Login attempt for ${
+          email ? `email ${email}` : `studentId ${studentId ?? "unknown"}`
+        }`
+      );
+
+      // Find user by identifier
+      const user = email
+        ? await User.findOne({ email })
+        : await User.findOne({ studentId });
       if (!user) {
-        console.log(`User not found for email: ${email}`);
+        console.log(
+          `User not found for identifier: ${email ?? studentId ?? "unknown"}`
+        );
         return res.status(401).json({
           success: false,
           message: "Invalid credentials",
@@ -154,12 +181,14 @@ router.post(
       }
 
       console.log(
-        `User found: ${user.email}, role: ${user.role}, status: ${user.status}, isActive: ${user.isActive}`
+        `User found: ${user.email ?? user.studentId}, role: ${user.role}, status: ${user.status}, isActive: ${user.isActive}`
       );
 
       // Check if user is active
       if (!user.isActive) {
-        console.log(`User ${email} is not active`);
+        console.log(
+          `User ${email ?? user.studentId ?? "unknown"} is not active`
+        );
         return res.status(401).json({
           success: false,
           message: "Account is deactivated",
@@ -167,7 +196,11 @@ router.post(
       }
 
       if (user.status !== "approved") {
-        console.log(`User ${email} status is ${user.status}, not approved`);
+        console.log(
+          `User ${email ?? user.studentId ?? "unknown"} status is ${
+            user.status
+          }, not approved`
+        );
         return res.status(403).json({
           success: false,
           message:
@@ -179,7 +212,9 @@ router.post(
 
       // Check password
       const isMatch = await user.comparePassword(password);
-      console.log(`Password match for ${email}: ${isMatch}`);
+      console.log(
+        `Password match for ${email ?? user.studentId ?? "unknown"}: ${isMatch}`
+      );
       if (!isMatch) {
         return res.status(401).json({
           success: false,
@@ -207,6 +242,7 @@ router.post(
             profile: user.profile,
             academicInfo: user.academicInfo,
             employmentInfo: user.employmentInfo,
+            studentId: user.studentId,
           },
           token,
         },

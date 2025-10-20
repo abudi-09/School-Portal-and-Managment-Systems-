@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
   UserPlus,
@@ -10,6 +10,8 @@ import {
   Edit,
   Trash2,
   Eye,
+  RefreshCcw,
+  Copy,
 } from "lucide-react";
 import {
   Card,
@@ -122,6 +124,15 @@ const AdminStudentManagement = () => {
   const [newStudentForm, setNewStudentForm] =
     useState<StudentFormState>(EMPTY_STUDENT_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [generatedCredentials, setGeneratedCredentials] = useState<
+    | {
+        studentId: string;
+        password: string;
+        fullName: string;
+        action: "created" | "reset";
+      }
+    | null
+  >(null);
   const { toast } = useToast();
   const apiBaseUrl =
     import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
@@ -159,13 +170,36 @@ const AdminStudentManagement = () => {
         status: s.isActive ? "active" : "inactive",
         phone: s.profile?.phone,
       })) as Student[];
-      setStudents(list);
       return list;
     },
   });
 
+  useEffect(() => {
+    if (studentsQuery.data) {
+      setStudents(studentsQuery.data);
+    }
+  }, [studentsQuery.data]);
+
   const resetNewStudentForm = () => {
     setNewStudentForm(EMPTY_STUDENT_FORM);
+  };
+
+  const handleCopyCredentials = async (studentId: string, password: string) => {
+    try {
+      await navigator.clipboard.writeText(
+        `Student ID: ${studentId}\nTemporary Password: ${password}`
+      );
+      toast({
+        title: "Copied",
+        description: "Credentials copied to clipboard.",
+      });
+    } catch (error) {
+      toast({
+        title: "Copy failed",
+        description: "Unable to copy credentials automatically.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleNewStudentChange = (
@@ -176,11 +210,6 @@ const AdminStudentManagement = () => {
       ...prev,
       [field]: value,
     }));
-  };
-
-  const generateTemporaryPassword = () => {
-    const random = Math.random().toString(36).substring(2, 8);
-    return `Stu@${random.padEnd(6, "0")}`;
   };
 
   const handleAddStudent = async (event?: FormEvent<HTMLFormElement>) => {
@@ -216,7 +245,6 @@ const AdminStudentManagement = () => {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       email: email.trim().toLowerCase(),
-      password: generateTemporaryPassword(),
       profile: phone.trim() ? { phone: phone.trim() } : undefined,
       academicInfo: normalizedGrade
         ? { grade: normalizedGrade, class: normalizedGrade }
@@ -242,6 +270,9 @@ const AdminStudentManagement = () => {
       }
 
       const created = data?.data?.student;
+      const credentials = data?.data?.credentials as
+        | { studentId?: string; temporaryPassword?: string }
+        | undefined;
 
       if (!created || !created.studentId) {
         throw new Error("Invalid response received from the server.");
@@ -270,6 +301,16 @@ const AdminStudentManagement = () => {
           newStudent.studentId
         } to ${getStudentFullName(newStudent)}.`,
       });
+
+      if (credentials?.temporaryPassword) {
+        setGeneratedCredentials({
+          studentId:
+            credentials.studentId ?? newStudent.studentId ?? "Unknown ID",
+          password: credentials.temporaryPassword,
+          fullName: getStudentFullName(newStudent),
+          action: "created",
+        });
+      }
 
       resetNewStudentForm();
       setDialogOpen(false);
@@ -302,11 +343,14 @@ const AdminStudentManagement = () => {
   };
 
   const handleDeleteStudent = (studentId: string) => {
-    // Delete student logic here
-    toast({
-      title: "Student Deleted",
-      description: "Student has been removed from the system.",
-    });
+    if (!studentId) return;
+    const target = students.find((student) => student.id === studentId);
+    const fullName = target ? getStudentFullName(target) : "this student";
+    const confirmed = window.confirm(
+      `Are you sure you want to remove ${fullName}?`
+    );
+    if (!confirmed) return;
+    deleteMutation.mutate(studentId);
   };
 
   const handleUpdateStudent = () => {
@@ -378,30 +422,69 @@ const AdminStudentManagement = () => {
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: async ({ id, password }: { id: string; password: string }) => {
+    mutationFn: async ({ id }: { id: string }) => {
       const res = await fetch(
         `${apiBaseUrl}/api/users/students/${id}/reset-password`,
         {
           method: "PATCH",
           headers: authHeaders(),
-          body: JSON.stringify({ password }),
         }
       );
       const data = await res.json();
       if (!res.ok || !data?.success)
         throw new Error(data?.message || "Failed to reset password");
-      return data;
+      return data as {
+        data?: { credentials?: { studentId?: string; temporaryPassword?: string } };
+      };
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      const credentials = data?.data?.credentials;
+      if (credentials?.temporaryPassword) {
+        const target = students.find((s) => s.id === variables.id);
+        setGeneratedCredentials({
+          studentId: credentials.studentId ?? target?.studentId ?? "",
+          password: credentials.temporaryPassword,
+          fullName: target ? getStudentFullName(target) : "The student",
+          action: "reset",
+        });
+      }
       toast({
         title: "Password Reset",
-        description: "A new password has been set for the student.",
+        description: "A temporary password has been generated.",
       });
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : "Please try again.";
       toast({
         title: "Reset failed",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`${apiBaseUrl}/api/users/students/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success)
+        throw new Error(data?.message || "Failed to remove student");
+      return data;
+    },
+    onSuccess: async () => {
+      toast({
+        title: "Student Removed",
+        description: "The student has been deactivated successfully.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : "Please try again.";
+      toast({
+        title: "Removal failed",
         description: message,
         variant: "destructive",
       });
@@ -650,6 +733,72 @@ const AdminStudentManagement = () => {
           </DialogContent>
         </Dialog>
 
+        <Dialog
+          open={Boolean(generatedCredentials)}
+          onOpenChange={(open) => {
+            if (!open) setGeneratedCredentials(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {generatedCredentials?.action === "reset"
+                  ? "Temporary Password Generated"
+                  : "Student Credentials"}
+              </DialogTitle>
+              <DialogDescription>
+                Share these credentials securely with the student. They won't
+                be shown again.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {generatedCredentials?.fullName && (
+                <div className="space-y-1">
+                  <Label>Student</Label>
+                  <p className="font-semibold text-gray-900">
+                    {generatedCredentials.fullName}
+                  </p>
+                </div>
+              )}
+              <div className="space-y-1">
+                <Label>Student ID</Label>
+                <code className="inline-block rounded bg-gray-100 px-2 py-1 text-sm text-gray-900">
+                  {generatedCredentials?.studentId}
+                </code>
+              </div>
+              <div className="space-y-1">
+                <Label>Temporary Password</Label>
+                <code className="inline-block rounded bg-gray-100 px-2 py-1 text-sm text-gray-900">
+                  {generatedCredentials?.password}
+                </code>
+                <p className="text-xs text-gray-500">
+                  Ask the student to reset their password after signing in.
+                </p>
+              </div>
+            </div>
+            <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  generatedCredentials &&
+                  handleCopyCredentials(
+                    generatedCredentials.studentId,
+                    generatedCredentials.password
+                  )
+                }
+                className="justify-center sm:justify-start"
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copy credentials
+              </Button>
+              <Button type="button" onClick={() => setGeneratedCredentials(null)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((stat) => (
@@ -829,6 +978,23 @@ const AdminStudentManagement = () => {
                             Activate
                           </>
                         )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const confirmed = window.confirm(
+                            `Generate a new password for ${getStudentFullName(
+                              student
+                            )}?`
+                          );
+                          if (!confirmed) return;
+                          resetPasswordMutation.mutate({ id: student.id });
+                        }}
+                        className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      >
+                        <RefreshCcw className="h-4 w-4 mr-1" />
+                        Reset Password
                       </Button>
                       <Button
                         variant="ghost"

@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import User, { IUser } from "../models/User";
 
 export class StudentService {
@@ -30,33 +31,83 @@ export class StudentService {
   /**
    * Create a new student user with generated student ID and approved status
    */
+  static generateTemporaryPassword(length = 10): string {
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const upper = lower.toUpperCase();
+    const digits = "0123456789";
+    const symbols = "!@#$%^&*";
+    const all = lower + upper + digits + symbols;
+
+    const pick = (source: string) => source.charAt(
+      crypto.randomInt(0, source.length)
+    );
+
+    const required: string[] = [
+      pick(lower),
+      pick(upper),
+      pick(digits),
+      pick(symbols),
+    ];
+    const remainingLength = Math.max(length, required.length) - required.length;
+
+    const remaining: string[] = Array.from({ length: remainingLength }, () =>
+      pick(all)
+    );
+    const passwordChars: string[] = [...required, ...remaining];
+
+    // Fisher-Yates shuffle to avoid predictable positions
+    for (let i = passwordChars.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(0, i + 1);
+      const current = passwordChars[i];
+      const swapWith = passwordChars[j];
+
+      if (current === undefined || swapWith === undefined) {
+        continue;
+      }
+
+      passwordChars[i] = swapWith;
+      passwordChars[j] = current;
+    }
+
+    return passwordChars.join("");
+  }
+
   static async createStudent(payload: {
     firstName: string;
     lastName: string;
     email: string;
-    password: string;
     profile?: IUser["profile"];
     academicInfo?: IUser["academicInfo"];
   }) {
-    const existingUser = await User.findOne({ email: payload.email });
+  const normalizedEmail = payload.email.toLowerCase();
+  const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       throw new Error("A user with this email already exists");
     }
 
     const studentId = await this.generateStudentId();
+    const temporaryPassword = this.generateTemporaryPassword();
 
     const student = new User({
-      ...payload,
-      email: payload.email.toLowerCase(),
+  ...payload,
+  email: normalizedEmail,
       role: "student",
       status: "approved",
       isActive: true,
       studentId,
+      password: temporaryPassword,
     });
 
     await student.save();
+    const studentData = student.toJSON();
 
-    return student.toJSON();
+    return {
+      student: studentData,
+      credentials: {
+        studentId,
+        temporaryPassword,
+      },
+    };
   }
 
   static async getStudents(options: {
@@ -147,11 +198,34 @@ export class StudentService {
     return student.toJSON();
   }
 
-  static async resetPassword(id: string, newPassword: string) {
+  static async resetPassword(id: string) {
     const student = await User.findOne({ _id: id, role: "student" });
     if (!student) throw new Error("Student not found");
-    student.password = newPassword; // will be hashed by pre-save hook
+    const temporaryPassword = this.generateTemporaryPassword();
+    student.password = temporaryPassword; // will be hashed by pre-save hook
     await student.save();
-    return { _id: student._id };
+
+    const studentData = student.toJSON();
+    const studentIdentifier =
+      student.studentId ?? student._id?.toString?.() ?? "";
+
+    return {
+      student: studentData,
+      credentials: {
+        studentId: studentIdentifier,
+        temporaryPassword,
+      },
+    };
+  }
+
+  static async deleteStudent(id: string) {
+    const student = await User.findOne({ _id: id, role: "student" });
+    if (!student) throw new Error("Student not found");
+
+    student.isActive = false;
+    student.status = "deactivated";
+    await student.save();
+
+    return student.toJSON();
   }
 }

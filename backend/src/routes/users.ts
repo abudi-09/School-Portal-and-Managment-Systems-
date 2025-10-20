@@ -3,6 +3,10 @@ import { body, param, validationResult } from "express-validator";
 import User from "../models/User";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
 import { StudentService } from "../services/student.service";
+import {
+  getApprovedUsers,
+  upgradeUserRole,
+} from "../controllers/user.controller";
 import path from "path";
 
 let multer: any;
@@ -73,9 +77,6 @@ const createStudentValidators = [
     .isEmail()
     .withMessage("Valid email is required")
     .normalizeEmail(),
-  body("password")
-    .isLength({ min: 6 })
-    .withMessage("Password must be at least 6 characters"),
   body("profile").optional({ nullable: true }).isObject(),
   body("academicInfo").optional({ nullable: true }).isObject(),
 ];
@@ -86,49 +87,9 @@ const gmailEmailValidator = (field = "email") =>
     .withMessage("Email must be a Gmail address");
 
 // @route   GET /api/users
-// @desc    Get all users (admin only)
+// @desc    Get approved users with valid roles (admin only)
 // @access  Private/Admin
-router.get(
-  "/",
-  authMiddleware,
-  authorizeRoles("admin"),
-  async (req: express.Request, res: express.Response) => {
-    try {
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
-      const skip = (page - 1) * limit;
-
-      const users = await User.find({})
-        .select("-password")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit);
-
-      const total = await User.countDocuments();
-
-      res.json({
-        success: true,
-        data: {
-          users,
-          pagination: {
-            page,
-            limit,
-            total,
-            pages: Math.ceil(total / limit),
-          },
-        },
-      });
-    } catch (error: any) {
-      console.error("Get users error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Server error retrieving users",
-        error:
-          process.env.NODE_ENV === "development" ? error.message : undefined,
-      });
-    }
-  }
-);
+router.get("/", authMiddleware, authorizeRoles("admin"), getApprovedUsers);
 
 // NOTE: The generic "/:id" routes are declared AFTER specific routes like "/students" and "/role/:role"
 // to prevent accidental matches such as GET /api/users/students being treated as an ID.
@@ -450,14 +411,12 @@ router.post(
     }
 
     try {
-      const { firstName, lastName, email, password, profile, academicInfo } =
-        req.body;
+      const { firstName, lastName, email, profile, academicInfo } = req.body;
 
-      const student = await StudentService.createStudent({
+      const { student, credentials } = await StudentService.createStudent({
         firstName,
         lastName,
         email,
-        password,
         profile,
         academicInfo,
       });
@@ -476,6 +435,7 @@ router.post(
             academicInfo: student.academicInfo,
             profile: student.profile,
           },
+          credentials,
         },
       });
     } catch (error: any) {
@@ -674,6 +634,59 @@ router.patch(
   }
 );
 
+// @route   DELETE /api/users/students/:id
+// @desc    Deactivate a student account and mark as deleted (admin only)
+// @access  Private/Admin
+router.delete(
+  "/students/:id",
+  authMiddleware,
+  authorizeRoles("admin"),
+  [param("id").isMongoId().withMessage("Invalid student ID")],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Invalid input",
+          errors: errors.array(),
+        });
+    }
+
+    try {
+      const student = await StudentService.deleteStudent(
+        req.params.id as string
+      );
+      res.json({
+        success: true,
+        message: "Student removed",
+        data: { student },
+      });
+    } catch (error: any) {
+      if (error.message === "Student not found") {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      console.error("Delete student error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error removing student",
+      });
+    }
+  }
+);
+
+// @route   PATCH /api/users/:id/upgrade
+// @desc    Upgrade a user role to admin (admin only)
+// @access  Private/Admin
+router.patch(
+  "/:id/upgrade",
+  authMiddleware,
+  authorizeRoles("admin"),
+  [param("id").isMongoId().withMessage("Invalid user ID")],
+  upgradeUserRole
+);
+
 // @route   PATCH /api/users/students/:id/reset-password
 // @desc    Reset a student's password (admin only)
 // @access  Private/Admin
@@ -681,12 +694,7 @@ router.patch(
   "/students/:id/reset-password",
   authMiddleware,
   authorizeRoles("admin"),
-  [
-    param("id").isMongoId().withMessage("Invalid student ID"),
-    body("password")
-      .isLength({ min: 6 })
-      .withMessage("Password must be at least 6 characters"),
-  ],
+  [param("id").isMongoId().withMessage("Invalid student ID")],
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -699,11 +707,14 @@ router.patch(
         });
     }
     try {
-      await StudentService.resetPassword(
-        req.params.id as string,
-        req.body.password
+      const { credentials } = await StudentService.resetPassword(
+        req.params.id as string
       );
-      res.json({ success: true, message: "Student password reset" });
+      res.json({
+        success: true,
+        message: "Student password reset",
+        data: { credentials },
+      });
     } catch (error: any) {
       if (error.message === "Student not found") {
         return res.status(404).json({ success: false, message: error.message });

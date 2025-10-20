@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
 import adminRoutes from "./routes/admin";
 import headRoutes from "./routes/head";
+import profileRoutes from "./routes/profile";
 import { errorHandler } from "./middleware/errorHandler";
 import { env } from "./config/env";
 import { seedSuperAdmin } from "./utils/seedSuperAdmin";
@@ -54,6 +55,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/head", headRoutes);
+app.use("/api/profile", profileRoutes);
 
 // 404 handler
 app.use((req, res) => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -25,48 +25,190 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/useAuth";
 import type { User as AuthUser } from "@/contexts/auth-types";
 
+type Gender = "male" | "female" | "other" | undefined;
+interface ProfileInfo {
+  phone?: string;
+  address?: string;
+  dateOfBirth?: string | Date;
+  gender?: Gender;
+  avatar?: string;
+}
+interface AcademicInfo {
+  studentId?: string;
+  class?: string;
+  section?: string;
+  grade?: string;
+  subjects?: string[];
+}
+interface EmploymentInfo {
+  employeeId?: string;
+  department?: string;
+  position?: string;
+  joinDate?: string | Date;
+  responsibilities?: string;
+}
+interface ApiUser {
+  _id?: string;
+  id?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  role?: "admin" | "head" | "teacher" | "student";
+  status?: "pending" | "approved" | "deactivated" | "rejected";
+  studentId?: string;
+  profile?: ProfileInfo;
+  academicInfo?: AcademicInfo;
+  employmentInfo?: EmploymentInfo;
+}
+
+const getApiBase = () =>
+  (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env
+    ?.VITE_API_BASE_URL || "http://localhost:5000";
+
 const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const { user: authUser } = useAuth();
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [apiUser, setApiUser] = useState<ApiUser | null>(null);
+
+  // Editable fields
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+
+  // Password fields
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
-    const avatarPath = (
-      authUser as (AuthUser & { profile?: { avatar?: string } }) | null
-    )?.profile?.avatar;
-    const base =
-      (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env
-        ?.VITE_API_BASE_URL || "http://localhost:5000";
-    if (typeof avatarPath === "string" && avatarPath.length > 0) {
-      setAvatarPreview(
-        avatarPath.startsWith("http") ? avatarPath : `${base}${avatarPath}`
-      );
-    }
+    const fetchProfile = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          setLoading(false);
+          return;
+        }
+        const res = await fetch(`${getApiBase()}/api/profile/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.message || "Failed to load profile");
+        }
+        const raw: ApiUser = data.data.user as ApiUser;
+        // Normalize id immutably
+        const u: ApiUser = {
+          ...raw,
+          id: raw.id || raw._id,
+        };
+        setApiUser(u);
+        setFirstName(u.firstName || "");
+        setLastName(u.lastName || "");
+        setPhone(u.profile?.phone || "");
+        setAddress(u.profile?.address || "");
+
+        // Avatar
+        const avatarPath = u.profile?.avatar;
+        if (avatarPath && typeof avatarPath === "string") {
+          setAvatarPreview(
+            avatarPath.startsWith("http")
+              ? avatarPath
+              : `${getApiBase()}${avatarPath}`
+          );
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Error";
+        toast.error(message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
   }, [authUser]);
+  const isStudent = apiUser?.role === "student";
+  const displayName = useMemo(() => {
+    const f = firstName?.trim() || "";
+    const l = lastName?.trim() || "";
+    const full = `${f} ${l}`.trim();
+    return full || apiUser?.email || apiUser?.studentId || "User";
+  }, [firstName, lastName, apiUser]);
 
-  const studentInfo = {
-    fullName: "John Smith",
-    studentId: "2024-11A-001",
-    email: "john.smith@school.edu",
-    phone: "+1 (555) 123-4567",
-    dateOfBirth: "2007-03-15",
-    gender: "Male",
-    class: "Grade 11A",
-    address: "123 Main Street, City, State 12345",
-  };
+  const initials = useMemo(() => {
+    const parts = displayName.split(" ").filter(Boolean);
+    return (
+      parts
+        .slice(0, 2)
+        .map((p) => p[0]?.toUpperCase())
+        .join("") || "U"
+    );
+  }, [displayName]);
 
-  const parentInfo = {
-    guardianName: "Robert Smith",
-    relationship: "Father",
-    phone: "+1 (555) 987-6543",
-    email: "robert.smith@email.com",
-    occupation: "Engineer",
-  };
+  const classLabel = useMemo(() => {
+    const info = apiUser?.academicInfo;
+    if (!info) return undefined;
+    if (info.class) return info.class;
+    const grade = info.grade ? `Grade ${info.grade}` : "";
+    const section = info.section ? ` ${info.section}` : "";
+    return (grade + section).trim() || undefined;
+  }, [apiUser]);
 
-  const handleSave = () => {
-    toast.success("Profile updated successfully");
-    setIsEditing(false);
+  const userIdForUpload = apiUser?._id || apiUser?.id || authUser?.id || "";
+
+  const handleSave = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not authenticated");
+      const payload: {
+        firstName: string;
+        lastName: string;
+        profile: { phone: string; address: string };
+      } = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        profile: { phone: phone.trim(), address: address.trim() },
+      };
+      const res = await fetch(`${getApiBase()}/api/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success)
+        throw new Error(data?.message || "Update failed");
+      const updated: ApiUser = data.data.user;
+      setApiUser(updated);
+      toast.success("Profile updated successfully");
+      setIsEditing(false);
+
+      // Update cached auth user name
+      const stored = localStorage.getItem("currentUser");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          const fullName = `${updated.firstName ?? ""} ${
+            updated.lastName ?? ""
+          }`
+            .trim()
+            .replace(/\s+/g, " ");
+          parsed.name = fullName || parsed.name;
+          parsed.studentId = updated.studentId ?? parsed.studentId;
+          parsed.email = updated.email ?? parsed.email;
+          localStorage.setItem("currentUser", JSON.stringify(parsed));
+        } catch {
+          // ignore
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Update error";
+      toast.error(message);
+    }
   };
 
   return (
@@ -106,7 +248,7 @@ const Profile = () => {
                     />
                   ) : (
                     <span className="text-3xl font-bold text-accent-foreground">
-                      JS
+                      {initials}
                     </span>
                   )}
                   <div className="absolute bottom-0 right-0">
@@ -130,14 +272,8 @@ const Profile = () => {
                     try {
                       const form = new FormData();
                       form.append("avatar", selectedFile);
-                      const userId =
-                        authUser?.id || studentInfo.studentId || "";
-                      const base =
-                        (
-                          import.meta as unknown as {
-                            env?: { VITE_API_BASE_URL?: string };
-                          }
-                        ).env?.VITE_API_BASE_URL || "http://localhost:5000";
+                      const userId = userIdForUpload;
+                      const base = getApiBase();
                       const token = localStorage.getItem("token");
                       const res = await fetch(
                         `${base}/api/users/${userId}/avatar`,
@@ -173,6 +309,14 @@ const Profile = () => {
                           // ignore
                         }
                       }
+                      // Also update local state
+                      setApiUser((prev) => ({
+                        ...(prev || {}),
+                        profile: {
+                          ...(prev?.profile || {}),
+                          avatar: avatarPath,
+                        },
+                      }));
                       setSelectedFile(null);
                     } catch (err) {
                       const message =
@@ -187,12 +331,33 @@ const Profile = () => {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-foreground">
-                {studentInfo.fullName}
+                {displayName}
               </h2>
-              <p className="text-muted-foreground">{studentInfo.studentId}</p>
-              <Badge variant="secondary" className="mt-2">
-                {studentInfo.class}
-              </Badge>
+              <p className="text-muted-foreground">
+                {apiUser?.studentId || apiUser?.academicInfo?.studentId || ""}
+              </p>
+              {(classLabel || apiUser?.role) && (
+                <div className="flex items-center gap-2 mt-2">
+                  {classLabel && (
+                    <Badge variant="secondary">{classLabel}</Badge>
+                  )}
+                  {apiUser?.role && (
+                    <Badge variant="outline" className="capitalize">
+                      {apiUser.role}
+                    </Badge>
+                  )}
+                  {apiUser?.status && (
+                    <Badge
+                      variant={
+                        apiUser.status === "approved" ? "secondary" : "outline"
+                      }
+                      className="capitalize"
+                    >
+                      {apiUser.status}
+                    </Badge>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -200,9 +365,13 @@ const Profile = () => {
 
       {/* Tabs */}
       <Tabs defaultValue="personal" className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-3">
+        <TabsList
+          className={`grid w-full max-w-md ${
+            isStudent ? "grid-cols-3" : "grid-cols-2"
+          }`}
+        >
           <TabsTrigger value="personal">Personal Info</TabsTrigger>
-          <TabsTrigger value="parent">Parent Info</TabsTrigger>
+          {isStudent && <TabsTrigger value="parent">Parent Info</TabsTrigger>}
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
 
@@ -235,15 +404,29 @@ const Profile = () => {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="fullName" className="flex items-center gap-2">
+                  <Label
+                    htmlFor="firstName"
+                    className="flex items-center gap-2"
+                  >
                     <User className="h-4 w-4" />
                     Full Name
                   </Label>
-                  <Input
-                    id="fullName"
-                    defaultValue={studentInfo.fullName}
-                    disabled={!isEditing}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="firstName"
+                      placeholder="First name"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      disabled={!isEditing}
+                    />
+                    <Input
+                      id="lastName"
+                      placeholder="Last name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      disabled={!isEditing}
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -256,7 +439,11 @@ const Profile = () => {
                   </Label>
                   <Input
                     id="studentId"
-                    defaultValue={studentInfo.studentId}
+                    value={
+                      apiUser?.studentId ||
+                      apiUser?.academicInfo?.studentId ||
+                      ""
+                    }
                     disabled
                   />
                 </div>
@@ -269,8 +456,8 @@ const Profile = () => {
                   <Input
                     id="email"
                     type="email"
-                    defaultValue={studentInfo.email}
-                    disabled={!isEditing}
+                    value={apiUser?.email || ""}
+                    disabled
                   />
                 </div>
 
@@ -281,7 +468,8 @@ const Profile = () => {
                   </Label>
                   <Input
                     id="phone"
-                    defaultValue={studentInfo.phone}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     disabled={!isEditing}
                   />
                 </div>
@@ -293,8 +481,14 @@ const Profile = () => {
                   </Label>
                   <Input
                     id="dob"
-                    defaultValue={studentInfo.dateOfBirth}
-                    disabled={!isEditing}
+                    value={
+                      apiUser?.profile?.dateOfBirth
+                        ? new Date(apiUser.profile.dateOfBirth)
+                            .toISOString()
+                            .slice(0, 10)
+                        : ""
+                    }
+                    disabled
                   />
                 </div>
 
@@ -305,8 +499,8 @@ const Profile = () => {
                   </Label>
                   <Input
                     id="gender"
-                    defaultValue={studentInfo.gender}
-                    disabled={!isEditing}
+                    value={apiUser?.profile?.gender || ""}
+                    disabled
                   />
                 </div>
 
@@ -317,7 +511,8 @@ const Profile = () => {
                   </Label>
                   <Input
                     id="address"
-                    defaultValue={studentInfo.address}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
                     disabled={!isEditing}
                   />
                 </div>
@@ -326,100 +521,25 @@ const Profile = () => {
           </Card>
         </TabsContent>
 
-        {/* Parent Information */}
-        <TabsContent value="parent">
-          <Card>
-            <CardHeader>
-              <CardTitle>Parent/Guardian Information</CardTitle>
-              <CardDescription>
-                Emergency contact and guardian details
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="guardianName"
-                    className="flex items-center gap-2"
-                  >
-                    <User className="h-4 w-4" />
-                    Guardian Name
-                  </Label>
-                  <Input
-                    id="guardianName"
-                    defaultValue={parentInfo.guardianName}
-                    disabled
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="relationship"
-                    className="flex items-center gap-2"
-                  >
-                    <User className="h-4 w-4" />
-                    Relationship
-                  </Label>
-                  <Input
-                    id="relationship"
-                    defaultValue={parentInfo.relationship}
-                    disabled
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="guardianPhone"
-                    className="flex items-center gap-2"
-                  >
-                    <Phone className="h-4 w-4" />
-                    Phone
-                  </Label>
-                  <Input
-                    id="guardianPhone"
-                    defaultValue={parentInfo.phone}
-                    disabled
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="guardianEmail"
-                    className="flex items-center gap-2"
-                  >
-                    <Mail className="h-4 w-4" />
-                    Email
-                  </Label>
-                  <Input
-                    id="guardianEmail"
-                    type="email"
-                    defaultValue={parentInfo.email}
-                    disabled
-                  />
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <Label
-                    htmlFor="occupation"
-                    className="flex items-center gap-2"
-                  >
-                    <Briefcase className="h-4 w-4" />
-                    Occupation
-                  </Label>
-                  <Input
-                    id="occupation"
-                    defaultValue={parentInfo.occupation}
-                    disabled
-                  />
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground mt-4">
-                To update guardian information, please contact the school
-                administration.
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* Parent Information (students only, placeholder) */}
+        {isStudent && (
+          <TabsContent value="parent">
+            <Card>
+              <CardHeader>
+                <CardTitle>Parent/Guardian Information</CardTitle>
+                <CardDescription>
+                  Emergency contact and guardian details
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Parent/guardian information is managed by your school. Please
+                  contact administration to request updates.
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* Account Settings */}
         <TabsContent value="settings">
@@ -437,19 +557,84 @@ const Profile = () => {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="currentPassword">Current Password</Label>
-                    <Input id="currentPassword" type="password" />
+                    <Input
+                      id="currentPassword"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="newPassword">New Password</Label>
-                    <Input id="newPassword" type="password" />
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="confirmPassword">
                       Confirm New Password
                     </Label>
-                    <Input id="confirmPassword" type="password" />
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
                   </div>
-                  <Button>Update Password</Button>
+                  <Button
+                    onClick={async () => {
+                      try {
+                        if (!currentPassword || !newPassword) {
+                          throw new Error("Please fill all password fields");
+                        }
+                        if (newPassword !== confirmPassword) {
+                          throw new Error("New passwords do not match");
+                        }
+                        if (newPassword.length < 6) {
+                          throw new Error(
+                            "New password must be at least 6 characters"
+                          );
+                        }
+                        const token = localStorage.getItem("token");
+                        if (!token) throw new Error("Not authenticated");
+                        const res = await fetch(
+                          `${getApiBase()}/api/profile/password`,
+                          {
+                            method: "PUT",
+                            headers: {
+                              "Content-Type": "application/json",
+                              Authorization: `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({
+                              currentPassword,
+                              newPassword,
+                            }),
+                          }
+                        );
+                        const data = await res.json();
+                        if (!res.ok || !data?.success) {
+                          throw new Error(
+                            data?.message || "Failed to update password"
+                          );
+                        }
+                        toast.success("Password updated successfully");
+                        setCurrentPassword("");
+                        setNewPassword("");
+                        setConfirmPassword("");
+                      } catch (err) {
+                        const message =
+                          err instanceof Error
+                            ? err.message
+                            : "Error updating password";
+                        toast.error(message);
+                      }
+                    }}
+                  >
+                    Update Password
+                  </Button>
                 </div>
               </div>
             </CardContent>

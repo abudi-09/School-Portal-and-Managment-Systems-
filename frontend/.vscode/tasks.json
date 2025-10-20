@@ -10,6 +10,20 @@
 				"$tsc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "lint-frontend",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"lint"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"group": "build"
 		}
 	]
 }

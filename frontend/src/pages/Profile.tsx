@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   User,
@@ -79,10 +80,14 @@ const Profile = () => {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
 
-  // Password fields
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  // Role-specific editable fields
+  const [classField, setClassField] = useState("");
+  const [section, setSection] = useState("");
+  const [grade, setGrade] = useState("");
+  const [subjects, setSubjects] = useState("");
+  const [department, setDepartment] = useState("");
+  const [position, setPosition] = useState("");
+  const [responsibilities, setResponsibilities] = useState("");
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -110,6 +115,14 @@ const Profile = () => {
         setLastName(u.lastName || "");
         setPhone(u.profile?.phone || "");
         setAddress(u.profile?.address || "");
+        // Role-specific
+        setClassField(u.academicInfo?.class || "");
+        setSection(u.academicInfo?.section || "");
+        setGrade(u.academicInfo?.grade || "");
+        setSubjects(u.academicInfo?.subjects?.join(", ") || "");
+        setDepartment(u.employmentInfo?.department || "");
+        setPosition(u.employmentInfo?.position || "");
+        setResponsibilities(u.employmentInfo?.responsibilities || "");
 
         // Avatar
         const avatarPath = u.profile?.avatar;
@@ -166,11 +179,43 @@ const Profile = () => {
         firstName: string;
         lastName: string;
         profile: { phone: string; address: string };
+        academicInfo?: {
+          class: string;
+          section: string;
+          grade: string;
+          subjects: string[];
+        };
+        employmentInfo?: {
+          department: string;
+          position: string;
+          responsibilities: string;
+        };
       } = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         profile: { phone: phone.trim(), address: address.trim() },
       };
+      // Add role-specific
+      if (apiUser?.role === "Student") {
+        payload.academicInfo = {
+          class: classField.trim(),
+          section: section.trim(),
+          grade: grade.trim(),
+          subjects: subjects
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        };
+      } else if (
+        apiUser?.role === "Teacher" ||
+        apiUser?.role === "Department Head"
+      ) {
+        payload.employmentInfo = {
+          department: department.trim(),
+          position: position.trim(),
+          responsibilities: responsibilities.trim(),
+        };
+      }
       const res = await fetch(`${getApiBase()}/api/profile`, {
         method: "PUT",
         headers: {
@@ -516,6 +561,84 @@ const Profile = () => {
                     disabled={!isEditing}
                   />
                 </div>
+
+                {/* Role-specific fields */}
+                {apiUser?.role === "Student" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="classField">Class</Label>
+                      <Input
+                        id="classField"
+                        value={classField}
+                        onChange={(e) => setClassField(e.target.value)}
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="section">Section</Label>
+                      <Input
+                        id="section"
+                        value={section}
+                        onChange={(e) => setSection(e.target.value)}
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="grade">Grade</Label>
+                      <Input
+                        id="grade"
+                        value={grade}
+                        onChange={(e) => setGrade(e.target.value)}
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="subjects">
+                        Subjects (comma-separated)
+                      </Label>
+                      <Input
+                        id="subjects"
+                        value={subjects}
+                        onChange={(e) => setSubjects(e.target.value)}
+                        disabled={!isEditing}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {(apiUser?.role === "Teacher" ||
+                  apiUser?.role === "Department Head") && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="department">Department</Label>
+                      <Input
+                        id="department"
+                        value={department}
+                        onChange={(e) => setDepartment(e.target.value)}
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="position">Position</Label>
+                      <Input
+                        id="position"
+                        value={position}
+                        onChange={(e) => setPosition(e.target.value)}
+                        disabled={!isEditing}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="responsibilities">Responsibilities</Label>
+                      <Textarea
+                        id="responsibilities"
+                        value={responsibilities}
+                        onChange={(e) => setResponsibilities(e.target.value)}
+                        disabled={!isEditing}
+                        rows={3}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>

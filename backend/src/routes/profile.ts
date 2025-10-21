@@ -63,6 +63,18 @@ const updateProfileValidators = [
     .optional({ nullable: true })
     .isIn(["male", "female", "other"]),
   body("profile.dateOfBirth").optional({ nullable: true }).isISO8601().toDate(),
+  // Role-specific validators
+  body("academicInfo").optional().isObject(),
+  body("academicInfo.class").optional({ nullable: true }).isString(),
+  body("academicInfo.section").optional({ nullable: true }).isString(),
+  body("academicInfo.grade").optional({ nullable: true }).isString(),
+  body("academicInfo.subjects").optional({ nullable: true }).isArray(),
+  body("employmentInfo").optional().isObject(),
+  body("employmentInfo.department").optional({ nullable: true }).isString(),
+  body("employmentInfo.position").optional({ nullable: true }).isString(),
+  body("employmentInfo.responsibilities")
+    .optional({ nullable: true })
+    .isString(),
 ];
 
 // @route   PUT /api/profile
@@ -75,13 +87,11 @@ router.put(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid input",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input",
+        errors: errors.array(),
+      });
     }
 
     try {
@@ -92,22 +102,46 @@ router.put(
           .json({ success: false, message: "User not authenticated" });
       }
 
-      const { firstName, lastName, profile } = req.body as {
-        firstName?: string;
-        lastName?: string;
-        profile?: {
-          phone?: string;
-          address?: string;
-          gender?: string;
-          dateOfBirth?: Date;
-          avatar?: string;
+      const { firstName, lastName, profile, academicInfo, employmentInfo } =
+        req.body as {
+          firstName?: string;
+          lastName?: string;
+          profile?: {
+            phone?: string;
+            address?: string;
+            gender?: string;
+            dateOfBirth?: Date;
+            avatar?: string;
+          };
+          academicInfo?: {
+            class?: string;
+            section?: string;
+            grade?: string;
+            subjects?: string[];
+          };
+          employmentInfo?: {
+            department?: string;
+            position?: string;
+            responsibilities?: string;
+          };
         };
-      };
 
       if (typeof firstName === "string") user.firstName = firstName;
       if (typeof lastName === "string") user.lastName = lastName;
       if (profile && typeof profile === "object") {
         user.profile = { ...(user.profile || {}), ...profile } as any;
+      }
+      if (academicInfo && typeof academicInfo === "object") {
+        user.academicInfo = {
+          ...(user.academicInfo || {}),
+          ...academicInfo,
+        } as any;
+      }
+      if (employmentInfo && typeof employmentInfo === "object") {
+        user.employmentInfo = {
+          ...(user.employmentInfo || {}),
+          ...employmentInfo,
+        } as any;
       }
 
       await user.save();
@@ -147,13 +181,11 @@ router.put(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid input",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input",
+        errors: errors.array(),
+      });
     }
 
     try {

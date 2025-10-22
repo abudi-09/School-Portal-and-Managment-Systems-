@@ -1,21 +1,65 @@
-import { BookOpen, Users, ClipboardCheck, Calendar, Bell, TrendingUp } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  BookOpen,
+  Users,
+  ClipboardCheck,
+  Calendar,
+  Bell,
+  TrendingUp,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/useAuth";
+import { useEffect, useState } from "react";
+import { StatCardSkeleton } from "@/components/shared/LoadingSkeletons";
 
 const TeacherDashboard = () => {
   const { user } = useAuth();
-  
+  const [isDemoLoading, setIsDemoLoading] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setIsDemoLoading(false), 500);
+    return () => clearTimeout(t);
+  }, []);
+
   const stats = [
-    { title: "Total Classes", value: "5", icon: BookOpen, color: "text-primary" },
-    { title: "Total Students", value: "127", icon: Users, color: "text-accent" },
-    { title: "Pending Grading", value: "18", icon: ClipboardCheck, color: "text-warning" },
-    { title: "Upcoming Exams", value: "3", icon: Calendar, color: "text-success" },
+    {
+      title: "Total Classes",
+      value: "5",
+      icon: BookOpen,
+      color: "text-primary",
+    },
+    {
+      title: "Total Students",
+      value: "127",
+      icon: Users,
+      color: "text-accent",
+    },
+    {
+      title: "Pending Grading",
+      value: "18",
+      icon: ClipboardCheck,
+      color: "text-warning",
+    },
+    {
+      title: "Upcoming Exams",
+      value: "3",
+      icon: Calendar,
+      color: "text-success",
+    },
   ];
 
   const quickActions = [
-    { title: "Upload Assignment", href: "/teacher/assignments", icon: ClipboardCheck },
+    {
+      title: "Upload Assignment",
+      href: "/teacher/assignments",
+      icon: ClipboardCheck,
+    },
     { title: "Enter Grades", href: "/teacher/grades", icon: TrendingUp },
     { title: "View Schedule", href: "/teacher/classes", icon: Calendar },
     { title: "Post Announcement", href: "/teacher/announcements", icon: Bell },
@@ -56,31 +100,43 @@ const TeacherDashboard = () => {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground mb-2">
-          Welcome back, {user?.name || 'Teacher'} 👋
+          Welcome back, {user?.name || "Teacher"} 👋
         </h1>
         <p className="text-muted-foreground">
           Here's what's happening with your classes today
-          {user?.isHeadClassTeacher && <span className="ml-1">(Head Class Teacher)</span>}
+          {user?.isHeadClassTeacher && (
+            <span className="ml-1">(Head Class Teacher)</span>
+          )}
         </p>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">{stat.title}</p>
-                  <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-                </div>
-                <div className={`p-3 rounded-lg bg-secondary ${stat.color}`}>
-                  <stat.icon className="h-6 w-6" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {isDemoLoading
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <StatCardSkeleton key={i} />
+            ))
+          : stats.map((stat) => (
+              <Card key={stat.title}>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">
+                        {stat.title}
+                      </p>
+                      <p className="text-3xl font-bold text-foreground">
+                        {stat.value}
+                      </p>
+                    </div>
+                    <div
+                      className={`p-3 rounded-lg bg-secondary ${stat.color}`}
+                    >
+                      <stat.icon className="h-6 w-6" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
       </div>
 
       {/* Quick Actions */}
@@ -113,7 +169,9 @@ const TeacherDashboard = () => {
               <Bell className="h-5 w-5 text-warning" />
               Urgent Actions
             </CardTitle>
-            <CardDescription>Tasks requiring immediate attention</CardDescription>
+            <CardDescription>
+              Tasks requiring immediate attention
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {urgentActions.map((item, index) => (
@@ -122,10 +180,20 @@ const TeacherDashboard = () => {
                 className="flex items-start justify-between p-4 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
               >
                 <div className="flex-1">
-                  <p className="font-medium text-foreground mb-1">{item.task}</p>
-                  <p className="text-sm text-muted-foreground">{item.deadline}</p>
+                  <p className="font-medium text-foreground mb-1">
+                    {item.task}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {item.deadline}
+                  </p>
                 </div>
-                <Badge variant={item.deadline.includes("today") ? "destructive" : "secondary"}>
+                <Badge
+                  variant={
+                    item.deadline.includes("today")
+                      ? "destructive"
+                      : "secondary"
+                  }
+                >
                   {item.deadline.includes("today") ? "Urgent" : "Pending"}
                 </Badge>
               </div>
@@ -137,7 +205,9 @@ const TeacherDashboard = () => {
         <Card>
           <CardHeader>
             <CardTitle>Recent Notifications</CardTitle>
-            <CardDescription>Messages from administration and staff</CardDescription>
+            <CardDescription>
+              Messages from administration and staff
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {recentNotifications.map((notification) => (
@@ -148,7 +218,9 @@ const TeacherDashboard = () => {
                 <div className="w-2 h-2 rounded-full bg-accent mt-2" />
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="font-medium text-foreground">{notification.title}</p>
+                    <p className="font-medium text-foreground">
+                      {notification.title}
+                    </p>
                     <Badge
                       variant={
                         notification.priority === "high"
@@ -164,7 +236,9 @@ const TeacherDashboard = () => {
                   <p className="text-sm text-muted-foreground mb-1">
                     From: {notification.sender}
                   </p>
-                  <p className="text-xs text-muted-foreground">{notification.date}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {notification.date}
+                  </p>
                 </div>
               </div>
             ))}

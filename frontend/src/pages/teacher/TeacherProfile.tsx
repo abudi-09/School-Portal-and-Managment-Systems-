@@ -1,6 +1,22 @@
 import { useState } from "react";
-import { User, Mail, Phone, Building, BookOpen, Lock, Camera } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  User,
+  Mail,
+  Phone,
+  Building,
+  BookOpen,
+  Lock,
+  Camera,
+} from "lucide-react";
+import { useEffect } from "react";
+import { SkeletonAvatar, SkeletonLine } from "@/components/skeleton";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +25,12 @@ import { Badge } from "@/components/ui/badge";
 
 const TeacherProfile = () => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isDemoLoading, setIsDemoLoading] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setIsDemoLoading(false), 500);
+    return () => clearTimeout(t);
+  }, []);
 
   const teacherInfo = {
     name: "Ms. Jane Smith",
@@ -27,7 +49,9 @@ const TeacherProfile = () => {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground mb-2">Profile</h1>
-        <p className="text-muted-foreground">Manage your account information and settings</p>
+        <p className="text-muted-foreground">
+          Manage your account information and settings
+        </p>
       </div>
 
       <Tabs defaultValue="personal" className="space-y-6">
@@ -45,22 +69,36 @@ const TeacherProfile = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-6">
-                <div className="relative">
-                  <div className="w-24 h-24 rounded-full bg-accent flex items-center justify-center">
-                    <span className="text-3xl font-semibold text-accent-foreground">MJ</span>
+                {isDemoLoading ? (
+                  <div className="flex items-center gap-6" aria-hidden>
+                    <SkeletonAvatar size={96} />
+                    <div className="space-y-2">
+                      <SkeletonLine height="h-5" width="w-40" />
+                      <SkeletonLine height="h-4" width="w-36" />
+                    </div>
                   </div>
-                  <button className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors">
-                    <Camera className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Allowed formats: JPG, PNG (Max 5MB)
-                  </p>
-                  <Button variant="outline" size="sm">
-                    Upload New Photo
-                  </Button>
-                </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <div className="w-24 h-24 rounded-full bg-accent flex items-center justify-center">
+                        <span className="text-3xl font-semibold text-accent-foreground">
+                          MJ
+                        </span>
+                      </div>
+                      <button className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors">
+                        <Camera className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Allowed formats: JPG, PNG (Max 5MB)
+                      </p>
+                      <Button variant="outline" size="sm">
+                        Upload New Photo
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -74,13 +112,20 @@ const TeacherProfile = () => {
                   <CardDescription>Your basic information</CardDescription>
                 </div>
                 {!isEditing ? (
-                  <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
+                  <Button onClick={() => setIsEditing(true)}>
+                    Edit Profile
+                  </Button>
                 ) : (
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setIsEditing(false)}>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsEditing(false)}
+                    >
                       Cancel
                     </Button>
-                    <Button onClick={() => setIsEditing(false)}>Save Changes</Button>
+                    <Button onClick={() => setIsEditing(false)}>
+                      Save Changes
+                    </Button>
                   </div>
                 )}
               </div>
@@ -183,7 +228,11 @@ const TeacherProfile = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="joinDate">Join Date</Label>
-                  <Input id="joinDate" defaultValue={teacherInfo.joinDate} disabled />
+                  <Input
+                    id="joinDate"
+                    defaultValue={teacherInfo.joinDate}
+                    disabled
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="experience">Experience</Label>

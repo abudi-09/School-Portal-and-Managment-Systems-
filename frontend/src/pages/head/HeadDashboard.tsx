@@ -1,15 +1,58 @@
-import { Users, GraduationCap, Calendar, TrendingUp, Bell, AlertCircle } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Users,
+  GraduationCap,
+  Calendar,
+  TrendingUp,
+  Bell,
+  AlertCircle,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { useEffect, useState } from "react";
+import { StatCardSkeleton } from "@/components/shared/LoadingSkeletons";
 
 const HeadDashboard = () => {
+  const [isDemoLoading, setIsDemoLoading] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setIsDemoLoading(false), 500);
+    return () => clearTimeout(t);
+  }, []);
   const stats = [
-    { title: "Total Teachers", value: "45", change: "+3", icon: Users, color: "text-primary" },
-    { title: "Total Students", value: "842", change: "+25", icon: GraduationCap, color: "text-accent" },
-    { title: "Active Accounts", value: "887", inactive: "12", icon: TrendingUp, color: "text-success" },
-    { title: "Upcoming Schedules", value: "18", icon: Calendar, color: "text-warning" },
+    {
+      title: "Total Teachers",
+      value: "45",
+      change: "+3",
+      icon: Users,
+      color: "text-primary",
+    },
+    {
+      title: "Total Students",
+      value: "842",
+      change: "+25",
+      icon: GraduationCap,
+      color: "text-accent",
+    },
+    {
+      title: "Active Accounts",
+      value: "887",
+      inactive: "12",
+      icon: TrendingUp,
+      color: "text-success",
+    },
+    {
+      title: "Upcoming Schedules",
+      value: "18",
+      icon: Calendar,
+      color: "text-warning",
+    },
   ];
 
   const pendingApprovals = [
@@ -40,10 +83,18 @@ const HeadDashboard = () => {
   ];
 
   const recentActivity = [
-    { action: "New teacher approved", user: "Ms. Johnson", time: "2 hours ago" },
+    {
+      action: "New teacher approved",
+      user: "Ms. Johnson",
+      time: "2 hours ago",
+    },
     { action: "Class schedule updated", user: "System", time: "5 hours ago" },
     { action: "Announcement posted", user: "You", time: "1 day ago" },
-    { action: "Student grades approved", user: "Head Class Teacher", time: "1 day ago" },
+    {
+      action: "Student grades approved",
+      user: "Head Class Teacher",
+      time: "1 day ago",
+    },
   ];
 
   return (
@@ -60,32 +111,42 @@ const HeadDashboard = () => {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 rounded-lg bg-secondary ${stat.color}`}>
-                  <stat.icon className="h-6 w-6" />
-                </div>
-                {stat.change && (
-                  <Badge variant="secondary" className="gap-1">
-                    <TrendingUp className="h-3 w-3" />
-                    {stat.change}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground mb-1">{stat.title}</p>
-              <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-                {stat.inactive && (
-                  <p className="text-sm text-muted-foreground">
-                    ({stat.inactive} inactive)
+        {isDemoLoading
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <StatCardSkeleton key={i} />
+            ))
+          : stats.map((stat) => (
+              <Card key={stat.title}>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div
+                      className={`p-3 rounded-lg bg-secondary ${stat.color}`}
+                    >
+                      <stat.icon className="h-6 w-6" />
+                    </div>
+                    {stat.change && (
+                      <Badge variant="secondary" className="gap-1">
+                        <TrendingUp className="h-3 w-3" />
+                        {stat.change}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    {stat.title}
                   </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl font-bold text-foreground">
+                      {stat.value}
+                    </p>
+                    {stat.inactive && (
+                      <p className="text-sm text-muted-foreground">
+                        ({stat.inactive} inactive)
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
       </div>
 
       {/* Key Metrics */}
@@ -134,7 +195,9 @@ const HeadDashboard = () => {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Week 12 of 18</span>
-            <span className="text-sm font-medium text-foreground">67% Complete</span>
+            <span className="text-sm font-medium text-foreground">
+              67% Complete
+            </span>
           </div>
           <Progress value={67} className="h-3" />
           <div className="grid grid-cols-3 gap-4 pt-2">
@@ -164,7 +227,9 @@ const HeadDashboard = () => {
                   <AlertCircle className="h-5 w-5 text-warning" />
                   Pending Approvals
                 </CardTitle>
-                <CardDescription>Actions requiring your attention</CardDescription>
+                <CardDescription>
+                  Actions requiring your attention
+                </CardDescription>
               </div>
               <Badge variant="destructive">{pendingApprovals.length}</Badge>
             </div>
@@ -180,15 +245,15 @@ const HeadDashboard = () => {
                     <Badge variant="outline">{item.type}</Badge>
                     <Badge
                       variant={
-                        item.priority === "high"
-                          ? "destructive"
-                          : "secondary"
+                        item.priority === "high" ? "destructive" : "secondary"
                       }
                     >
                       {item.priority}
                     </Badge>
                   </div>
-                  <p className="font-medium text-foreground mb-1">{item.name}</p>
+                  <p className="font-medium text-foreground mb-1">
+                    {item.name}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     {item.subject || item.class} • {item.date}
                   </p>
@@ -223,7 +288,9 @@ const HeadDashboard = () => {
               >
                 <div className="w-2 h-2 rounded-full bg-accent mt-2" />
                 <div className="flex-1">
-                  <p className="font-medium text-foreground mb-1">{activity.action}</p>
+                  <p className="font-medium text-foreground mb-1">
+                    {activity.action}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     By {activity.user} • {activity.time}
                   </p>

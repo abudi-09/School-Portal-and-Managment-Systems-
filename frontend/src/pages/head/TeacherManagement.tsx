@@ -275,25 +275,32 @@ const TeacherManagement = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {stat.title}
-                  </p>
-                  <p className="text-3xl font-bold text-foreground">
-                    {stat.value}
-                  </p>
-                </div>
-                <div className={`p-3 rounded-lg bg-secondary ${stat.color}`}>
-                  <stat.icon className="h-6 w-6" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {approvedQuery.isLoading || pendingQuery.isLoading
+          ? // show lightweight stat skeletons while queries hydrate
+            Array.from({ length: 2 }).map((_, i) => (
+              <StatCardSkeleton key={i} />
+            ))
+          : stats.map((stat) => (
+              <Card key={stat.title}>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">
+                        {stat.title}
+                      </p>
+                      <p className="text-3xl font-bold text-foreground">
+                        {stat.value}
+                      </p>
+                    </div>
+                    <div
+                      className={`p-3 rounded-lg bg-secondary ${stat.color}`}
+                    >
+                      <stat.icon className="h-6 w-6" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
       </div>
 
       {/* Search and Filter */}

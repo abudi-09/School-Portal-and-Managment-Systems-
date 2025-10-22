@@ -27,6 +27,7 @@ import {
   changePassword,
   type Profile,
 } from "@/lib/api/profileApi";
+import { SkeletonAvatar, SkeletonLine } from "@/components/skeleton";
 
 type ApiError = { response?: { data?: { message?: string } } };
 const getErrorMessage = (e: unknown) => {
@@ -230,15 +231,25 @@ const AdminProfile = () => {
             <CardContent className="space-y-6">
               {/* Avatar */}
               <div className="flex items-center gap-4">
-                <Avatar className="h-20 w-20">
-                  {profile.avatar ? (
-                    <AvatarImage src={profile.avatar} alt="Profile photo" />
-                  ) : null}
-                  <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
-                    {profile.firstName?.[0]?.toUpperCase()}
-                    {profile.lastName?.[0]?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+                {loading ? (
+                  <div className="flex items-center gap-4" aria-hidden>
+                    <SkeletonAvatar size={80} />
+                    <div className="space-y-2">
+                      <SkeletonLine height="h-6" width="w-40" />
+                      <SkeletonLine height="h-4" width="w-32" />
+                    </div>
+                  </div>
+                ) : (
+                  <Avatar className="h-20 w-20">
+                    {profile.avatar ? (
+                      <AvatarImage src={profile.avatar} alt="Profile photo" />
+                    ) : null}
+                    <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
+                      {profile.firstName?.[0]?.toUpperCase()}
+                      {profile.lastName?.[0]?.toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                )}
                 {isEditing && (
                   <div className="flex items-center gap-2">
                     <input
@@ -269,24 +280,28 @@ const AdminProfile = () => {
                   <Label htmlFor="name">Full Name</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="name"
-                      value={`${profile.firstName ?? ""} ${
-                        profile.lastName ?? ""
-                      }`.trim()}
-                      onChange={(e) => {
-                        // Split into first/last by first space
-                        const val = e.target.value;
-                        const [first, ...rest] = val.split(" ");
-                        setProfile((p) => ({
-                          ...p,
-                          firstName: first,
-                          lastName: rest.join(" "),
-                        }));
-                      }}
-                      disabled={!isEditing}
-                      className="pl-10"
-                    />
+                    {loading ? (
+                      <SkeletonLine height="h-10" />
+                    ) : (
+                      <Input
+                        id="name"
+                        value={`${profile.firstName ?? ""} ${
+                          profile.lastName ?? ""
+                        }`.trim()}
+                        onChange={(e) => {
+                          // Split into first/last by first space
+                          const val = e.target.value;
+                          const [first, ...rest] = val.split(" ");
+                          setProfile((p) => ({
+                            ...p,
+                            firstName: first,
+                            lastName: rest.join(" "),
+                          }));
+                        }}
+                        disabled={!isEditing}
+                        className="pl-10"
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -352,7 +367,7 @@ const AdminProfile = () => {
           </Card>
 
           {/* Change Password */}
-          <Card> 
+          <Card>
             <CardHeader>
               <CardTitle>Security Settings</CardTitle>
               <CardDescription>

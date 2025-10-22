@@ -26,7 +26,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { StatCardSkeleton } from "@/components/shared/LoadingSkeletons";
 import { useNavigate } from "react-router-dom";
 import StatCard from "@/components/StatCard";
 
@@ -64,6 +65,13 @@ const AdminDashboard = () => {
   ]);
 
   const unreadCount = notifications.filter((n) => !n.seen).length;
+
+  const [isDemoLoading, setIsDemoLoading] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setIsDemoLoading(false), 500);
+    return () => clearTimeout(t);
+  }, []);
 
   const markAsSeen = (id: number) => {
     setNotifications((prev) =>
@@ -287,36 +295,40 @@ const AdminDashboard = () => {
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {stats.map((stat) => (
-              <Card
-                key={stat.title}
-                className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-600 mb-2">
-                        {stat.title}
-                      </p>
-                      <p className="text-3xl font-bold text-gray-900 mb-3">
-                        {stat.value}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4 text-green-600" />
-                        <span className="text-sm font-medium text-green-600">
-                          {stat.change}
-                        </span>
+            {isDemoLoading
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <StatCardSkeleton key={i} />
+                ))
+              : stats.map((stat) => (
+                  <Card
+                    key={stat.title}
+                    className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-600 mb-2">
+                            {stat.title}
+                          </p>
+                          <p className="text-3xl font-bold text-gray-900 mb-3">
+                            {stat.value}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4 text-green-600" />
+                            <span className="text-sm font-medium text-green-600">
+                              {stat.change}
+                            </span>
+                          </div>
+                        </div>
+                        <div
+                          className={`p-3 rounded-xl bg-gray-100 ${stat.color} ml-4`}
+                        >
+                          <stat.icon className="h-6 w-6" />
+                        </div>
                       </div>
-                    </div>
-                    <div
-                      className={`p-3 rounded-xl bg-gray-100 ${stat.color} ml-4`}
-                    >
-                      <stat.icon className="h-6 w-6" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    </CardContent>
+                  </Card>
+                ))}
           </div>
         </section>
         {/* Registration Status Alert */}
@@ -456,44 +468,54 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {pendingActions.map((item, index) => (
-                <div
-                  key={item.type}
-                  onClick={() => {
-                    if (item.type === "Registration Approval") {
-                      navigate("/admin/head-management");
-                    } else if (item.type === "Account Activation") {
-                      navigate("/admin/users");
-                    } else if (item.type === "ID Generation") {
-                      navigate("/admin/students");
-                    }
-                  }}
-                  className={`flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:shadow-sm transition-all cursor-pointer ${
-                    index % 2 === 0 ? "bg-gray-50/50" : "bg-white"
-                  }`}
-                >
-                  <div>
-                    <p className="font-semibold text-gray-900 text-base">
-                      {item.type}
-                    </p>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {item.count} pending
-                    </p>
-                  </div>
-                  <Badge
-                    variant={
-                      item.priority === "high"
-                        ? "destructive"
-                        : item.priority === "medium"
-                        ? "default"
-                        : "secondary"
-                    }
-                    className="px-3 py-1 text-xs font-medium"
-                  >
-                    {item.priority}
-                  </Badge>
-                </div>
-              ))}
+              {isDemoLoading
+                ? Array.from({ length: 3 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="p-3 rounded-xl border border-gray-100 bg-gray-50/40 animate-pulse"
+                    >
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                      <div className="h-3 bg-gray-200 rounded w-1/3" />
+                    </div>
+                  ))
+                : pendingActions.map((item, index) => (
+                    <div
+                      key={item.type}
+                      onClick={() => {
+                        if (item.type === "Registration Approval") {
+                          navigate("/admin/head-management");
+                        } else if (item.type === "Account Activation") {
+                          navigate("/admin/users");
+                        } else if (item.type === "ID Generation") {
+                          navigate("/admin/students");
+                        }
+                      }}
+                      className={`flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:shadow-sm transition-all cursor-pointer ${
+                        index % 2 === 0 ? "bg-gray-50/50" : "bg-white"
+                      }`}
+                    >
+                      <div>
+                        <p className="font-semibold text-gray-900 text-base">
+                          {item.type}
+                        </p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {item.count} pending
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          item.priority === "high"
+                            ? "destructive"
+                            : item.priority === "medium"
+                            ? "default"
+                            : "secondary"
+                        }
+                        className="px-3 py-1 text-xs font-medium"
+                      >
+                        {item.priority}
+                      </Badge>
+                    </div>
+                  ))}
             </CardContent>
           </Card>
 

@@ -46,6 +46,9 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import TablePagination from "@/components/shared/TablePagination";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 type StudentStatus = "active" | "inactive" | "on-leave";
 
@@ -239,6 +242,7 @@ const STUDENTS: Student[] = [
 
 const StudentManagement = () => {
   const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [gradeFilter, setGradeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<StudentStatus | "all">(
@@ -247,7 +251,85 @@ const StudentManagement = () => {
   const [performanceFilter, setPerformanceFilter] = useState("all");
   const [profileStudent, setProfileStudent] = useState<Student | null>(null);
 
-  const students = STUDENTS;
+  // Auth & toast
+  const { user, isLoading: authLoading } = useAuth();
+  const { toast } = useToast();
+
+  // API base
+  const apiBaseUrl =
+    import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+
+  // Only allow head role to use this page
+  useEffect(() => {
+    // If auth finished loading and the user is present but not a head, block access
+    if (!authLoading) {
+      if (!user || user.role !== "head") {
+        window.location.href = "/unauthorized";
+      }
+    }
+  }, [user, authLoading]);
+
+  // Fetch students for Head (use dedicated endpoint)
+  const allStudentsQuery = useQuery({
+    queryKey: ["head", "students", "all"],
+    queryFn: async () => {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch(`${apiBaseUrl}/api/students/all`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || "Failed to load students");
+      const rawStudents = (json?.students ?? json) as unknown[];
+      const mapped = (Array.isArray(rawStudents) ? rawStudents : []).map(
+        (s: any, idx) => ({
+          id: s._id ?? s.id ?? idx,
+          name:
+            s.name ??
+            [s.firstName, s.lastName].filter(Boolean).join(" ") ??
+            s.studentId ??
+            "Unknown",
+          studentId: s.studentId ?? s.studentID ?? s.id ?? String(idx),
+          gradeLevel: s.gradeLevel ?? s.academicInfo?.grade ?? s.grade ?? "-",
+          section: s.section ?? s.academicInfo?.class ?? "-",
+          classRank: s.classRank ?? s.rank ?? 0,
+          gradeAverage: s.gradeAverage ?? s.academicInfo?.average ?? 0,
+          gpa: s.gpa ?? 0,
+          attendanceRate: s.attendanceRate ?? s.attendance ?? 0,
+          status:
+            (s.status as StudentStatus) ??
+            (s.isActive ? "active" : "inactive") ??
+            "active",
+          guardian: s.guardian ?? s.profile?.guardian ?? "",
+          contact: s.contact ?? s.email ?? s.profile?.phone ?? "",
+          alerts: s.alerts ?? [],
+          subjects: s.subjects ?? [],
+          attendanceHistory: s.attendanceHistory ?? [],
+        })
+      ) as Student[];
+      return mapped;
+    },
+    retry: 2,
+    onError(error) {
+      console.error("Error fetching students:", error);
+      const msg =
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+          ? error.message
+          : "Unknown error";
+      toast({
+        title: "Failed to load students",
+        description: msg,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const students = allStudentsQuery.data ?? STUDENTS;
 
   // Combine the active filters for flexible exploration.
   const filteredStudents = useMemo(() => {
@@ -313,7 +395,10 @@ const StudentManagement = () => {
   // Client-side pagination for directory
   const ROWS_PER_PAGE = 6;
   const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / ROWS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredStudents.length / ROWS_PER_PAGE)
+  );
   useEffect(() => {
     // Reset to first page whenever filters/search change
     setPage(1);
@@ -321,7 +406,12 @@ const StudentManagement = () => {
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
-  const pagedStudents = filteredStudents.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+  const pagedStudents = filteredStudents.slice(
+    (page - 1) * ROWS_PER_PAGE,
+    page * ROWS_PER_PAGE
+  );
+
+  // remove demo timer; use real query flags
 
   const toggleStudent = (id: number) => {
     setSelectedStudents((prev) =>
@@ -409,25 +499,31 @@ const StudentManagement = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {stat.title}
-                  </p>
-                  <p className="text-3xl font-bold text-foreground">
-                    {stat.value}
-                  </p>
-                </div>
-                <div className={`p-3 rounded-lg bg-secondary/60 ${stat.color}`}>
-                  <stat.icon className="h-6 w-6" aria-hidden="true" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {stats.length === 0
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <StatCardSkeleton key={i} />
+            ))
+          : stats.map((stat) => (
+              <Card key={stat.title}>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">
+                        {stat.title}
+                      </p>
+                      <p className="text-3xl font-bold text-foreground">
+                        {stat.value}
+                      </p>
+                    </div>
+                    <div
+                      className={`p-3 rounded-lg bg-secondary/60 ${stat.color}`}
+                    >
+                      <stat.icon className="h-6 w-6" aria-hidden="true" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
       </div>
 
       <div className="flex flex-col md:flex-row gap-4">
@@ -605,7 +701,41 @@ const StudentManagement = () => {
                   </TableRow>
                 );
               })}
-              {filteredStudents.length === 0 && (
+              {allStudentsQuery.isLoading && pagedStudents.length === 0 && (
+                <TableSkeletonRows rows={6} cols={9} />
+              )}
+              {allStudentsQuery.isError && (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center">
+                    <div className="space-y-2">
+                      <div className="text-sm text-destructive">
+                        Failed to load students.
+                      </div>
+                      <div>
+                        <Button
+                          variant="ghost"
+                          onClick={() => allStudentsQuery.refetch()}
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+              {!allStudentsQuery.isLoading &&
+                Array.isArray(students) &&
+                students.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={9}
+                      className="text-center text-muted-foreground"
+                    >
+                      No Students Found
+                    </TableCell>
+                  </TableRow>
+                )}
+              {filteredStudents.length === 0 && students.length > 0 && (
                 <TableRow>
                   <TableCell
                     colSpan={9}

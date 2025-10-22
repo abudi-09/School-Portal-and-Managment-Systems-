@@ -9,6 +9,8 @@ import {
   Users,
 } from "lucide-react";
 import StatCard from "@/components/StatCard";
+import { useEffect, useState } from "react";
+import { StatCardSkeleton } from "@/components/shared/LoadingSkeletons";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,6 +23,11 @@ import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 
 const Dashboard = () => {
+  const [isDemoLoading, setIsDemoLoading] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setIsDemoLoading(false), 500);
+    return () => clearTimeout(t);
+  }, []);
   const upcomingAssignments = [
     {
       id: 1,
@@ -97,43 +104,56 @@ const Dashboard = () => {
 
         {/* Enhanced Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="transform hover:scale-105 transition-all duration-300">
-            <StatCard
-              title="Current GPA"
-              value="3.85"
-              icon={Award}
-              trend={{ value: "+0.15", isPositive: true }}
-              description="Above average"
-              variant="success"
-            />
-          </div>
-          <div className="transform hover:scale-105 transition-all duration-300">
-            <StatCard
-              title="Class Rank"
-              value="#8"
-              icon={Trophy}
-              description="Out of 120 students"
-              variant="accent"
-            />
-          </div>
-          <div className="transform hover:scale-105 transition-all duration-300">
-            <StatCard
-              title="Pending Assignments"
-              value="5"
-              icon={ClipboardList}
-              description="2 due this week"
-              variant="warning"
-            />
-          </div>
-          <div className="transform hover:scale-105 transition-all duration-300">
-            <StatCard
-              title="Attendance Rate"
-              value="96%"
-              icon={TrendingUp}
-              description="Excellent record"
-              variant="success"
-            />
-          </div>
+          {isDemoLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div
+                className="transform hover:scale-105 transition-all duration-300"
+                key={i}
+              >
+                <StatCardSkeleton />
+              </div>
+            ))
+          ) : (
+            <>
+              <div className="transform hover:scale-105 transition-all duration-300">
+                <StatCard
+                  title="Current GPA"
+                  value="3.85"
+                  icon={Award}
+                  trend={{ value: "+0.15", isPositive: true }}
+                  description="Above average"
+                  variant="success"
+                />
+              </div>
+              <div className="transform hover:scale-105 transition-all duration-300">
+                <StatCard
+                  title="Class Rank"
+                  value="#8"
+                  icon={Trophy}
+                  description="Out of 120 students"
+                  variant="accent"
+                />
+              </div>
+              <div className="transform hover:scale-105 transition-all duration-300">
+                <StatCard
+                  title="Pending Assignments"
+                  value="5"
+                  icon={ClipboardList}
+                  description="2 due this week"
+                  variant="warning"
+                />
+              </div>
+              <div className="transform hover:scale-105 transition-all duration-300">
+                <StatCard
+                  title="Attendance Rate"
+                  value="96%"
+                  icon={TrendingUp}
+                  description="Excellent record"
+                  variant="success"
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {/* Enhanced Quick Access */}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Power, CheckCircle, XCircle, Clock, FileText } from "lucide-react";
 import {
   Card,
@@ -32,10 +32,21 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import {
+  StatCardSkeleton,
+  TableSkeletonRows,
+} from "@/components/shared/LoadingSkeletons";
 
 const AdminRegistrationControl = () => {
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
+  // Loading state placeholder; replace with real query loading flags when connected to API
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const t = setTimeout(() => setIsLoading(false), 600);
+    return () => clearTimeout(t);
+  }, []);
 
   const pendingRegistrations = [
     {
@@ -208,56 +219,75 @@ const AdminRegistrationControl = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Pending</p>
-                <p className="text-3xl font-bold text-foreground">
-                  {pendingRegistrations.length}
-                </p>
-              </div>
-              <Clock className="h-6 w-6 text-primary" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Approved</p>
-                <p className="text-3xl font-bold text-success">
-                  {approvedRegistrations.length}
-                </p>
-              </div>
-              <CheckCircle className="h-6 w-6 text-success" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Rejected</p>
-                <p className="text-3xl font-bold text-destructive">0</p>
-              </div>
-              <XCircle className="h-6 w-6 text-destructive" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Returning</p>
-                <p className="text-3xl font-bold text-foreground">
-                  {returningStudents.length}
-                </p>
-              </div>
-              <FileText className="h-6 w-6 text-primary" />
-            </div>
-          </CardContent>
-        </Card>
+        {isLoading ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          <>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Pending
+                    </p>
+                    <p className="text-3xl font-bold text-foreground">
+                      {pendingRegistrations.length}
+                    </p>
+                  </div>
+                  <Clock className="h-6 w-6 text-primary" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Approved
+                    </p>
+                    <p className="text-3xl font-bold text-success">
+                      {approvedRegistrations.length}
+                    </p>
+                  </div>
+                  <CheckCircle className="h-6 w-6 text-success" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Rejected
+                    </p>
+                    <p className="text-3xl font-bold text-destructive">0</p>
+                  </div>
+                  <XCircle className="h-6 w-6 text-destructive" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Returning
+                    </p>
+                    <p className="text-3xl font-bold text-foreground">
+                      {returningStudents.length}
+                    </p>
+                  </div>
+                  <FileText className="h-6 w-6 text-primary" />
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Registration Tabs */}
@@ -277,57 +307,81 @@ const AdminRegistrationControl = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Grade</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead>Payment Proof</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingRegistrations.map((reg) => (
-                    <TableRow key={reg.id}>
-                      <TableCell className="font-medium">{reg.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{reg.grade}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="default">{reg.type}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {reg.submittedDate}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="link" size="sm" className="p-0 h-auto">
-                          {reg.paymentProof}
-                        </Button>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => handleApprove(reg.name)}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleReject(reg.name)}
-                          >
-                            Reject
-                          </Button>
-                        </div>
-                      </TableCell>
+              {isLoading ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead>Payment Proof</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    <TableSkeletonRows rows={6} cols={6} />
+                  </TableBody>
+                </Table>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead>Payment Proof</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingRegistrations.map((reg) => (
+                      <TableRow key={reg.id}>
+                        <TableCell className="font-medium">
+                          {reg.name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{reg.grade}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="default">{reg.type}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {reg.submittedDate}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="p-0 h-auto"
+                          >
+                            {reg.paymentProof}
+                          </Button>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleApprove(reg.name)}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleReject(reg.name)}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -342,39 +396,58 @@ const AdminRegistrationControl = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Student ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Grade</TableHead>
-                    <TableHead>Approved Date</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {approvedRegistrations.map((reg) => (
-                    <TableRow key={reg.id}>
-                      <TableCell className="font-mono text-sm">
-                        {reg.studentId}
-                      </TableCell>
-                      <TableCell className="font-medium">{reg.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{reg.grade}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {reg.approvedDate}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="default">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Approved
-                        </Badge>
-                      </TableCell>
+              {isLoading ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Approved Date</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    <TableSkeletonRows rows={6} cols={5} />
+                  </TableBody>
+                </Table>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Approved Date</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {approvedRegistrations.map((reg) => (
+                      <TableRow key={reg.id}>
+                        <TableCell className="font-mono text-sm">
+                          {reg.studentId}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {reg.name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{reg.grade}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {reg.approvedDate}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="default">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Approved
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -389,51 +462,71 @@ const AdminRegistrationControl = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Student ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Previous Grade</TableHead>
-                    <TableHead>New Grade</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {returningStudents.map((student) => (
-                    <TableRow key={student.id}>
-                      <TableCell className="font-mono text-sm">
-                        {student.studentId}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {student.name}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{student.previousGrade}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="default">{student.newGrade}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          <Clock className="h-3 w-3 mr-1" />
-                          Pending Update
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => handleUpdateReturning(student.name)}
-                        >
-                          Confirm Update
-                        </Button>
-                      </TableCell>
+              {isLoading ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Previous Grade</TableHead>
+                      <TableHead>New Grade</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    <TableSkeletonRows rows={6} cols={6} />
+                  </TableBody>
+                </Table>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Previous Grade</TableHead>
+                      <TableHead>New Grade</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {returningStudents.map((student) => (
+                      <TableRow key={student.id}>
+                        <TableCell className="font-mono text-sm">
+                          {student.studentId}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {student.name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {student.previousGrade}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="default">{student.newGrade}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Pending Update
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleUpdateReturning(student.name)}
+                          >
+                            Confirm Update
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

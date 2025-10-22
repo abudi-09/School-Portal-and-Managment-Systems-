@@ -1,6 +1,22 @@
 import { useState } from "react";
-import { User, Mail, Phone, Building, Lock, Camera, Shield } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  User,
+  Mail,
+  Phone,
+  Building,
+  Lock,
+  Camera,
+  Shield,
+} from "lucide-react";
+import { useEffect } from "react";
+import { SkeletonAvatar, SkeletonLine } from "@/components/skeleton";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +25,13 @@ import { Switch } from "@/components/ui/switch";
 
 const HeadProfile = () => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isDemoLoading, setIsDemoLoading] = useState(true);
+
+  // clear demo loading after a short delay — replace with real query flags when available
+  useEffect(() => {
+    const t = setTimeout(() => setIsDemoLoading(false), 500);
+    return () => clearTimeout(t);
+  }, []);
 
   const profileInfo = {
     name: "Dr. Robert Anderson",
@@ -25,7 +48,9 @@ const HeadProfile = () => {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground mb-2">Profile</h1>
-        <p className="text-muted-foreground">Manage your account information and settings</p>
+        <p className="text-muted-foreground">
+          Manage your account information and settings
+        </p>
       </div>
 
       <Tabs defaultValue="personal" className="space-y-6">
@@ -44,22 +69,36 @@ const HeadProfile = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-6">
-                <div className="relative">
-                  <div className="w-24 h-24 rounded-full bg-accent flex items-center justify-center">
-                    <span className="text-3xl font-semibold text-accent-foreground">DR</span>
+                {isDemoLoading ? (
+                  <div className="flex items-center gap-6" aria-hidden>
+                    <SkeletonAvatar size={96} />
+                    <div className="space-y-2">
+                      <SkeletonLine height="h-5" width="w-40" />
+                      <SkeletonLine height="h-4" width="w-36" />
+                    </div>
                   </div>
-                  <button className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors">
-                    <Camera className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Allowed formats: JPG, PNG (Max 5MB)
-                  </p>
-                  <Button variant="outline" size="sm">
-                    Upload New Photo
-                  </Button>
-                </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <div className="w-24 h-24 rounded-full bg-accent flex items-center justify-center">
+                        <span className="text-3xl font-semibold text-accent-foreground">
+                          DR
+                        </span>
+                      </div>
+                      <button className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors">
+                        <Camera className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Allowed formats: JPG, PNG (Max 5MB)
+                      </p>
+                      <Button variant="outline" size="sm">
+                        Upload New Photo
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -73,13 +112,20 @@ const HeadProfile = () => {
                   <CardDescription>Your basic information</CardDescription>
                 </div>
                 {!isEditing ? (
-                  <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
+                  <Button onClick={() => setIsEditing(true)}>
+                    Edit Profile
+                  </Button>
                 ) : (
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setIsEditing(false)}>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsEditing(false)}
+                    >
                       Cancel
                     </Button>
-                    <Button onClick={() => setIsEditing(false)}>Save Changes</Button>
+                    <Button onClick={() => setIsEditing(false)}>
+                      Save Changes
+                    </Button>
                   </div>
                 )}
               </div>
@@ -170,7 +216,11 @@ const HeadProfile = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="joinDate">Date Joined</Label>
-                <Input id="joinDate" defaultValue={profileInfo.joinDate} disabled />
+                <Input
+                  id="joinDate"
+                  defaultValue={profileInfo.joinDate}
+                  disabled
+                />
               </div>
             </CardContent>
           </Card>
@@ -214,7 +264,9 @@ const HeadProfile = () => {
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <p className="font-medium text-foreground">Email Notifications</p>
+                  <p className="font-medium text-foreground">
+                    Email Notifications
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     Receive notifications via email
                   </p>
@@ -223,7 +275,9 @@ const HeadProfile = () => {
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <p className="font-medium text-foreground">New Teacher Registrations</p>
+                  <p className="font-medium text-foreground">
+                    New Teacher Registrations
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     Alert when new teachers register
                   </p>
@@ -232,7 +286,9 @@ const HeadProfile = () => {
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <p className="font-medium text-foreground">Student Activation Requests</p>
+                  <p className="font-medium text-foreground">
+                    Student Activation Requests
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     Alert when student activation is needed
                   </p>

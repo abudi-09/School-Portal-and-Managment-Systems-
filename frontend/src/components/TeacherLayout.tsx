@@ -40,6 +40,11 @@ const TeacherLayout = () => {
     { name: "Messages", href: "/teacher/messages", icon: MessageCircle },
     { name: "Announcements", href: "/teacher/announcements", icon: Bell },
     { name: "Profile", href: "/teacher/profile", icon: User },
+    {
+      name: "Teacher Attendance",
+      href: "/teacher/attendance",
+      icon: CalendarCheck,
+    },
   ];
 
   // Additional navigation for Head Class Teachers (appears after profile)

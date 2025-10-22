@@ -297,7 +297,6 @@ const StudentManagement = () => {
           `Failed to load students (status: ${res.status} ${statusText})`
         );
       }
-
       const rawStudents = (json?.students ?? json) as unknown[];
       const mapped = (Array.isArray(rawStudents) ? rawStudents : []).map(
         (s: any, idx) => ({

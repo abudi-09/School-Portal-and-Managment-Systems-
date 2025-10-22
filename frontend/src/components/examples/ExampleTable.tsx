@@ -26,7 +26,11 @@ export default function ExampleTable() {
   return (
     <div className="p-4">
       <h2 className="text-xl font-semibold mb-2">Example Paginated Table</h2>
-      <GenericTable<User> data={sampleUsers} columns={columns} rowsPerPage={6} />
+      <GenericTable<User>
+        data={sampleUsers}
+        columns={columns}
+        rowsPerPage={6}
+      />
     </div>
   );
 }

@@ -8,12 +8,21 @@ type TablePaginationProps = {
 };
 
 // Reusable pagination control for data tables: [ Prev ]  Page X of Y  [ Next ]
-export default function TablePagination({ currentPage, totalPages, onPageChange, className }: TablePaginationProps) {
+export default function TablePagination({
+  currentPage,
+  totalPages,
+  onPageChange,
+  className,
+}: TablePaginationProps) {
   const canPrev = currentPage > 1;
   const canNext = currentPage < totalPages;
 
   return (
-    <div className={"flex items-center justify-center gap-4 py-3 " + (className ?? "")}>      
+    <div
+      className={
+        "flex items-center justify-center gap-4 py-3 " + (className ?? "")
+      }
+    >
       <Button
         variant="outline"
         onClick={() => canPrev && onPageChange(currentPage - 1)}
@@ -22,7 +31,8 @@ export default function TablePagination({ currentPage, totalPages, onPageChange,
         Previous
       </Button>
       <span className="text-sm text-muted-foreground">
-        Page <span className="font-medium text-foreground">{currentPage}</span> of {totalPages}
+        Page <span className="font-medium text-foreground">{currentPage}</span>{" "}
+        of {totalPages}
       </span>
       <Button
         variant="outline"

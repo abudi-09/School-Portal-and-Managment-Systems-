@@ -26,7 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/useAuth";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -35,6 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import TablePagination from "@/components/shared/TablePagination";
 
 interface ClassItem {
   id: number;
@@ -48,6 +49,9 @@ const TeacherClasses = () => {
   const { user } = useAuth();
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const ROWS_PER_PAGE = 6;
+  const [weeklyPage, setWeeklyPage] = useState(1);
+  const [examPage, setExamPage] = useState(1);
   const assignedClasses = [
     {
       id: 1,
@@ -179,6 +183,20 @@ const TeacherClasses = () => {
     },
   ];
 
+  // Pagination calculations
+  const weeklyTotalPages = Math.max(1, Math.ceil(weeklySchedule.length / ROWS_PER_PAGE));
+  const examTotalPages = Math.max(1, Math.ceil(examSchedule.length / ROWS_PER_PAGE));
+
+  useEffect(() => {
+    if (weeklyPage > weeklyTotalPages) setWeeklyPage(weeklyTotalPages);
+  }, [weeklyPage, weeklyTotalPages]);
+  useEffect(() => {
+    if (examPage > examTotalPages) setExamPage(examTotalPages);
+  }, [examPage, examTotalPages]);
+
+  const pagedWeekly = weeklySchedule.slice((weeklyPage - 1) * ROWS_PER_PAGE, weeklyPage * ROWS_PER_PAGE);
+  const pagedExams = examSchedule.slice((examPage - 1) * ROWS_PER_PAGE, examPage * ROWS_PER_PAGE);
+
   return (
     <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
@@ -261,7 +279,7 @@ const TeacherClasses = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {weeklySchedule.map((schedule, index) => (
+                  {pagedWeekly.map((schedule, index) => (
                     <TableRow key={index}>
                       <TableCell className="font-medium">
                         {schedule.day}
@@ -283,6 +301,11 @@ const TeacherClasses = () => {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                currentPage={weeklyPage}
+                totalPages={weeklyTotalPages}
+                onPageChange={setWeeklyPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -309,7 +332,7 @@ const TeacherClasses = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {examSchedule.map((exam, index) => (
+                  {pagedExams.map((exam, index) => (
                     <TableRow key={index}>
                       <TableCell className="font-medium">{exam.date}</TableCell>
                       <TableCell>
@@ -332,6 +355,11 @@ const TeacherClasses = () => {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                currentPage={examPage}
+                totalPages={examTotalPages}
+                onPageChange={setExamPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>

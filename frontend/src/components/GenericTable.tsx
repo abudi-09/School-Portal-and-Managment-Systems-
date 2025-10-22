@@ -1,4 +1,11 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import TablePagination from "@/components/shared/TablePagination";
 import { usePagination } from "@/hooks/usePagination";
 import { ReactNode } from "react";
@@ -17,8 +24,16 @@ type GenericTableProps<T> = {
 };
 
 // Example, reusable paginated table. Pass any dataset and column renderers.
-export function GenericTable<T>({ data, columns, rowsPerPage = 6, className }: GenericTableProps<T>) {
-  const { currentItems, currentPage, totalPages, setPage } = usePagination<T>({ items: data, pageSize: rowsPerPage });
+export function GenericTable<T>({
+  data,
+  columns,
+  rowsPerPage = 6,
+  className,
+}: GenericTableProps<T>) {
+  const { currentItems, currentPage, totalPages, setPage } = usePagination<T>({
+    items: data,
+    pageSize: rowsPerPage,
+  });
 
   return (
     <div className={className ?? ""}>
@@ -26,7 +41,9 @@ export function GenericTable<T>({ data, columns, rowsPerPage = 6, className }: G
         <TableHeader>
           <TableRow>
             {columns.map((c, idx) => (
-              <TableHead key={idx} className={c.className}>{c.header}</TableHead>
+              <TableHead key={idx} className={c.className}>
+                {c.header}
+              </TableHead>
             ))}
           </TableRow>
         </TableHeader>
@@ -34,13 +51,20 @@ export function GenericTable<T>({ data, columns, rowsPerPage = 6, className }: G
           {currentItems.map((row, ridx) => (
             <TableRow key={ridx}>
               {columns.map((c, cidx) => (
-                <TableCell key={cidx} className={c.className}>{c.cell(row)}</TableCell>
+                <TableCell key={cidx} className={c.className}>
+                  {c.cell(row)}
+                </TableCell>
               ))}
             </TableRow>
           ))}
         </TableBody>
       </Table>
-  <TablePagination currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} className="mt-3" />
+      <TablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        className="mt-3"
+      />
     </div>
   );
 }

@@ -293,7 +293,10 @@ const AdminHeadManagement = () => {
   // Pagination (6 rows per page)
   const ROWS_PER_PAGE = 6;
   const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(filteredHeads.length / ROWS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredHeads.length / ROWS_PER_PAGE)
+  );
   const last = page * ROWS_PER_PAGE;
   const first = last - ROWS_PER_PAGE;
   const paginatedHeads = filteredHeads.slice(first, last);

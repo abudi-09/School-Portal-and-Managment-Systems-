@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   GraduationCap,
   Search,
@@ -45,6 +45,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import TablePagination from "@/components/shared/TablePagination";
 
 type StudentStatus = "active" | "inactive" | "on-leave";
 
@@ -309,6 +310,19 @@ const StudentManagement = () => {
     [students]
   );
 
+  // Client-side pagination for directory
+  const ROWS_PER_PAGE = 6;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / ROWS_PER_PAGE));
+  useEffect(() => {
+    // Reset to first page whenever filters/search change
+    setPage(1);
+  }, [searchTerm, gradeFilter, statusFilter, performanceFilter]);
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const pagedStudents = filteredStudents.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+
   const toggleStudent = (id: number) => {
     setSelectedStudents((prev) =>
       prev.includes(id)
@@ -503,7 +517,7 @@ const StudentManagement = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredStudents.map((student) => {
+              {pagedStudents.map((student) => {
                 const atRisk =
                   student.attendanceRate < 80 || student.gradeAverage < 75;
                 return (
@@ -603,6 +617,13 @@ const StudentManagement = () => {
               )}
             </TableBody>
           </Table>
+          {filteredStudents.length > 0 && (
+            <TablePagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+            />
+          )}
         </CardContent>
       </Card>
 

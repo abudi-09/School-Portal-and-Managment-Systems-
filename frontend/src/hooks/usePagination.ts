@@ -19,7 +19,9 @@ export interface UsePaginationResult<T> {
 }
 
 // Client-side pagination helper hook with a fixed default of 6 rows per page
-export function usePagination<T>(options: UsePaginationOptions<T>): UsePaginationResult<T> {
+export function usePagination<T>(
+  options: UsePaginationOptions<T>
+): UsePaginationResult<T> {
   const { items, pageSize = 6, initialPage = 1 } = options;
   const [currentPage, setCurrentPage] = useState<number>(initialPage);
 

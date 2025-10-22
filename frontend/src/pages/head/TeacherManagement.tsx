@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Users,
   Search,
@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import TablePagination from "@/components/shared/TablePagination";
 
 type Teacher = {
   _id?: string;
@@ -229,6 +230,21 @@ const TeacherManagement = () => {
     },
   ];
 
+  // Client-side pagination (6 rows/page)
+  const ROWS_PER_PAGE = 6;
+  const [activePage, setActivePage] = useState(1);
+  const [pendingPage, setPendingPage] = useState(1);
+  const activeTotalPages = Math.max(1, Math.ceil(activeTeachers.length / ROWS_PER_PAGE));
+  const pendingTotalPages = Math.max(1, Math.ceil(pendingTeachers.length / ROWS_PER_PAGE));
+  useEffect(() => {
+    if (activePage > activeTotalPages) setActivePage(activeTotalPages);
+  }, [activePage, activeTotalPages]);
+  useEffect(() => {
+    if (pendingPage > pendingTotalPages) setPendingPage(pendingTotalPages);
+  }, [pendingPage, pendingTotalPages]);
+  const pagedActiveTeachers = activeTeachers.slice((activePage - 1) * ROWS_PER_PAGE, activePage * ROWS_PER_PAGE);
+  const pagedPendingTeachers = pendingTeachers.slice((pendingPage - 1) * ROWS_PER_PAGE, pendingPage * ROWS_PER_PAGE);
+
   return (
     <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
@@ -317,6 +333,7 @@ const TeacherManagement = () => {
                   {(approvedQuery.error as Error).message}
                 </p>
               ) : (
+                <>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -329,7 +346,7 @@ const TeacherManagement = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {activeTeachers.map((t) => {
+                    {pagedActiveTeachers.map((t) => {
                       const id = (t._id || t.id) as string;
                       const name = `${t.firstName} ${t.lastName}`;
                       const subjects =
@@ -380,6 +397,12 @@ const TeacherManagement = () => {
                     })}
                   </TableBody>
                 </Table>
+                <TablePagination
+                  currentPage={activePage}
+                  totalPages={activeTotalPages}
+                  onPageChange={setActivePage}
+                />
+                </>
               )}
             </CardContent>
           </Card>
@@ -403,6 +426,7 @@ const TeacherManagement = () => {
                   {(pendingQuery.error as Error).message}
                 </p>
               ) : (
+                <>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -414,7 +438,7 @@ const TeacherManagement = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pendingTeachers.map((t) => {
+                    {pagedPendingTeachers.map((t) => {
                       const id = (t._id || t.id) as string;
                       const name = `${t.firstName} ${t.lastName}`;
                       const subjects =
@@ -475,6 +499,12 @@ const TeacherManagement = () => {
                     })}
                   </TableBody>
                 </Table>
+                <TablePagination
+                  currentPage={pendingPage}
+                  totalPages={pendingTotalPages}
+                  onPageChange={setPendingPage}
+                />
+                </>
               )}
             </CardContent>
           </Card>

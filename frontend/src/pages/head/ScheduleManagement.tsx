@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Calendar, Clock, Plus, FileDown, Edit, Trash2 } from "lucide-react";
 import {
   Card,
@@ -36,6 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import TablePagination from "@/components/shared/TablePagination";
 
 interface ClassScheduleItem {
   day: string;
@@ -147,6 +148,23 @@ const ScheduleManagement = () => {
       room: "Exam Hall A",
     },
   ]);
+
+  const ROWS_PER_PAGE = 6;
+  const [classPage, setClassPage] = useState(1);
+  const [examPage, setExamPage] = useState(1);
+
+  const classTotalPages = Math.max(1, Math.ceil(classSchedule.length / ROWS_PER_PAGE));
+  const examTotalPages = Math.max(1, Math.ceil(examSchedule.length / ROWS_PER_PAGE));
+
+  useEffect(() => {
+    if (classPage > classTotalPages) setClassPage(classTotalPages);
+  }, [classPage, classTotalPages]);
+  useEffect(() => {
+    if (examPage > examTotalPages) setExamPage(examTotalPages);
+  }, [examPage, examTotalPages]);
+
+  const pagedClassSchedule = classSchedule.slice((classPage - 1) * ROWS_PER_PAGE, classPage * ROWS_PER_PAGE);
+  const pagedExamSchedule = examSchedule.slice((examPage - 1) * ROWS_PER_PAGE, examPage * ROWS_PER_PAGE);
 
   // CRUD functions
   const handleAddClassPeriod = () => {
@@ -509,7 +527,7 @@ const ScheduleManagement = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {classSchedule.map((schedule, index) => (
+                  {pagedClassSchedule.map((schedule, index) => (
                     <TableRow key={index}>
                       <TableCell className="font-medium">
                         {schedule.day}
@@ -553,6 +571,11 @@ const ScheduleManagement = () => {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                currentPage={classPage}
+                totalPages={classTotalPages}
+                onPageChange={setClassPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -734,7 +757,7 @@ const ScheduleManagement = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {examSchedule.map((exam) => (
+                  {pagedExamSchedule.map((exam) => (
                     <TableRow key={exam.id}>
                       <TableCell className="font-medium">{exam.date}</TableCell>
                       <TableCell>
@@ -778,6 +801,11 @@ const ScheduleManagement = () => {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                currentPage={examPage}
+                totalPages={examTotalPages}
+                onPageChange={setExamPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>

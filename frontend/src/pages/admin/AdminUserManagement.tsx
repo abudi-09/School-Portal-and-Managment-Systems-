@@ -184,12 +184,10 @@ const AdminUserManagement = () => {
   );
 
   useEffect(() => {
-    if (studentsPage > studentsTotalPages)
-      setStudentsPage(studentsTotalPages);
+    if (studentsPage > studentsTotalPages) setStudentsPage(studentsTotalPages);
   }, [studentsPage, studentsTotalPages]);
   useEffect(() => {
-    if (teachersPage > teachersTotalPages)
-      setTeachersPage(teachersTotalPages);
+    if (teachersPage > teachersTotalPages) setTeachersPage(teachersTotalPages);
   }, [teachersPage, teachersTotalPages]);
   useEffect(() => {
     if (headsPage > headsTotalPages) setHeadsPage(headsTotalPages);
@@ -413,45 +411,48 @@ const AdminUserManagement = () => {
                 <>
                   <UserTable
                     users={pagedStudents.map((s) => ({
-                    _id: s._id,
-                    firstName: s.firstName,
-                    lastName: s.lastName,
-                    email: s.email,
-                    role: s.role,
-                    status: s.status ?? (s.isActive ? "approved" : "inactive"),
-                    createdAt: s.createdAt,
-                  }))}
+                      _id: s._id,
+                      firstName: s.firstName,
+                      lastName: s.lastName,
+                      email: s.email,
+                      role: s.role,
+                      status:
+                        s.status ?? (s.isActive ? "approved" : "inactive"),
+                      createdAt: s.createdAt,
+                    }))}
                     onUpgrade={async (id) => {
-                    try {
-                      const res = await fetch(
-                        `${apiBaseUrl}/api/users/${id}/upgrade`,
-                        {
-                          method: "PATCH",
-                          headers: authHeaders(),
-                        }
-                      );
-                      const json = await res.json();
-                      if (!res.ok || !json?.success)
-                        throw new Error(
-                          json?.message || "Failed to upgrade user"
+                      try {
+                        const res = await fetch(
+                          `${apiBaseUrl}/api/users/${id}/upgrade`,
+                          {
+                            method: "PATCH",
+                            headers: authHeaders(),
+                          }
                         );
-                      toast({ title: "Success", description: json.message });
-                      queryClient.invalidateQueries({
-                        queryKey: ["admin", "users"],
-                      });
-                      queryClient.invalidateQueries({
-                        queryKey: ["admin", "admins"],
-                      });
-                    } catch (error: unknown) {
-                      const message =
-                        error instanceof Error ? error.message : String(error);
-                      toast({
-                        title: "Upgrade failed",
-                        description: message,
-                        variant: "destructive",
-                      });
-                    }
-                  }}
+                        const json = await res.json();
+                        if (!res.ok || !json?.success)
+                          throw new Error(
+                            json?.message || "Failed to upgrade user"
+                          );
+                        toast({ title: "Success", description: json.message });
+                        queryClient.invalidateQueries({
+                          queryKey: ["admin", "users"],
+                        });
+                        queryClient.invalidateQueries({
+                          queryKey: ["admin", "admins"],
+                        });
+                      } catch (error: unknown) {
+                        const message =
+                          error instanceof Error
+                            ? error.message
+                            : String(error);
+                        toast({
+                          title: "Upgrade failed",
+                          description: message,
+                          variant: "destructive",
+                        });
+                      }
+                    }}
                     showUpgrade={user.role === "admin"}
                   />
                   <TablePagination
@@ -552,45 +553,48 @@ const AdminUserManagement = () => {
                 <>
                   <UserTable
                     users={pagedTeachers.map((t) => ({
-                    _id: t._id,
-                    firstName: t.firstName,
-                    lastName: t.lastName,
-                    email: t.email,
-                    role: t.role,
-                    status: t.status ?? (t.isActive ? "approved" : "inactive"),
-                    createdAt: t.createdAt,
-                  }))}
+                      _id: t._id,
+                      firstName: t.firstName,
+                      lastName: t.lastName,
+                      email: t.email,
+                      role: t.role,
+                      status:
+                        t.status ?? (t.isActive ? "approved" : "inactive"),
+                      createdAt: t.createdAt,
+                    }))}
                     onUpgrade={async (id) => {
-                    try {
-                      const res = await fetch(
-                        `${apiBaseUrl}/api/users/${id}/upgrade`,
-                        {
-                          method: "PATCH",
-                          headers: authHeaders(),
-                        }
-                      );
-                      const json = await res.json();
-                      if (!res.ok || !json?.success)
-                        throw new Error(
-                          json?.message || "Failed to upgrade user"
+                      try {
+                        const res = await fetch(
+                          `${apiBaseUrl}/api/users/${id}/upgrade`,
+                          {
+                            method: "PATCH",
+                            headers: authHeaders(),
+                          }
                         );
-                      toast({ title: "Success", description: json.message });
-                      queryClient.invalidateQueries({
-                        queryKey: ["admin", "users"],
-                      });
-                      queryClient.invalidateQueries({
-                        queryKey: ["admin", "admins"],
-                      });
-                    } catch (error: unknown) {
-                      const message =
-                        error instanceof Error ? error.message : String(error);
-                      toast({
-                        title: "Upgrade failed",
-                        description: message,
-                        variant: "destructive",
-                      });
-                    }
-                  }}
+                        const json = await res.json();
+                        if (!res.ok || !json?.success)
+                          throw new Error(
+                            json?.message || "Failed to upgrade user"
+                          );
+                        toast({ title: "Success", description: json.message });
+                        queryClient.invalidateQueries({
+                          queryKey: ["admin", "users"],
+                        });
+                        queryClient.invalidateQueries({
+                          queryKey: ["admin", "admins"],
+                        });
+                      } catch (error: unknown) {
+                        const message =
+                          error instanceof Error
+                            ? error.message
+                            : String(error);
+                        toast({
+                          title: "Upgrade failed",
+                          description: message,
+                          variant: "destructive",
+                        });
+                      }
+                    }}
                     showUpgrade={user.role === "admin"}
                   />
                   <TablePagination
@@ -691,45 +695,48 @@ const AdminUserManagement = () => {
                 <>
                   <UserTable
                     users={pagedHeads.map((h) => ({
-                    _id: h._id,
-                    firstName: h.firstName,
-                    lastName: h.lastName,
-                    email: h.email,
-                    role: h.role,
-                    status: h.status ?? (h.isActive ? "approved" : "inactive"),
-                    createdAt: h.createdAt,
-                  }))}
+                      _id: h._id,
+                      firstName: h.firstName,
+                      lastName: h.lastName,
+                      email: h.email,
+                      role: h.role,
+                      status:
+                        h.status ?? (h.isActive ? "approved" : "inactive"),
+                      createdAt: h.createdAt,
+                    }))}
                     onUpgrade={async (id) => {
-                    try {
-                      const res = await fetch(
-                        `${apiBaseUrl}/api/users/${id}/upgrade`,
-                        {
-                          method: "PATCH",
-                          headers: authHeaders(),
-                        }
-                      );
-                      const json = await res.json();
-                      if (!res.ok || !json?.success)
-                        throw new Error(
-                          json?.message || "Failed to upgrade user"
+                      try {
+                        const res = await fetch(
+                          `${apiBaseUrl}/api/users/${id}/upgrade`,
+                          {
+                            method: "PATCH",
+                            headers: authHeaders(),
+                          }
                         );
-                      toast({ title: "Success", description: json.message });
-                      queryClient.invalidateQueries({
-                        queryKey: ["admin", "users"],
-                      });
-                      queryClient.invalidateQueries({
-                        queryKey: ["admin", "admins"],
-                      });
-                    } catch (error: unknown) {
-                      const message =
-                        error instanceof Error ? error.message : String(error);
-                      toast({
-                        title: "Upgrade failed",
-                        description: message,
-                        variant: "destructive",
-                      });
-                    }
-                  }}
+                        const json = await res.json();
+                        if (!res.ok || !json?.success)
+                          throw new Error(
+                            json?.message || "Failed to upgrade user"
+                          );
+                        toast({ title: "Success", description: json.message });
+                        queryClient.invalidateQueries({
+                          queryKey: ["admin", "users"],
+                        });
+                        queryClient.invalidateQueries({
+                          queryKey: ["admin", "admins"],
+                        });
+                      } catch (error: unknown) {
+                        const message =
+                          error instanceof Error
+                            ? error.message
+                            : String(error);
+                        toast({
+                          title: "Upgrade failed",
+                          description: message,
+                          variant: "destructive",
+                        });
+                      }
+                    }}
                     showUpgrade={user.role === "admin"}
                   />
                   <TablePagination
@@ -830,21 +837,22 @@ const AdminUserManagement = () => {
                 <>
                   <UserTable
                     users={pagedAdmins.map((a) => ({
-                    _id: a._id,
-                    firstName: a.firstName,
-                    lastName: a.lastName,
-                    email: a.email,
-                    role: a.role,
-                    status: a.status ?? (a.isActive ? "approved" : "inactive"),
-                    createdAt: a.createdAt,
-                  }))}
+                      _id: a._id,
+                      firstName: a.firstName,
+                      lastName: a.lastName,
+                      email: a.email,
+                      role: a.role,
+                      status:
+                        a.status ?? (a.isActive ? "approved" : "inactive"),
+                      createdAt: a.createdAt,
+                    }))}
                     onUpgrade={async (_id) => {
-                    // no-op: admins cannot be upgraded further
-                    toast({
-                      title: "Info",
-                      description: "User is already an admin",
-                    });
-                  }}
+                      // no-op: admins cannot be upgraded further
+                      toast({
+                        title: "Info",
+                        description: "User is already an admin",
+                      });
+                    }}
                     showUpgrade={false}
                   />
                   <TablePagination

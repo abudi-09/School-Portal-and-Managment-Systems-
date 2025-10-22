@@ -44,6 +44,10 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import TablePagination from "@/components/shared/TablePagination";
+import {
+  StatCardSkeleton,
+  TableSkeletonRows,
+} from "@/components/shared/LoadingSkeletons";
 
 type Teacher = {
   _id?: string;
@@ -234,16 +238,28 @@ const TeacherManagement = () => {
   const ROWS_PER_PAGE = 6;
   const [activePage, setActivePage] = useState(1);
   const [pendingPage, setPendingPage] = useState(1);
-  const activeTotalPages = Math.max(1, Math.ceil(activeTeachers.length / ROWS_PER_PAGE));
-  const pendingTotalPages = Math.max(1, Math.ceil(pendingTeachers.length / ROWS_PER_PAGE));
+  const activeTotalPages = Math.max(
+    1,
+    Math.ceil(activeTeachers.length / ROWS_PER_PAGE)
+  );
+  const pendingTotalPages = Math.max(
+    1,
+    Math.ceil(pendingTeachers.length / ROWS_PER_PAGE)
+  );
   useEffect(() => {
     if (activePage > activeTotalPages) setActivePage(activeTotalPages);
   }, [activePage, activeTotalPages]);
   useEffect(() => {
     if (pendingPage > pendingTotalPages) setPendingPage(pendingTotalPages);
   }, [pendingPage, pendingTotalPages]);
-  const pagedActiveTeachers = activeTeachers.slice((activePage - 1) * ROWS_PER_PAGE, activePage * ROWS_PER_PAGE);
-  const pagedPendingTeachers = pendingTeachers.slice((pendingPage - 1) * ROWS_PER_PAGE, pendingPage * ROWS_PER_PAGE);
+  const pagedActiveTeachers = activeTeachers.slice(
+    (activePage - 1) * ROWS_PER_PAGE,
+    activePage * ROWS_PER_PAGE
+  );
+  const pagedPendingTeachers = pendingTeachers.slice(
+    (pendingPage - 1) * ROWS_PER_PAGE,
+    pendingPage * ROWS_PER_PAGE
+  );
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -325,15 +341,6 @@ const TeacherManagement = () => {
             </CardHeader>
             <CardContent>
               {approvedQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">
-                  Loading teachers...
-                </p>
-              ) : approvedQuery.isError ? (
-                <p className="text-sm text-destructive">
-                  {(approvedQuery.error as Error).message}
-                </p>
-              ) : (
-                <>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -346,62 +353,85 @@ const TeacherManagement = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pagedActiveTeachers.map((t) => {
-                      const id = (t._id || t.id) as string;
-                      const name = `${t.firstName} ${t.lastName}`;
-                      const subjects =
-                        t.academicInfo?.subjects ??
-                        (t.employmentInfo?.position
-                          ? [t.employmentInfo.position]
-                          : []);
-                      const dateJoined = t.createdAt
-                        ? new Date(t.createdAt).toLocaleDateString()
-                        : "—";
-                      return (
-                        <TableRow key={id}>
-                          <TableCell className="font-medium">{name}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {subjects.length === 0 ? (
-                                <span className="text-sm text-muted-foreground">
-                                  —
-                                </span>
-                              ) : (
-                                subjects.map((subject) => (
-                                  <Badge key={subject} variant="secondary">
-                                    {subject}
-                                  </Badge>
-                                ))
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              <p>{t.email}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>{dateJoined}</TableCell>
-                          <TableCell>
-                            <Badge variant="default">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Active
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="outline" size="sm">
-                              Deactivate
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    <TableSkeletonRows rows={6} cols={6} />
                   </TableBody>
                 </Table>
-                <TablePagination
-                  currentPage={activePage}
-                  totalPages={activeTotalPages}
-                  onPageChange={setActivePage}
-                />
+              ) : approvedQuery.isError ? (
+                <p className="text-sm text-destructive">
+                  {(approvedQuery.error as Error).message}
+                </p>
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Subject(s)</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Date Joined</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedActiveTeachers.map((t) => {
+                        const id = (t._id || t.id) as string;
+                        const name = `${t.firstName} ${t.lastName}`;
+                        const subjects =
+                          t.academicInfo?.subjects ??
+                          (t.employmentInfo?.position
+                            ? [t.employmentInfo.position]
+                            : []);
+                        const dateJoined = t.createdAt
+                          ? new Date(t.createdAt).toLocaleDateString()
+                          : "—";
+                        return (
+                          <TableRow key={id}>
+                            <TableCell className="font-medium">
+                              {name}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {subjects.length === 0 ? (
+                                  <span className="text-sm text-muted-foreground">
+                                    —
+                                  </span>
+                                ) : (
+                                  subjects.map((subject) => (
+                                    <Badge key={subject} variant="secondary">
+                                      {subject}
+                                    </Badge>
+                                  ))
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                <p>{t.email}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>{dateJoined}</TableCell>
+                            <TableCell>
+                              <Badge variant="default">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Active
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="outline" size="sm">
+                                Deactivate
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  <TablePagination
+                    currentPage={activePage}
+                    totalPages={activeTotalPages}
+                    onPageChange={setActivePage}
+                  />
                 </>
               )}
             </CardContent>
@@ -418,15 +448,6 @@ const TeacherManagement = () => {
             </CardHeader>
             <CardContent>
               {pendingQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">
-                  Loading pending teachers...
-                </p>
-              ) : pendingQuery.isError ? (
-                <p className="text-sm text-destructive">
-                  {(pendingQuery.error as Error).message}
-                </p>
-              ) : (
-                <>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -438,72 +459,94 @@ const TeacherManagement = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pagedPendingTeachers.map((t) => {
-                      const id = (t._id || t.id) as string;
-                      const name = `${t.firstName} ${t.lastName}`;
-                      const subjects =
-                        t.academicInfo?.subjects ??
-                        (t.employmentInfo?.position
-                          ? [t.employmentInfo.position]
-                          : []);
-                      const dateApplied = t.createdAt
-                        ? new Date(t.createdAt).toLocaleDateString()
-                        : "—";
-                      return (
-                        <TableRow key={id}>
-                          <TableCell className="font-medium">{name}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {subjects.length === 0 ? (
-                                <span className="text-sm text-muted-foreground">
-                                  —
-                                </span>
-                              ) : (
-                                subjects.map((subject) => (
-                                  <Badge key={subject} variant="secondary">
-                                    {subject}
-                                  </Badge>
-                                ))
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              <p>{t.email}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>{dateApplied}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={rejectMutation.isPending}
-                                onClick={() => rejectMutation.mutate(id)}
-                              >
-                                <XCircle className="h-4 w-4 mr-1" />
-                                Reject
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => handleApprove(t)}
-                                disabled={approveMutation.isPending}
-                              >
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                Approve
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    <TableSkeletonRows rows={6} cols={5} />
                   </TableBody>
                 </Table>
-                <TablePagination
-                  currentPage={pendingPage}
-                  totalPages={pendingTotalPages}
-                  onPageChange={setPendingPage}
-                />
+              ) : pendingQuery.isError ? (
+                <p className="text-sm text-destructive">
+                  {(pendingQuery.error as Error).message}
+                </p>
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Subject(s)</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Date Applied</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedPendingTeachers.map((t) => {
+                        const id = (t._id || t.id) as string;
+                        const name = `${t.firstName} ${t.lastName}`;
+                        const subjects =
+                          t.academicInfo?.subjects ??
+                          (t.employmentInfo?.position
+                            ? [t.employmentInfo.position]
+                            : []);
+                        const dateApplied = t.createdAt
+                          ? new Date(t.createdAt).toLocaleDateString()
+                          : "—";
+                        return (
+                          <TableRow key={id}>
+                            <TableCell className="font-medium">
+                              {name}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {subjects.length === 0 ? (
+                                  <span className="text-sm text-muted-foreground">
+                                    —
+                                  </span>
+                                ) : (
+                                  subjects.map((subject) => (
+                                    <Badge key={subject} variant="secondary">
+                                      {subject}
+                                    </Badge>
+                                  ))
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                <p>{t.email}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>{dateApplied}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={rejectMutation.isPending}
+                                  onClick={() => rejectMutation.mutate(id)}
+                                >
+                                  <XCircle className="h-4 w-4 mr-1" />
+                                  Reject
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleApprove(t)}
+                                  disabled={approveMutation.isPending}
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  Approve
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  <TablePagination
+                    currentPage={pendingPage}
+                    totalPages={pendingTotalPages}
+                    onPageChange={setPendingPage}
+                  />
                 </>
               )}
             </CardContent>

@@ -167,9 +167,28 @@ router.post(
       );
 
       // Find user by identifier
-      const user = email
-        ? await User.findOne({ email })
-        : await User.findOne({ studentId });
+      let user: IUser | null = null;
+      if (email) {
+        user = await User.findOne({ email });
+      } else if (studentId) {
+        // Look up by current studentId or historical academicInfo.studentId
+        user = await User.findOne({
+          $or: [{ studentId }, { "academicInfo.studentId": studentId }],
+        });
+
+        // If an admin (or upgraded account) attempts to use studentId, enforce email-only login
+        if (user && user.role === "admin") {
+          console.log(
+            `Admin account attempted studentId login: ${studentId}. Enforcing email-only login.`
+          );
+          return res.status(400).json({
+            success: false,
+            message: "Admin accounts must log in using email and password.",
+            code: "EMAIL_ONLY_LOGIN",
+          });
+        }
+      }
+
       if (!user) {
         console.log(
           `User not found for identifier: ${email ?? studentId ?? "unknown"}`

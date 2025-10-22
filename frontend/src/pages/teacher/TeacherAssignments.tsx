@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import TablePagination from "@/components/shared/TablePagination";
+import { SkeletonWrapper, SkeletonGrid } from "@/components/skeleton";
 
 const TeacherAssignments = () => {
   const [open, setOpen] = useState(false);
@@ -222,69 +223,81 @@ const TeacherAssignments = () => {
         </TabsList>
 
         <TabsContent value="assignments" className="space-y-4">
-          {pagedAssignments.map((assignment) => (
-            <Card
-              key={assignment.id}
-              className="hover:shadow-md transition-shadow"
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <CardTitle>{assignment.title}</CardTitle>
-                    <CardDescription>
-                      {assignment.subject} • Class {assignment.class}
-                    </CardDescription>
+          <SkeletonWrapper
+            isLoading={false}
+            skeleton={<SkeletonGrid columns={2} count={6} />}
+          >
+            {pagedAssignments.map((assignment) => (
+              <Card
+                key={assignment.id}
+                className="hover:shadow-md transition-shadow"
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <CardTitle>{assignment.title}</CardTitle>
+                      <CardDescription>
+                        {assignment.subject} • Class {assignment.class}
+                      </CardDescription>
+                    </div>
+                    <Badge variant={getStatusColor(assignment.status)}>
+                      {assignment.status}
+                    </Badge>
                   </div>
-                  <Badge variant={getStatusColor(assignment.status)}>
-                    {assignment.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Due:</span>
-                    <span className="font-medium">{assignment.dueDate}</span>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Due:</span>
+                      <span className="font-medium">{assignment.dueDate}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">
+                        Submissions:
+                      </span>
+                      <span className="font-medium">
+                        {assignment.submissions}/{assignment.totalStudents}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Submissions:</span>
-                    <span className="font-medium">
-                      {assignment.submissions}/{assignment.totalStudents}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            ))}
+          </SkeletonWrapper>
         </TabsContent>
 
         <TabsContent value="homework" className="space-y-4">
-          {pagedHomework.map((item) => (
-            <Card key={item.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <CardTitle>{item.title}</CardTitle>
-                    <CardDescription>
-                      {item.subject} • Class {item.class}
-                    </CardDescription>
+          <SkeletonWrapper
+            isLoading={false}
+            skeleton={<SkeletonGrid columns={2} count={6} />}
+          >
+            {pagedHomework.map((item) => (
+              <Card key={item.id} className="hover:shadow-md transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <CardTitle>{item.title}</CardTitle>
+                      <CardDescription>
+                        {item.subject} • Class {item.class}
+                      </CardDescription>
+                    </div>
+                    <Badge variant={getStatusColor(item.status)}>
+                      {item.status}
+                    </Badge>
                   </div>
-                  <Badge variant={getStatusColor(item.status)}>
-                    {item.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Due:</span>
-                  <span className="font-medium">{item.dueDate}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Due:</span>
+                    <span className="font-medium">{item.dueDate}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </SkeletonWrapper>
         </TabsContent>
         <div className="flex justify-center">
           {assignments.length > 0 && (

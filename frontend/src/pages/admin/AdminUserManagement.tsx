@@ -31,6 +31,10 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import TablePagination from "@/components/shared/TablePagination";
+import {
+  StatCardSkeleton,
+  TableSkeletonRows,
+} from "@/components/shared/LoadingSkeletons";
 
 type APIUser = {
   _id: string;
@@ -125,6 +129,7 @@ const AdminUserManagement = () => {
   });
 
   const adminsFromAll = adminsQuery.data ?? [];
+  const isAnyLoading = usersQuery.isLoading || adminsQuery.isLoading;
 
   // Search state (shared across tabs) with debounce
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -262,6 +267,9 @@ const AdminUserManagement = () => {
         </TableRow>
       </TableHeader>
       <TableBody>
+        {isAnyLoading && data.length === 0 && (
+          <TableSkeletonRows rows={6} cols={6} />
+        )}
         {data.map((item) => (
           <TableRow key={String(item.id ?? item.userId ?? Math.random())}>
             <TableCell className="font-mono text-sm">{item.userId}</TableCell>

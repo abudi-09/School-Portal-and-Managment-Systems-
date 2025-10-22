@@ -52,6 +52,7 @@ const Login = () => {
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<"student" | "staff">("student");
 
   const studentForm = useForm<StudentLoginForm>({
     resolver: zodResolver(studentLoginSchema),
@@ -81,6 +82,14 @@ const Login = () => {
           description: result.message || "Invalid student ID or password.",
           variant: "destructive",
         });
+        // Auto-switch to Staff login when backend indicates admin must use email
+        const hint = (result.message || "").toLowerCase();
+        if (
+          result.code === "EMAIL_ONLY_LOGIN" ||
+          (hint.includes("admin") && hint.includes("email"))
+        ) {
+          setTab("staff");
+        }
       }
     } catch (error) {
       toast({
@@ -175,7 +184,13 @@ const Login = () => {
             <CardDescription>Sign in to access your portal</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="student" className="w-full">
+            <Tabs
+              value={tab}
+              onValueChange={(v: string) =>
+                setTab(v === "staff" ? "staff" : "student")
+              }
+              className="w-full"
+            >
               <TabsList className="grid w-full grid-cols-2 mb-6">
                 <TabsTrigger value="student">Student</TabsTrigger>
                 <TabsTrigger value="staff">Staff</TabsTrigger>

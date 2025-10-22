@@ -31,6 +31,7 @@ export interface AuthContextType {
     user?: User;
     pending?: boolean;
     message?: string;
+    code?: string;
   }>;
   signup: (data: SignupData) => Promise<boolean>;
   logout: () => void;

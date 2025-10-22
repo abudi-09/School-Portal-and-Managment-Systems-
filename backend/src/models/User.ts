@@ -238,12 +238,10 @@ userSchema.pre("save", async function (next) {
 userSchema.pre("save", async function (next) {
   try {
     if (this.role !== "student") {
-      // Ensure non-student roles do not accidentally retain a studentId
+      // Ensure non-student roles do not accidentally retain a login-eligible studentId
+      // Keep academicInfo.studentId as a historical reference, but remove top-level studentId
       if (this.studentId) {
         delete this.studentId;
-      }
-      if (this.academicInfo && this.academicInfo.studentId) {
-        delete this.academicInfo.studentId;
       }
       return next();
     }

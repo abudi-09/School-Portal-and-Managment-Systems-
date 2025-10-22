@@ -41,6 +41,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import TablePagination from "@/components/shared/TablePagination";
+import {
+  ListCardSkeleton,
+  StatCardSkeleton,
+  TableSkeletonRows,
+} from "@/components/shared/LoadingSkeletons";
 
 type HeadStatus = "pending" | "active" | "inactive";
 
@@ -507,25 +512,29 @@ const AdminHeadManagement = () => {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {summaryCards.map(({ label, value, icon: Icon, accent }) => (
-            <Card key={label} className="border-none shadow-sm bg-white">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {label}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between pb-6">
-                <div>
-                  <span className="text-3xl font-semibold text-gray-900">
-                    {value}
-                  </span>
-                </div>
-                <div className={`rounded-full p-3 ${accent}`}>
-                  <Icon className="h-5 w-5" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {isLoading && heads.length === 0
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <StatCardSkeleton key={i} />
+              ))
+            : summaryCards.map(({ label, value, icon: Icon, accent }) => (
+                <Card key={label} className="border-none shadow-sm bg-white">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      {label}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex items-center justify-between pb-6">
+                    <div>
+                      <span className="text-3xl font-semibold text-gray-900">
+                        {value}
+                      </span>
+                    </div>
+                    <div className={`rounded-full p-3 ${accent}`}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
         </div>
       </section>
 
@@ -590,6 +599,9 @@ const AdminHeadManagement = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {isLoading && heads.length === 0 && (
+              <TableSkeletonRows rows={6} cols={4} />
+            )}
             {paginatedHeads.map((head) => (
               <TableRow key={head.id} className="border-gray-100">
                 <TableCell className="align-top">
@@ -650,11 +662,7 @@ const AdminHeadManagement = () => {
       </div>
 
       <div className="grid gap-4 lg:hidden">
-        {isLoading && (
-          <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-6 text-center text-muted-foreground">
-            Loading head accounts...
-          </div>
-        )}
+        {isLoading && heads.length === 0 && <ListCardSkeleton count={6} />}
         {paginatedHeads.map((head) => (
           <div
             key={head.id}

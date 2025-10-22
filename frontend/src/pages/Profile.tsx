@@ -30,6 +30,11 @@ import {
   uploadAvatar as uploadAvatarApi,
   changePassword as changePasswordApi,
 } from "@/lib/api/profileApi";
+import {
+  SkeletonWrapper,
+  SkeletonLine,
+  SkeletonAvatar,
+} from "@/components/skeleton";
 
 type Gender = "male" | "female" | "other" | undefined;
 interface ProfileInfo {
@@ -76,6 +81,10 @@ const Profile = () => {
   const { user: authUser } = useAuth();
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  // Security settings (password change)
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(true);
   const [apiUser, setApiUser] = useState<ApiUser | null>(null);
 
@@ -199,7 +208,7 @@ const Profile = () => {
         profile: { phone: phone.trim(), address: address.trim() },
       };
       // Add role-specific
-      if (apiUser?.role === "Student") {
+      if (apiUser?.role === "student") {
         payload.academicInfo = {
           class: classField.trim(),
           section: section.trim(),
@@ -209,10 +218,7 @@ const Profile = () => {
             .map((s) => s.trim())
             .filter(Boolean),
         };
-      } else if (
-        apiUser?.role === "Teacher" ||
-        apiUser?.role === "Department Head"
-      ) {
+      } else if (apiUser?.role === "teacher" || apiUser?.role === "head") {
         payload.employmentInfo = {
           department: department.trim(),
           position: position.trim(),
@@ -247,6 +253,45 @@ const Profile = () => {
       toast.error(message);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="p-6 lg:p-8 space-y-6" aria-busy>
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Profile</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your personal information and settings
+          </p>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4" aria-hidden>
+              <SkeletonAvatar size={64} />
+              <div className="space-y-2">
+                <SkeletonLine height="h-5" width="w-48" />
+                <SkeletonLine height="h-4" width="w-32" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent
+            className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6"
+            aria-hidden
+          >
+            <div className="space-y-2">
+              <SkeletonLine height="h-4" width="w-24" />
+              <SkeletonLine height="h-10" />
+            </div>
+            <div className="space-y-2">
+              <SkeletonLine height="h-4" width="w-24" />
+              <SkeletonLine height="h-10" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -308,7 +353,7 @@ const Profile = () => {
                     if (!selectedFile) return;
                     try {
                       const user = await uploadAvatarApi(selectedFile);
-                      const avatarUrl = user.avatar || user?.profile?.avatar;
+                      const avatarUrl = user.avatar;
                       if (avatarUrl) setAvatarPreview(avatarUrl);
                       toast.success("Avatar uploaded");
                       // persist to localStorage currentUser if present
@@ -535,7 +580,7 @@ const Profile = () => {
                 </div>
 
                 {/* Role-specific fields */}
-                {apiUser?.role === "Student" && (
+                {apiUser?.role === "student" && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="classField">Class</Label>
@@ -578,8 +623,7 @@ const Profile = () => {
                   </>
                 )}
 
-                {(apiUser?.role === "Teacher" ||
-                  apiUser?.role === "Department Head") && (
+                {(apiUser?.role === "teacher" || apiUser?.role === "head") && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="department">Department</Label>

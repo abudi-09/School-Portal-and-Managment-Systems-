@@ -57,6 +57,12 @@ import StudentPrintCard, {
 } from "@/components/students/StudentPrintCard";
 import StudentPrintSheet from "@/components/students/StudentPrintSheet";
 import TablePagination from "@/components/shared/TablePagination";
+import { SkeletonWrapper } from "@/components/skeleton";
+import { SkeletonTableRow } from "@/components/skeleton";
+import {
+  StatCardSkeleton,
+  TableSkeletonRows,
+} from "@/components/shared/LoadingSkeletons";
 
 type StudentStatus = "active" | "inactive";
 type RegistrationType = "New" | "Returning";
@@ -991,23 +997,29 @@ const AdminStudentManagement = () => {
 
           {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {stats.map((stat) => (
-              <Card key={stat.title} className="border-gray-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600 mb-1">{stat.title}</p>
-                      <p className="text-3xl font-bold text-gray-900">
-                        {stat.value}
-                      </p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-gray-100 text-gray-600">
-                      <stat.icon className="h-6 w-6" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {studentsQuery.isLoading && students.length === 0
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <StatCardSkeleton key={i} />
+                ))
+              : stats.map((stat) => (
+                  <Card key={stat.title} className="border-gray-200">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">
+                            {stat.title}
+                          </p>
+                          <p className="text-3xl font-bold text-gray-900">
+                            {stat.value}
+                          </p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-gray-100 text-gray-600">
+                          <stat.icon className="h-6 w-6" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
           </div>
         </section>
 
@@ -1095,164 +1107,192 @@ const AdminStudentManagement = () => {
                 </Button>
               </div>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow className="border-gray-200 hover:bg-gray-50">
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={toggleAll}
-                      aria-label="Select all"
-                    />
-                  </TableHead>
-                  <TableHead className="text-gray-700 font-semibold">
-                    Student ID
-                  </TableHead>
-                  <TableHead className="text-gray-700 font-semibold">
-                    Name
-                  </TableHead>
-                  <TableHead className="text-gray-700 font-semibold">
-                    Grade
-                  </TableHead>
-                  <TableHead className="text-gray-700 font-semibold">
-                    Registration
-                  </TableHead>
-                  <TableHead className="text-gray-700 font-semibold">
-                    Status
-                  </TableHead>
-                  <TableHead className="text-gray-700 font-semibold text-right">
-                    Actions
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedStudents.map((student) => (
-                  <TableRow
-                    key={student.id}
-                    className="border-gray-200 hover:bg-gray-50"
-                  >
-                    <TableCell>
+            <SkeletonWrapper
+              isLoading={studentsQuery.isLoading && students.length === 0}
+              skeleton={
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-gray-200">
+                      {Array.from({ length: 7 }).map((_, i) => (
+                        <TableHead
+                          key={i}
+                          className="text-gray-700 font-semibold"
+                        >
+                          <span aria-hidden> </span>
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Array.from({ length: 6 }).map((_, r) => (
+                      <SkeletonTableRow key={r} cols={7} />
+                    ))}
+                  </TableBody>
+                </Table>
+              }
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-gray-200 hover:bg-gray-50">
+                    <TableHead className="w-10">
                       <Checkbox
-                        checked={!!selected[student.id]}
-                        onCheckedChange={(v) => toggleOne(student.id, v)}
-                        aria-label={`Select ${getStudentFullName(student)}`}
+                        checked={allSelected}
+                        onCheckedChange={toggleAll}
+                        aria-label="Select all"
                       />
-                    </TableCell>
-                    <TableCell className="font-mono text-sm text-gray-900">
-                      {student.studentId}
-                    </TableCell>
-                    <TableCell className="font-medium text-gray-900">
-                      {getStudentFullName(student)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className="border-gray-300 text-gray-700"
-                      >
-                        {student.grade ? student.grade.toUpperCase() : "—"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          student.registrationType === "New"
-                            ? "default"
-                            : "secondary"
-                        }
-                        className="bg-gray-100 text-gray-800 border-gray-300"
-                      >
-                        {student.registrationType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          student.status === "active" ? "default" : "outline"
-                        }
-                        className={
-                          student.status === "active"
-                            ? "bg-gray-100 text-gray-800 border-gray-300"
-                            : "border-gray-300 text-gray-700"
-                        }
-                      >
-                        {student.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditStudent(student)}
-                          className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        >
-                          <Edit className="h-4 w-4 mr-1" />
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewStudent(student)}
-                          className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            activateMutation.mutate({
-                              id: student.id,
-                              active: student.status !== "active",
-                            })
-                          }
-                          className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        >
-                          {student.status === "active" ? (
-                            <>
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Deactivate
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Activate
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            const confirmed = window.confirm(
-                              `Generate a new password for ${getStudentFullName(
-                                student
-                              )}?`
-                            );
-                            if (!confirmed) return;
-                            resetPasswordMutation.mutate({ id: student.id });
-                          }}
-                          className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        >
-                          <RefreshCcw className="h-4 w-4 mr-1" />
-                          Reset Password
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteStudent(student.id)}
-                          className="text-gray-600 hover:bg-gray-50 hover:text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Delete
-                        </Button>
-                      </div>
-                    </TableCell>
+                    </TableHead>
+                    <TableHead className="text-gray-700 font-semibold">
+                      Student ID
+                    </TableHead>
+                    <TableHead className="text-gray-700 font-semibold">
+                      Name
+                    </TableHead>
+                    <TableHead className="text-gray-700 font-semibold">
+                      Grade
+                    </TableHead>
+                    <TableHead className="text-gray-700 font-semibold">
+                      Registration
+                    </TableHead>
+                    <TableHead className="text-gray-700 font-semibold">
+                      Status
+                    </TableHead>
+                    <TableHead className="text-gray-700 font-semibold text-right">
+                      Actions
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {studentsQuery.isLoading && students.length === 0 && (
+                    <TableSkeletonRows rows={6} cols={7} />
+                  )}
+                  {paginatedStudents.map((student) => (
+                    <TableRow
+                      key={student.id}
+                      className="border-gray-200 hover:bg-gray-50"
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={!!selected[student.id]}
+                          onCheckedChange={(v) => toggleOne(student.id, v)}
+                          aria-label={`Select ${getStudentFullName(student)}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono text-sm text-gray-900">
+                        {student.studentId}
+                      </TableCell>
+                      <TableCell className="font-medium text-gray-900">
+                        {getStudentFullName(student)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className="border-gray-300 text-gray-700"
+                        >
+                          {student.grade ? student.grade.toUpperCase() : "—"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            student.registrationType === "New"
+                              ? "default"
+                              : "secondary"
+                          }
+                          className="bg-gray-100 text-gray-800 border-gray-300"
+                        >
+                          {student.registrationType}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            student.status === "active" ? "default" : "outline"
+                          }
+                          className={
+                            student.status === "active"
+                              ? "bg-gray-100 text-gray-800 border-gray-300"
+                              : "border-gray-300 text-gray-700"
+                          }
+                        >
+                          {student.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditStudent(student)}
+                            className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewStudent(student)}
+                            className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              activateMutation.mutate({
+                                id: student.id,
+                                active: student.status !== "active",
+                              })
+                            }
+                            className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          >
+                            {student.status === "active" ? (
+                              <>
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Deactivate
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Activate
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const confirmed = window.confirm(
+                                `Generate a new password for ${getStudentFullName(
+                                  student
+                                )}?`
+                              );
+                              if (!confirmed) return;
+                              resetPasswordMutation.mutate({ id: student.id });
+                            }}
+                            className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          >
+                            <RefreshCcw className="h-4 w-4 mr-1" />
+                            Reset Password
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteStudent(student.id)}
+                            className="text-gray-600 hover:bg-gray-50 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </SkeletonWrapper>
             {/* Pagination controls */}
             <TablePagination
               currentPage={currentPage}

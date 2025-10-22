@@ -67,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user?: User;
     pending?: boolean;
     message?: string;
+    code?: string;
   }> => {
     const apiBaseUrl =
       import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
@@ -134,10 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const message: string | undefined = data?.message;
+      const code: string | undefined = data?.code;
       const isPending =
         typeof message === "string" &&
         message.toLowerCase().includes("pending");
-      return { success: false, pending: isPending, message };
+      return { success: false, pending: isPending, message, code };
     } catch (error) {
       console.warn("API call failed:", error);
 

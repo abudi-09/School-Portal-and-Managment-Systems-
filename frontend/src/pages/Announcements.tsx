@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -17,6 +17,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import TablePagination from "@/components/shared/TablePagination";
 
 interface Announcement {
   id: number;
@@ -272,6 +273,36 @@ const Announcements = () => {
     );
   };
 
+  // Pagination for the two announcement lists
+  const ROWS_PER_PAGE = 6;
+  const [schoolPage, setSchoolPage] = useState(1);
+  const [teacherPage, setTeacherPage] = useState(1);
+
+  const schoolTotalPages = Math.max(
+    1,
+    Math.ceil(schoolAnnouncements.length / ROWS_PER_PAGE)
+  );
+  const teacherTotalPages = Math.max(
+    1,
+    Math.ceil(teacherAnnouncements.length / ROWS_PER_PAGE)
+  );
+
+  useEffect(() => {
+    if (schoolPage > schoolTotalPages) setSchoolPage(schoolTotalPages);
+  }, [schoolPage, schoolTotalPages]);
+  useEffect(() => {
+    if (teacherPage > teacherTotalPages) setTeacherPage(teacherTotalPages);
+  }, [teacherPage, teacherTotalPages]);
+
+  const pagedSchoolAnnouncements = schoolAnnouncements.slice(
+    (schoolPage - 1) * ROWS_PER_PAGE,
+    schoolPage * ROWS_PER_PAGE
+  );
+  const pagedTeacherAnnouncements = teacherAnnouncements.slice(
+    (teacherPage - 1) * ROWS_PER_PAGE,
+    teacherPage * ROWS_PER_PAGE
+  );
+
   return (
     <div className="p-6 lg:p-8 space-y-6">
       {/* Header */}
@@ -316,7 +347,12 @@ const Announcements = () => {
               {schoolAnnouncements.length} announcements
             </Badge>
           </div>
-          {renderAnnouncements(schoolAnnouncements)}
+          {renderAnnouncements(pagedSchoolAnnouncements)}
+          <TablePagination
+            currentPage={schoolPage}
+            totalPages={schoolTotalPages}
+            onPageChange={setSchoolPage}
+          />
         </TabsContent>
 
         <TabsContent value="teacher" className="space-y-4">
@@ -328,7 +364,12 @@ const Announcements = () => {
               {teacherAnnouncements.length} announcements
             </Badge>
           </div>
-          {renderAnnouncements(teacherAnnouncements)}
+          {renderAnnouncements(pagedTeacherAnnouncements)}
+          <TablePagination
+            currentPage={teacherPage}
+            totalPages={teacherTotalPages}
+            onPageChange={setTeacherPage}
+          />
         </TabsContent>
       </Tabs>
     </div>

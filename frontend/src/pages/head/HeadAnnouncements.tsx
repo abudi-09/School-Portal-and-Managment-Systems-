@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Bell, Paperclip, Filter, Eye, TrendingUp } from "lucide-react";
 import {
   Card,
@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import TablePagination from "@/components/shared/TablePagination";
 
 interface Announcement {
   id: number;
@@ -143,6 +144,24 @@ const HeadAnnouncements = () => {
             ? a.audience === "Students"
             : a.audience === "All Users"
         );
+
+  // Pagination
+  const ROWS_PER_PAGE = 6;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredAnnouncements.length / ROWS_PER_PAGE)
+  );
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const pagedAnnouncements = filteredAnnouncements.slice(
+    (page - 1) * ROWS_PER_PAGE,
+    page * ROWS_PER_PAGE
+  );
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -470,7 +489,7 @@ const HeadAnnouncements = () => {
 
       {/* Announcements List */}
       <div className="space-y-4">
-        {filteredAnnouncements.map((announcement) => (
+        {pagedAnnouncements.map((announcement) => (
           <Card
             key={announcement.id}
             className="border-gray-200 hover:bg-gray-50 transition-colors"
@@ -545,6 +564,13 @@ const HeadAnnouncements = () => {
             </CardContent>
           </Card>
         ))}
+        {filteredAnnouncements.length > 0 && (
+          <TablePagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
+        )}
       </div>
     </div>
   );

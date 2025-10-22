@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Bell, Paperclip, Filter, Edit2 } from "lucide-react";
 import {
   Card,
@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import TablePagination from "@/components/shared/TablePagination";
 
 interface Announcement {
   id: number;
@@ -212,6 +213,21 @@ const TeacherAnnouncements = () => {
       ? announcements.filter((a) => a.author === "You")
       : announcements.filter((a) => a.author !== "You");
 
+  const ROWS_PER_PAGE = 6;
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [filter]);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredAnnouncements.length / ROWS_PER_PAGE)
+  );
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const pagedAnnouncements = filteredAnnouncements.slice(
+    (page - 1) * ROWS_PER_PAGE,
+    page * ROWS_PER_PAGE
+  );
+
   return (
     <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
@@ -348,7 +364,7 @@ const TeacherAnnouncements = () => {
 
       {/* Announcements List */}
       <div className="space-y-4">
-        {filteredAnnouncements.map((announcement) => (
+        {pagedAnnouncements.map((announcement) => (
           <Card
             key={announcement.id}
             className="hover:shadow-md transition-shadow"
@@ -397,6 +413,13 @@ const TeacherAnnouncements = () => {
             </CardContent>
           </Card>
         ))}
+        {filteredAnnouncements.length > 0 && (
+          <TablePagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
+        )}
       </div>
     </div>
   );

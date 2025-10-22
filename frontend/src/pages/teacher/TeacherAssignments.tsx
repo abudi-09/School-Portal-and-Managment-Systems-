@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Upload, Calendar, FileText, Download } from "lucide-react";
 import {
   Card,
@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import TablePagination from "@/components/shared/TablePagination";
 
 const TeacherAssignments = () => {
   const [open, setOpen] = useState(false);
@@ -84,6 +85,30 @@ const TeacherAssignments = () => {
       status: "ongoing",
     },
   ];
+
+  const ROWS_PER_PAGE = 6;
+  const [assignmentsPage, setAssignmentsPage] = useState(1);
+  const [homeworkPage, setHomeworkPage] = useState(1);
+  const assignmentsTotal = Math.max(
+    1,
+    Math.ceil(assignments.length / ROWS_PER_PAGE)
+  );
+  const homeworkTotal = Math.max(1, Math.ceil(homework.length / ROWS_PER_PAGE));
+  useEffect(() => {
+    if (assignmentsPage > assignmentsTotal)
+      setAssignmentsPage(assignmentsTotal);
+  }, [assignmentsPage, assignmentsTotal]);
+  useEffect(() => {
+    if (homeworkPage > homeworkTotal) setHomeworkPage(homeworkTotal);
+  }, [homeworkPage, homeworkTotal]);
+  const pagedAssignments = assignments.slice(
+    (assignmentsPage - 1) * ROWS_PER_PAGE,
+    assignmentsPage * ROWS_PER_PAGE
+  );
+  const pagedHomework = homework.slice(
+    (homeworkPage - 1) * ROWS_PER_PAGE,
+    homeworkPage * ROWS_PER_PAGE
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -197,7 +222,7 @@ const TeacherAssignments = () => {
         </TabsList>
 
         <TabsContent value="assignments" className="space-y-4">
-          {assignments.map((assignment) => (
+          {pagedAssignments.map((assignment) => (
             <Card
               key={assignment.id}
               className="hover:shadow-md transition-shadow"
@@ -236,7 +261,7 @@ const TeacherAssignments = () => {
         </TabsContent>
 
         <TabsContent value="homework" className="space-y-4">
-          {homework.map((item) => (
+          {pagedHomework.map((item) => (
             <Card key={item.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -261,6 +286,24 @@ const TeacherAssignments = () => {
             </Card>
           ))}
         </TabsContent>
+        <div className="flex justify-center">
+          {assignments.length > 0 && (
+            <TablePagination
+              currentPage={assignmentsPage}
+              totalPages={assignmentsTotal}
+              onPageChange={setAssignmentsPage}
+            />
+          )}
+        </div>
+        <div className="flex justify-center">
+          {homework.length > 0 && (
+            <TablePagination
+              currentPage={homeworkPage}
+              totalPages={homeworkTotal}
+              onPageChange={setHomeworkPage}
+            />
+          )}
+        </div>
       </Tabs>
     </div>
   );

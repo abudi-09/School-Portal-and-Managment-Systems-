@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Save, Send, Download, Users } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,11 +26,16 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import TablePagination from "@/components/shared/TablePagination";
 
 const TeacherGrades = () => {
   const [selectedClass, setSelectedClass] = useState("11a");
-  const [status, setStatus] = useState<"draft" | "submitted" | "verified" | "approved">("draft");
-  const [grades, setGrades] = useState<{ [key: string]: { [key: string]: number } }>({});
+  const [status, setStatus] = useState<
+    "draft" | "submitted" | "verified" | "approved"
+  >("draft");
+  const [grades, setGrades] = useState<{
+    [key: string]: { [key: string]: number };
+  }>({});
 
   const students = [
     {
@@ -69,6 +80,18 @@ const TeacherGrades = () => {
     },
   ];
 
+  // Pagination for grades table
+  const ROWS_PER_PAGE = 6;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(students.length / ROWS_PER_PAGE));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const pagedStudents = students.slice(
+    (page - 1) * ROWS_PER_PAGE,
+    page * ROWS_PER_PAGE
+  );
+
   const completionPercentage = 75;
 
   return (
@@ -76,7 +99,9 @@ const TeacherGrades = () => {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Grade Management</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            Grade Management
+          </h1>
           <p className="text-muted-foreground">
             Enter and manage student grades for your classes
           </p>
@@ -103,7 +128,9 @@ const TeacherGrades = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Grading Status</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Grading Status
+                </p>
                 <Badge
                   variant={
                     status === "approved"
@@ -125,8 +152,12 @@ const TeacherGrades = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Total Students</p>
-                <p className="text-3xl font-bold text-foreground">{students.length}</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Total Students
+                </p>
+                <p className="text-3xl font-bold text-foreground">
+                  {students.length}
+                </p>
               </div>
               <div className="p-3 rounded-lg bg-secondary">
                 <Users className="h-6 w-6 text-accent" />
@@ -154,7 +185,9 @@ const TeacherGrades = () => {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Grading Workflow</CardTitle>
-              <CardDescription>Track the approval process for grades</CardDescription>
+              <CardDescription>
+                Track the approval process for grades
+              </CardDescription>
             </div>
             <Select value={selectedClass} onValueChange={setSelectedClass}>
               <SelectTrigger className="w-64">
@@ -176,7 +209,10 @@ const TeacherGrades = () => {
               <div className="flex items-center gap-3">
                 <div
                   className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                    status === "draft" || status === "submitted" || status === "verified" || status === "approved"
+                    status === "draft" ||
+                    status === "submitted" ||
+                    status === "verified" ||
+                    status === "approved"
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground"
                   }`}
@@ -189,11 +225,13 @@ const TeacherGrades = () => {
                 </div>
               </div>
               <div className="flex-1 h-0.5 bg-border mx-4" />
-              
+
               <div className="flex items-center gap-3">
                 <div
                   className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                    status === "submitted" || status === "verified" || status === "approved"
+                    status === "submitted" ||
+                    status === "verified" ||
+                    status === "approved"
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground"
                   }`}
@@ -202,11 +240,13 @@ const TeacherGrades = () => {
                 </div>
                 <div>
                   <p className="font-medium text-sm">Head Class Review</p>
-                  <p className="text-xs text-muted-foreground">Verify & calculate</p>
+                  <p className="text-xs text-muted-foreground">
+                    Verify & calculate
+                  </p>
                 </div>
               </div>
               <div className="flex-1 h-0.5 bg-border mx-4" />
-              
+
               <div className="flex items-center gap-3">
                 <div
                   className={`flex items-center justify-center w-10 h-10 rounded-full ${
@@ -223,7 +263,7 @@ const TeacherGrades = () => {
                 </div>
               </div>
               <div className="flex-1 h-0.5 bg-border mx-4" />
-              
+
               <div className="flex items-center gap-3">
                 <div
                   className={`flex items-center justify-center w-10 h-10 rounded-full ${
@@ -236,7 +276,9 @@ const TeacherGrades = () => {
                 </div>
                 <div>
                   <p className="font-medium text-sm">Published</p>
-                  <p className="text-xs text-muted-foreground">Visible to students</p>
+                  <p className="text-xs text-muted-foreground">
+                    Visible to students
+                  </p>
                 </div>
               </div>
             </div>
@@ -259,7 +301,8 @@ const TeacherGrades = () => {
             {status === "verified" && (
               <div className="p-3 rounded-lg bg-accent/10 border border-accent/20">
                 <p className="text-sm text-accent">
-                  Verified by Head Class Teacher - awaiting Head of School approval
+                  Verified by Head Class Teacher - awaiting Head of School
+                  approval
                 </p>
               </div>
             )}
@@ -292,16 +335,20 @@ const TeacherGrades = () => {
                   <TableHead>Student Name</TableHead>
                   <TableHead className="text-center">Test (100)</TableHead>
                   <TableHead className="text-center">Exam (100)</TableHead>
-                  <TableHead className="text-center">Assignment (100)</TableHead>
+                  <TableHead className="text-center">
+                    Assignment (100)
+                  </TableHead>
                   <TableHead className="text-center">Total (300)</TableHead>
                   <TableHead className="text-center">Average (%)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {students.map((student, index) => (
+                {pagedStudents.map((student, index) => (
                   <TableRow key={student.id}>
                     <TableCell className="font-medium">{index + 1}</TableCell>
-                    <TableCell className="font-medium">{student.rollNo}</TableCell>
+                    <TableCell className="font-medium">
+                      {student.rollNo}
+                    </TableCell>
                     <TableCell>{student.name}</TableCell>
                     <TableCell>
                       <Input
@@ -334,7 +381,11 @@ const TeacherGrades = () => {
                       {student.total}
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={student.average >= 85 ? "default" : "secondary"}>
+                      <Badge
+                        variant={
+                          student.average >= 85 ? "default" : "secondary"
+                        }
+                      >
                         {student.average.toFixed(1)}%
                       </Badge>
                     </TableCell>
@@ -342,6 +393,13 @@ const TeacherGrades = () => {
                 ))}
               </TableBody>
             </Table>
+            <div className="pt-4">
+              <TablePagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

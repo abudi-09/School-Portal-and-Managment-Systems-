@@ -41,7 +41,11 @@ const TeacherLayout = () => {
 
   // Additional navigation for Head Class Teachers (appears after profile)
   const headClassTeacherNavigation = [
-    { name: "Attendance", href: "/teacher/attendance", icon: Users },
+    {
+      name: "Attendance Management",
+      href: "/teacher/head-attendance",
+      icon: Users,
+    },
     { name: "Head Class Grades", href: "/teacher/head-grades", icon: Award },
   ];
 

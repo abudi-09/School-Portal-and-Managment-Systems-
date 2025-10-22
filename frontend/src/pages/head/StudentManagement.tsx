@@ -275,14 +275,29 @@ const StudentManagement = () => {
     queryFn: async () => {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Not authenticated");
-      const res = await fetch(`${apiBaseUrl}/api/students/all`, {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.message || "Failed to load students");
+
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      } as Record<string, string>;
+
+      // Try primary endpoint
+      let res = await fetch(`${apiBaseUrl}/api/students/all`, { headers });
+      // If not found, try legacy/admin endpoint
+      if (res.status === 404) {
+        res = await fetch(`${apiBaseUrl}/api/users/students?limit=100`, {
+          headers,
+        });
+      }
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        const statusText = res.statusText || String(res.status);
+        throw new Error(
+          `Failed to load students (status: ${res.status} ${statusText})`
+        );
+      }
+
       const rawStudents = (json?.students ?? json) as unknown[];
       const mapped = (Array.isArray(rawStudents) ? rawStudents : []).map(
         (s: any, idx) => ({

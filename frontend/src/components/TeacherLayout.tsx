@@ -40,11 +40,6 @@ const TeacherLayout = () => {
     { name: "Messages", href: "/teacher/messages", icon: MessageCircle },
     { name: "Announcements", href: "/teacher/announcements", icon: Bell },
     { name: "Profile", href: "/teacher/profile", icon: User },
-    {
-      name: "Teacher Attendance",
-      href: "/teacher/attendance",
-      icon: CalendarCheck,
-    },
   ];
 
   // Additional navigation for Head Class Teachers (appears after profile)
@@ -53,6 +48,7 @@ const TeacherLayout = () => {
       name: "Teacher Attendance",
       href: "/teacher/attendance",
       icon: CalendarCheck,
+      headOnly: true,
     },
     {
       name: "Attendance Management",
@@ -143,6 +139,10 @@ const TeacherLayout = () => {
                 <div className="px-4 pt-4 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Head Class Teacher
                 </div>
+                <div className="px-4 pb-2 text-xs text-muted-foreground">
+                  Showing role-specific links for{" "}
+                  <span className="font-medium">Head</span>
+                </div>
                 {headClassTeacherNavigation.map((item) => (
                   <NavLink
                     key={item.name}
@@ -159,7 +159,14 @@ const TeacherLayout = () => {
                     }
                   >
                     <item.icon className="h-5 w-5" />
-                    {item.name}
+                    <div className="flex items-center gap-2">
+                      <span>{item.name}</span>
+                      {item.headOnly && (
+                        <span className="text-[10px] bg-muted px-2 py-0.5 rounded text-muted-foreground ml-2">
+                          Head only
+                        </span>
+                      )}
+                    </div>
                   </NavLink>
                 ))}
               </>

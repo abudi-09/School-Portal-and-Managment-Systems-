@@ -56,6 +56,7 @@ import StudentPrintCard, {
   type StudentPrintData,
 } from "@/components/students/StudentPrintCard";
 import StudentPrintSheet from "@/components/students/StudentPrintSheet";
+import TablePagination from "@/components/shared/TablePagination";
 
 type StudentStatus = "active" | "inactive";
 type RegistrationType = "New" | "Returning";
@@ -319,6 +320,15 @@ const AdminStudentManagement = () => {
         phone: created.profile?.phone ?? payload.profile?.phone,
       };
 
+      // Add the new student to local state immediately so actions like
+      // printing (all/selected) include the freshly-created student's
+      // credentials even before the background query refresh completes.
+      setStudents((prev) => {
+        // avoid duplicate if already present
+        if (prev.some((s) => s.studentId === newStudent.studentId)) return prev;
+        return [newStudent, ...prev];
+      });
+
       await queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
 
       toast({
@@ -401,7 +411,7 @@ const AdminStudentManagement = () => {
     documentTitle: "Student-Credentials",
     pageStyle: `
       @page { size: A4 portrait; margin: 10mm; }
-      @media print {
+      @media print { 
         html, body { background: #fff; }
         .break-after { page-break-after: always; }
       }
@@ -622,6 +632,25 @@ const AdminStudentManagement = () => {
       (s.phone || "").toLowerCase().includes(q)
     );
   });
+
+  // Pagination: 6 rows per page for all tables
+  const ROWS_PER_PAGE = 6;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredStudents.length / ROWS_PER_PAGE)
+  );
+  const indexOfLast = currentPage * ROWS_PER_PAGE;
+  const indexOfFirst = indexOfLast - ROWS_PER_PAGE;
+  const paginatedStudents = filteredStudents.slice(indexOfFirst, indexOfLast);
+
+  // Reset to page 1 when filters/search change or when current page goes out of bounds
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch]);
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(1);
+  }, [totalPages, currentPage]);
 
   const stats = [
     {
@@ -1097,7 +1126,7 @@ const AdminStudentManagement = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredStudents.map((student) => (
+                {paginatedStudents.map((student) => (
                   <TableRow
                     key={student.id}
                     className="border-gray-200 hover:bg-gray-50"
@@ -1224,6 +1253,13 @@ const AdminStudentManagement = () => {
                 ))}
               </TableBody>
             </Table>
+            {/* Pagination controls */}
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              className="mt-4"
+            />
           </CardContent>
         </Card>
         {/* Hidden bulk print container */}

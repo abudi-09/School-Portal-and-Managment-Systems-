@@ -1,3 +1,41 @@
+import { Button } from "@/components/ui/button";
+
+type PaginationProps = {
+  currentPage: number; // 1-based
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  className?: string;
+};
+
+// Reusable pagination control: [ Prev ]  Page X of Y  [ Next ]
+export function Pagination({ currentPage, totalPages, onPageChange, className }: PaginationProps) {
+  const canPrev = currentPage > 1;
+  const canNext = currentPage < totalPages;
+
+  return (
+    <div className={"flex items-center justify-center gap-4 py-3 " + (className ?? "")}>      
+      <Button
+        variant="outline"
+        onClick={() => canPrev && onPageChange(currentPage - 1)}
+        disabled={!canPrev}
+      >
+        Previous
+      </Button>
+      <span className="text-sm text-muted-foreground">
+        Page <span className="font-medium text-foreground">{currentPage}</span> of {totalPages}
+      </span>
+      <Button
+        variant="outline"
+        onClick={() => canNext && onPageChange(currentPage + 1)}
+        disabled={!canNext}
+      >
+        Next
+      </Button>
+    </div>
+  );
+}
+
+export default Pagination;
 import * as React from "react";
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 

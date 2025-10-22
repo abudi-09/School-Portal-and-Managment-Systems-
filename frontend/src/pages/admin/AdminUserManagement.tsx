@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import TablePagination from "@/components/shared/TablePagination";
 
 type APIUser = {
   _id: string;
@@ -47,6 +48,13 @@ const AdminUserManagement = () => {
   const [activeTab, setActiveTab] = useState("students");
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const ROWS_PER_PAGE = 6;
+
+  // Per-tab pagination state
+  const [studentsPage, setStudentsPage] = useState(1);
+  const [teachersPage, setTeachersPage] = useState(1);
+  const [headsPage, setHeadsPage] = useState(1);
+  const [adminsPage, setAdminsPage] = useState(1);
 
   const apiBaseUrl =
     import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
@@ -147,6 +155,65 @@ const AdminUserManagement = () => {
   const filteredHeads = heads.filter((h) => matchesQuery(h, debouncedSearch));
   const filteredAdmins = adminsFromAll.filter((a) =>
     matchesQuery(a, debouncedSearch)
+  );
+
+  // Reset pages on search change
+  useEffect(() => {
+    setStudentsPage(1);
+    setTeachersPage(1);
+    setHeadsPage(1);
+    setAdminsPage(1);
+  }, [debouncedSearch]);
+
+  // Clamp current pages within range when filtered counts change
+  const studentsTotalPages = Math.max(
+    1,
+    Math.ceil(filteredStudents.length / ROWS_PER_PAGE)
+  );
+  const teachersTotalPages = Math.max(
+    1,
+    Math.ceil(filteredTeachers.length / ROWS_PER_PAGE)
+  );
+  const headsTotalPages = Math.max(
+    1,
+    Math.ceil(filteredHeads.length / ROWS_PER_PAGE)
+  );
+  const adminsTotalPages = Math.max(
+    1,
+    Math.ceil(filteredAdmins.length / ROWS_PER_PAGE)
+  );
+
+  useEffect(() => {
+    if (studentsPage > studentsTotalPages)
+      setStudentsPage(studentsTotalPages);
+  }, [studentsPage, studentsTotalPages]);
+  useEffect(() => {
+    if (teachersPage > teachersTotalPages)
+      setTeachersPage(teachersTotalPages);
+  }, [teachersPage, teachersTotalPages]);
+  useEffect(() => {
+    if (headsPage > headsTotalPages) setHeadsPage(headsTotalPages);
+  }, [headsPage, headsTotalPages]);
+  useEffect(() => {
+    if (adminsPage > adminsTotalPages) setAdminsPage(adminsTotalPages);
+  }, [adminsPage, adminsTotalPages]);
+
+  // Compute paginated slices
+  const pagedStudents = filteredStudents.slice(
+    (studentsPage - 1) * ROWS_PER_PAGE,
+    studentsPage * ROWS_PER_PAGE
+  );
+  const pagedTeachers = filteredTeachers.slice(
+    (teachersPage - 1) * ROWS_PER_PAGE,
+    teachersPage * ROWS_PER_PAGE
+  );
+  const pagedHeads = filteredHeads.slice(
+    (headsPage - 1) * ROWS_PER_PAGE,
+    headsPage * ROWS_PER_PAGE
+  );
+  const pagedAdmins = filteredAdmins.slice(
+    (adminsPage - 1) * ROWS_PER_PAGE,
+    adminsPage * ROWS_PER_PAGE
   );
 
   const stats = {
@@ -343,8 +410,9 @@ const AdminUserManagement = () => {
             </CardHeader>
             <CardContent>
               {user && user.role === "admin" ? (
-                <UserTable
-                  users={filteredStudents.map((s) => ({
+                <>
+                  <UserTable
+                    users={pagedStudents.map((s) => ({
                     _id: s._id,
                     firstName: s.firstName,
                     lastName: s.lastName,
@@ -353,7 +421,7 @@ const AdminUserManagement = () => {
                     status: s.status ?? (s.isActive ? "approved" : "inactive"),
                     createdAt: s.createdAt,
                   }))}
-                  onUpgrade={async (id) => {
+                    onUpgrade={async (id) => {
                     try {
                       const res = await fetch(
                         `${apiBaseUrl}/api/users/${id}/upgrade`,
@@ -384,8 +452,14 @@ const AdminUserManagement = () => {
                       });
                     }
                   }}
-                  showUpgrade={user.role === "admin"}
-                />
+                    showUpgrade={user.role === "admin"}
+                  />
+                  <TablePagination
+                    currentPage={studentsPage}
+                    totalPages={studentsTotalPages}
+                    onPageChange={setStudentsPage}
+                  />
+                </>
               ) : (
                 <p className="text-muted-foreground">
                   You must be an admin to view users.
@@ -475,8 +549,9 @@ const AdminUserManagement = () => {
             </CardHeader>
             <CardContent>
               {user && user.role === "admin" ? (
-                <UserTable
-                  users={filteredTeachers.map((t) => ({
+                <>
+                  <UserTable
+                    users={pagedTeachers.map((t) => ({
                     _id: t._id,
                     firstName: t.firstName,
                     lastName: t.lastName,
@@ -485,7 +560,7 @@ const AdminUserManagement = () => {
                     status: t.status ?? (t.isActive ? "approved" : "inactive"),
                     createdAt: t.createdAt,
                   }))}
-                  onUpgrade={async (id) => {
+                    onUpgrade={async (id) => {
                     try {
                       const res = await fetch(
                         `${apiBaseUrl}/api/users/${id}/upgrade`,
@@ -516,8 +591,14 @@ const AdminUserManagement = () => {
                       });
                     }
                   }}
-                  showUpgrade={user.role === "admin"}
-                />
+                    showUpgrade={user.role === "admin"}
+                  />
+                  <TablePagination
+                    currentPage={teachersPage}
+                    totalPages={teachersTotalPages}
+                    onPageChange={setTeachersPage}
+                  />
+                </>
               ) : (
                 <p className="text-muted-foreground">
                   You must be an admin to view users.
@@ -607,8 +688,9 @@ const AdminUserManagement = () => {
             </CardHeader>
             <CardContent>
               {user && user.role === "admin" ? (
-                <UserTable
-                  users={filteredHeads.map((h) => ({
+                <>
+                  <UserTable
+                    users={pagedHeads.map((h) => ({
                     _id: h._id,
                     firstName: h.firstName,
                     lastName: h.lastName,
@@ -617,7 +699,7 @@ const AdminUserManagement = () => {
                     status: h.status ?? (h.isActive ? "approved" : "inactive"),
                     createdAt: h.createdAt,
                   }))}
-                  onUpgrade={async (id) => {
+                    onUpgrade={async (id) => {
                     try {
                       const res = await fetch(
                         `${apiBaseUrl}/api/users/${id}/upgrade`,
@@ -648,8 +730,14 @@ const AdminUserManagement = () => {
                       });
                     }
                   }}
-                  showUpgrade={user.role === "admin"}
-                />
+                    showUpgrade={user.role === "admin"}
+                  />
+                  <TablePagination
+                    currentPage={headsPage}
+                    totalPages={headsTotalPages}
+                    onPageChange={setHeadsPage}
+                  />
+                </>
               ) : (
                 <p className="text-muted-foreground">
                   You must be an admin to view users.
@@ -739,8 +827,9 @@ const AdminUserManagement = () => {
             </CardHeader>
             <CardContent>
               {user && user.role === "admin" ? (
-                <UserTable
-                  users={filteredAdmins.map((a) => ({
+                <>
+                  <UserTable
+                    users={pagedAdmins.map((a) => ({
                     _id: a._id,
                     firstName: a.firstName,
                     lastName: a.lastName,
@@ -749,15 +838,21 @@ const AdminUserManagement = () => {
                     status: a.status ?? (a.isActive ? "approved" : "inactive"),
                     createdAt: a.createdAt,
                   }))}
-                  onUpgrade={async (_id) => {
+                    onUpgrade={async (_id) => {
                     // no-op: admins cannot be upgraded further
                     toast({
                       title: "Info",
                       description: "User is already an admin",
                     });
                   }}
-                  showUpgrade={false}
-                />
+                    showUpgrade={false}
+                  />
+                  <TablePagination
+                    currentPage={adminsPage}
+                    totalPages={adminsTotalPages}
+                    onPageChange={setAdminsPage}
+                  />
+                </>
               ) : (
                 <p className="text-muted-foreground">
                   You must be an admin to view users.

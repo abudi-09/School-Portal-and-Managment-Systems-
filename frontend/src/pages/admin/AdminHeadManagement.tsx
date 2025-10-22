@@ -40,6 +40,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import TablePagination from "@/components/shared/TablePagination";
 
 type HeadStatus = "pending" | "active" | "inactive";
 
@@ -288,6 +289,21 @@ const AdminHeadManagement = () => {
       return matchesSearch && matchesStatus;
     });
   }, [heads, searchTerm, statusFilter]);
+
+  // Pagination (6 rows per page)
+  const ROWS_PER_PAGE = 6;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filteredHeads.length / ROWS_PER_PAGE));
+  const last = page * ROWS_PER_PAGE;
+  const first = last - ROWS_PER_PAGE;
+  const paginatedHeads = filteredHeads.slice(first, last);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter]);
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [totalPages, page]);
 
   const handleActionRequest = (head: Head, type: ActionType) => {
     setPendingAction({ head, type });
@@ -571,7 +587,7 @@ const AdminHeadManagement = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredHeads.map((head) => (
+            {paginatedHeads.map((head) => (
               <TableRow key={head.id} className="border-gray-100">
                 <TableCell className="align-top">
                   <div className="font-semibold text-gray-900">
@@ -622,6 +638,12 @@ const AdminHeadManagement = () => {
             )}
           </TableBody>
         </Table>
+        <TablePagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          className="border-t border-gray-100"
+        />
       </div>
 
       <div className="grid gap-4 lg:hidden">
@@ -630,7 +652,7 @@ const AdminHeadManagement = () => {
             Loading head accounts...
           </div>
         )}
-        {filteredHeads.map((head) => (
+        {paginatedHeads.map((head) => (
           <div
             key={head.id}
             className="bg-white shadow rounded-2xl border border-gray-200 p-4 space-y-3"
@@ -656,6 +678,11 @@ const AdminHeadManagement = () => {
             <div className="flex flex-wrap gap-2">{renderActions(head)}</div>
           </div>
         ))}
+        <TablePagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+        />
         {filteredHeads.length === 0 && (
           <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-6 text-center text-gray-500">
             No Head of School records match your filters.

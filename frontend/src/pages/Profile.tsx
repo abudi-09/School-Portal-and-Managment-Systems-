@@ -25,6 +25,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/useAuth";
 import type { User as AuthUser } from "@/contexts/auth-types";
+import {
+  updateProfile as updateProfileApi,
+  uploadAvatar as uploadAvatarApi,
+  changePassword as changePasswordApi,
+} from "@/lib/api/profileApi";
 
 type Gender = "male" | "female" | "other" | undefined;
 interface ProfileInfo {
@@ -173,8 +178,6 @@ const Profile = () => {
 
   const handleSave = async () => {
     try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Not authenticated");
       const payload: {
         firstName: string;
         lastName: string;
@@ -216,18 +219,7 @@ const Profile = () => {
           responsibilities: responsibilities.trim(),
         };
       }
-      const res = await fetch(`${getApiBase()}/api/profile`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.success)
-        throw new Error(data?.message || "Update failed");
-      const updated: ApiUser = data.data.user;
+      const updated = (await updateProfileApi(payload)) as unknown as ApiUser;
       setApiUser(updated);
       toast.success("Profile updated successfully");
       setIsEditing(false);
@@ -315,29 +307,9 @@ const Profile = () => {
                   onClick={async () => {
                     if (!selectedFile) return;
                     try {
-                      const form = new FormData();
-                      form.append("avatar", selectedFile);
-                      const userId = userIdForUpload;
-                      const base = getApiBase();
-                      const token = localStorage.getItem("token");
-                      const res = await fetch(
-                        `${base}/api/users/${userId}/avatar`,
-                        {
-                          method: "POST",
-                          body: form,
-                          headers: token
-                            ? { Authorization: `Bearer ${token}` }
-                            : undefined,
-                        }
-                      );
-                      const data = await res.json();
-                      if (!res.ok)
-                        throw new Error(data?.message || "Upload failed");
-                      const avatarPath = data?.data?.avatar;
-                      const fullPath = avatarPath.startsWith("http")
-                        ? avatarPath
-                        : `${base}${avatarPath}`;
-                      setAvatarPreview(fullPath);
+                      const user = await uploadAvatarApi(selectedFile);
+                      const avatarUrl = user.avatar || user?.profile?.avatar;
+                      if (avatarUrl) setAvatarPreview(avatarUrl);
                       toast.success("Avatar uploaded");
                       // persist to localStorage currentUser if present
                       const stored = localStorage.getItem("currentUser");
@@ -345,7 +317,7 @@ const Profile = () => {
                         try {
                           const parsed = JSON.parse(stored);
                           parsed.profile = parsed.profile || {};
-                          parsed.profile.avatar = avatarPath;
+                          parsed.profile.avatar = avatarUrl;
                           localStorage.setItem(
                             "currentUser",
                             JSON.stringify(parsed)
@@ -359,7 +331,7 @@ const Profile = () => {
                         ...(prev || {}),
                         profile: {
                           ...(prev?.profile || {}),
-                          avatar: avatarPath,
+                          avatar: avatarUrl || prev?.profile?.avatar,
                         },
                       }));
                       setSelectedFile(null);
@@ -721,28 +693,11 @@ const Profile = () => {
                             "New password must be at least 6 characters"
                           );
                         }
-                        const token = localStorage.getItem("token");
-                        if (!token) throw new Error("Not authenticated");
-                        const res = await fetch(
-                          `${getApiBase()}/api/profile/password`,
-                          {
-                            method: "PUT",
-                            headers: {
-                              "Content-Type": "application/json",
-                              Authorization: `Bearer ${token}`,
-                            },
-                            body: JSON.stringify({
-                              currentPassword,
-                              newPassword,
-                            }),
-                          }
-                        );
-                        const data = await res.json();
-                        if (!res.ok || !data?.success) {
-                          throw new Error(
-                            data?.message || "Failed to update password"
-                          );
-                        }
+                        await changePasswordApi({
+                          currentPassword,
+                          newPassword,
+                          confirmPassword,
+                        });
                         toast.success("Password updated successfully");
                         setCurrentPassword("");
                         setNewPassword("");

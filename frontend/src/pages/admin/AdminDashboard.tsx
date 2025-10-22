@@ -359,46 +359,6 @@ const AdminDashboard = () => {
             </AlertDescription>
           </Alert>
         )}
-        {/* Registration Status Alert */}
-        <Alert className="border-blue-200 bg-blue-50/50 rounded-xl shadow-sm">
-          <AlertCircle className="h-5 w-5 text-blue-600" />
-          <AlertDescription className="text-blue-900">
-            <span className="font-semibold">Registration Status:</span>{" "}
-            Currently{" "}
-            <Badge
-              variant="default"
-              className="ml-2 bg-blue-100 text-blue-800 hover:bg-blue-200"
-            >
-              Open
-            </Badge>
-          </AlertDescription>
-        </Alert>
-        {/* Head Signup Notification Alert */}
-        {unreadCount > 0 && (
-          <Alert className="border-blue-200 bg-blue-50 rounded-xl shadow-sm">
-            <Bell className="h-5 w-5 text-blue-600" />
-            <AlertDescription className="text-blue-900">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-semibold text-lg">New Head Signup</span>
-                  <p className="text-sm mt-1 text-blue-700">
-                    A new Head of School has registered. Review and approve
-                    their account.
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    handleViewNotification(notifications.find((n) => !n.seen)!)
-                  }
-                  className="ml-6 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm hover:shadow-md transition-all"
-                >
-                  View
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {stats.map((stat) => (

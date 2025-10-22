@@ -1,44 +1,209 @@
-import { useState } from "react";
-import { User, Mail, Phone, Lock, Activity } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useRef, useState } from "react";
+import {
+  User,
+  Mail,
+  Phone,
+  Lock,
+  Activity,
+  Image as ImageIcon,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
+import {
+  getMe,
+  updateProfile,
+  uploadAvatar,
+  changePassword,
+  type Profile,
+} from "@/lib/api/profileApi";
+
+type ApiError = { response?: { data?: { message?: string } } };
+const getErrorMessage = (e: unknown) => {
+  const api = e as ApiError;
+  return (
+    api?.response?.data?.message ??
+    (e instanceof Error ? e.message : "Please try again.")
+  );
+};
 
 const AdminProfile = () => {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
 
+  // Profile state
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [profile, setProfile] = useState<
+    Pick<Profile, "firstName" | "lastName" | "email" | "phoneNumber" | "avatar">
+  >({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phoneNumber: "",
+    avatar: "",
+  });
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  useEffect(() => {
+    const fetchMe = async () => {
+      try {
+        const me = await getMe();
+        setProfile({
+          firstName: me.firstName ?? "",
+          lastName: me.lastName ?? "",
+          email: me.email ?? "",
+          phoneNumber: me.phoneNumber ?? "",
+          avatar: me.avatar ?? "",
+        });
+      } catch (err: unknown) {
+        toast({
+          title: "Failed to load profile",
+          description: getErrorMessage(err),
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMe();
+  }, [toast]);
+
   const recentActivity = [
-    { action: "Approved student registration", details: "Alex Thompson", time: "2 hours ago" },
-    { action: "Disabled registration system", details: "System-wide change", time: "1 day ago" },
-    { action: "Added new student", details: "Sarah Davis - STU-2024-099", time: "2 days ago" },
-    { action: "Activated teacher account", details: "Prof. James Wilson", time: "3 days ago" },
+    {
+      action: "Approved student registration",
+      details: "Alex Thompson",
+      time: "2 hours ago",
+    },
+    {
+      action: "Disabled registration system",
+      details: "System-wide change",
+      time: "1 day ago",
+    },
+    {
+      action: "Added new student",
+      details: "Sarah Davis - STU-2024-099",
+      time: "2 days ago",
+    },
+    {
+      action: "Activated teacher account",
+      details: "Prof. James Wilson",
+      time: "3 days ago",
+    },
   ];
 
-  const handleSaveProfile = () => {
-    toast({
-      title: "Profile Updated",
-      description: "Your profile information has been saved successfully.",
-    });
-    setIsEditing(false);
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    try {
+      const updated = await updateProfile({
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        phoneNumber: profile.phoneNumber,
+      });
+      setProfile((p) => ({ ...p, ...updated }));
+      toast({
+        title: "Profile updated",
+        description: "Your profile information has been saved.",
+      });
+      setIsEditing(false);
+    } catch (err: unknown) {
+      toast({
+        title: "Update failed",
+        description: getErrorMessage(err),
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleChangePassword = () => {
-    toast({
-      title: "Password Changed",
-      description: "Your password has been updated successfully.",
-    });
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast({
+        title: "Missing fields",
+        description: "Fill all password fields.",
+      });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Password mismatch",
+        description: "New passwords do not match.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      await changePassword({ currentPassword, newPassword, confirmPassword });
+      toast({
+        title: "Password changed",
+        description: "Your password has been updated.",
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: unknown) {
+      toast({
+        title: "Change failed",
+        description: getErrorMessage(err),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const triggerFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected: React.ChangeEventHandler<HTMLInputElement> = async (
+    e
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const updated = await uploadAvatar(file);
+      setProfile((p) => ({ ...p, avatar: updated.avatar || p.avatar }));
+      toast({
+        title: "Photo updated",
+        description: "Your profile photo has been changed.",
+      });
+    } catch (err: unknown) {
+      toast({
+        title: "Upload failed",
+        description: getErrorMessage(err),
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+      // reset input so the same file can be re-selected if needed
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   return (
     <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">Admin Profile</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-2">
+          Admin Profile
+        </h1>
         <p className="text-muted-foreground">
           Manage your account settings and view activity
         </p>
@@ -52,7 +217,9 @@ const AdminProfile = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Personal Information</CardTitle>
-                <CardDescription>Your account details and contact information</CardDescription>
+                <CardDescription>
+                  Your account details and contact information
+                </CardDescription>
               </div>
               {!isEditing && (
                 <Button variant="outline" onClick={() => setIsEditing(true)}>
@@ -64,14 +231,33 @@ const AdminProfile = () => {
               {/* Avatar */}
               <div className="flex items-center gap-4">
                 <Avatar className="h-20 w-20">
+                  {profile.avatar ? (
+                    <AvatarImage src={profile.avatar} alt="Profile photo" />
+                  ) : null}
                   <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
-                    AD
+                    {profile.firstName?.[0]?.toUpperCase()}
+                    {profile.lastName?.[0]?.toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 {isEditing && (
-                  <Button variant="outline" size="sm">
-                    Change Photo
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleFileSelected}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={triggerFilePicker}
+                      disabled={uploading}
+                    >
+                      <ImageIcon className="mr-2 h-4 w-4" />
+                      {uploading ? "Uploading..." : "Change Photo"}
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -85,7 +271,19 @@ const AdminProfile = () => {
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="name"
-                      defaultValue="System Administrator"
+                      value={`${profile.firstName ?? ""} ${
+                        profile.lastName ?? ""
+                      }`.trim()}
+                      onChange={(e) => {
+                        // Split into first/last by first space
+                        const val = e.target.value;
+                        const [first, ...rest] = val.split(" ");
+                        setProfile((p) => ({
+                          ...p,
+                          firstName: first,
+                          lastName: rest.join(" "),
+                        }));
+                      }}
                       disabled={!isEditing}
                       className="pl-10"
                     />
@@ -109,9 +307,9 @@ const AdminProfile = () => {
                     <Input
                       id="email"
                       type="email"
-                      defaultValue="admin@school.edu"
-                      disabled={!isEditing}
-                      className="pl-10"
+                      value={profile.email}
+                      disabled
+                      className="pl-10 bg-muted"
                     />
                   </div>
                 </div>
@@ -122,7 +320,13 @@ const AdminProfile = () => {
                     <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="phone"
-                      defaultValue="+1 (555) 123-4567"
+                      value={profile.phoneNumber ?? ""}
+                      onChange={(e) =>
+                        setProfile((p) => ({
+                          ...p,
+                          phoneNumber: e.target.value,
+                        }))
+                      }
                       disabled={!isEditing}
                       className="pl-10"
                     />
@@ -132,8 +336,14 @@ const AdminProfile = () => {
 
               {isEditing && (
                 <div className="flex gap-2 pt-4">
-                  <Button onClick={handleSaveProfile}>Save Changes</Button>
-                  <Button variant="outline" onClick={() => setIsEditing(false)}>
+                  <Button onClick={handleSaveProfile} disabled={saving}>
+                    {saving ? "Saving..." : "Save Changes"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsEditing(false)}
+                    disabled={saving || uploading}
+                  >
                     Cancel
                   </Button>
                 </div>
@@ -142,17 +352,25 @@ const AdminProfile = () => {
           </Card>
 
           {/* Change Password */}
-          <Card>
+          <Card> 
             <CardHeader>
               <CardTitle>Security Settings</CardTitle>
-              <CardDescription>Update your password and security preferences</CardDescription>
+              <CardDescription>
+                Update your password and security preferences
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="current-password">Current Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="current-password" type="password" className="pl-10" />
+                  <Input
+                    id="current-password"
+                    type="password"
+                    className="pl-10"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -160,7 +378,13 @@ const AdminProfile = () => {
                 <Label htmlFor="new-password">New Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="new-password" type="password" className="pl-10" />
+                  <Input
+                    id="new-password"
+                    type="password"
+                    className="pl-10"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -168,7 +392,13 @@ const AdminProfile = () => {
                 <Label htmlFor="confirm-password">Confirm New Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="confirm-password" type="password" className="pl-10" />
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    className="pl-10"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -193,9 +423,15 @@ const AdminProfile = () => {
                   <p className="text-sm font-medium text-foreground">
                     {activity.action}
                   </p>
-                  <p className="text-xs text-muted-foreground">{activity.details}</p>
-                  <p className="text-xs text-muted-foreground">{activity.time}</p>
-                  {index < recentActivity.length - 1 && <Separator className="mt-4" />}
+                  <p className="text-xs text-muted-foreground">
+                    {activity.details}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {activity.time}
+                  </p>
+                  {index < recentActivity.length - 1 && (
+                    <Separator className="mt-4" />
+                  )}
                 </div>
               ))}
             </CardContent>

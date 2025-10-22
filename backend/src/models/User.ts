@@ -15,6 +15,11 @@ export interface IUser extends Document {
   status: UserStatus;
   isApproved: boolean;
   isActive: boolean;
+  phoneNumber?: string;
+  address?: string;
+  gender?: "male" | "female" | "other";
+  dateOfBirth?: Date;
+  avatar?: string;
   profile: {
     phone?: string;
     address?: string;
@@ -138,6 +143,76 @@ userSchema.virtual("fullName").get(function (this: IUser) {
   return `${this.firstName} ${this.lastName}`;
 });
 
+userSchema
+  .virtual("phoneNumber")
+  .get(function (this: IUser) {
+    return this.profile?.phone;
+  })
+  .set(function (this: IUser, value: string | undefined) {
+    if (!this.profile) this.profile = {} as IUser["profile"];
+    if (value === undefined || value === null) {
+      delete this.profile.phone;
+    } else {
+      this.profile.phone = value;
+    }
+  });
+
+userSchema
+  .virtual("address")
+  .get(function (this: IUser) {
+    return this.profile?.address;
+  })
+  .set(function (this: IUser, value: string | undefined) {
+    if (!this.profile) this.profile = {} as IUser["profile"];
+    if (value === undefined || value === null) {
+      delete this.profile.address;
+    } else {
+      this.profile.address = value;
+    }
+  });
+
+userSchema
+  .virtual("gender")
+  .get(function (this: IUser) {
+    return this.profile?.gender;
+  })
+  .set(function (this: IUser, value: "male" | "female" | "other" | undefined) {
+    if (!this.profile) this.profile = {} as IUser["profile"];
+    if (value === undefined || value === null) {
+      delete this.profile.gender;
+    } else {
+      this.profile.gender = value;
+    }
+  });
+
+userSchema
+  .virtual("dateOfBirth")
+  .get(function (this: IUser) {
+    return this.profile?.dateOfBirth;
+  })
+  .set(function (this: IUser, value: Date | undefined) {
+    if (!this.profile) this.profile = {} as IUser["profile"];
+    if (value === undefined || value === null) {
+      delete this.profile.dateOfBirth;
+    } else {
+      this.profile.dateOfBirth = value;
+    }
+  });
+
+userSchema
+  .virtual("avatar")
+  .get(function (this: IUser) {
+    return this.profile?.avatar;
+  })
+  .set(function (this: IUser, value: string | undefined) {
+    if (!this.profile) this.profile = {} as IUser["profile"];
+    if (value === undefined || value === null) {
+      delete this.profile.avatar;
+    } else {
+      this.profile.avatar = value;
+    }
+  });
+
 // Index for better query performance
 userSchema.index({ role: 1 });
 userSchema.index({ status: 1 });
@@ -230,7 +305,7 @@ userSchema.pre("save", function (next) {
 
 // Remove password from JSON output
 userSchema.methods.toJSON = function () {
-  const userObject = this.toObject();
+  const userObject = this.toObject({ virtuals: true });
   delete userObject.password;
   return userObject;
 };

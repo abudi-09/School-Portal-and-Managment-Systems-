@@ -20,6 +20,12 @@ export const env = {
   mongoUri: getEnv("MONGODB_URI", "mongodb://localhost:27017/pathways_db"),
   jwtSecret: getEnv("JWT_SECRET", "change-me"),
   jwtExpiresIn: getEnv("JWT_EXPIRES_IN", "7d"),
+  cloudinary: {
+    cloudName: getEnv("CLOUDINARY_CLOUD_NAME", ""),
+    apiKey: getEnv("CLOUDINARY_API_KEY", ""),
+    apiSecret: getEnv("CLOUDINARY_API_SECRET", ""),
+    avatarFolder: getEnv("CLOUDINARY_AVATAR_FOLDER", "pathways/avatars"),
+  },
   superAdmin: {
     email: getEnv("SUPER_ADMIN_EMAIL", "superadmin@pathways.local"),
     password: getEnv("SUPER_ADMIN_PASSWORD", "ChangeMe123!"),

@@ -102,10 +102,7 @@ router.post(
   authMiddleware,
   [param("id").isMongoId().withMessage("Invalid user ID")],
   upload.single("avatar"),
-  async (
-    req: express.Request & { user?: any; file?: { filename?: string } | null },
-    res: express.Response
-  ) => {
+  async (req: express.Request, res: express.Response) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -125,7 +122,8 @@ router.post(
           .json({ success: false, message: "Access denied" });
       }
 
-      if (!req.file || !req.file.filename) {
+      const file = (req as any).file as { filename?: string } | undefined;
+      if (!file || !file.filename) {
         return res
           .status(400)
           .json({ success: false, message: "No file uploaded" });
@@ -140,7 +138,7 @@ router.post(
 
       // Save relative path to avatar
       user.profile = user.profile || {};
-      user.profile.avatar = `/uploads/${req.file.filename}`;
+      user.profile.avatar = `/uploads/${file.filename}`;
       await user.save();
 
       res.json({

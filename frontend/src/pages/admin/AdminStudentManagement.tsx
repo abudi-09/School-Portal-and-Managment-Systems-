@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   UserPlus,
@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -50,6 +51,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useReactToPrint } from "react-to-print";
+import StudentPrintCard, {
+  type StudentPrintData,
+} from "@/components/students/StudentPrintCard";
+import StudentPrintSheet from "@/components/students/StudentPrintSheet";
 
 type StudentStatus = "active" | "inactive";
 type RegistrationType = "New" | "Returning";
@@ -369,6 +375,46 @@ const AdminStudentManagement = () => {
   const [credentialsMap, setCredentialsMap] = useState<Record<string, string>>(
     {}
   );
+  // Selection for bulk printing
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const allSelected =
+    students.length > 0 && students.every((s) => selected[s.id]);
+  const toggleAll = (checked: boolean | string) => {
+    const flag = Boolean(checked);
+    const next: Record<string, boolean> = {};
+    for (const s of students) next[s.id] = flag;
+    setSelected(next);
+  };
+  const toggleOne = (id: string, checked: boolean | string) => {
+    setSelected((prev) => ({ ...prev, [id]: Boolean(checked) }));
+  };
+  const selectedStudents = students.filter((s) => selected[s.id]);
+  const printSelectedDisabled = selectedStudents.length === 0;
+
+  // Printing state and refs
+  const bulkPrintRef = useRef<HTMLDivElement | null>(null);
+  const [bulkPrintData, setBulkPrintData] = useState<StudentPrintData[]>([]);
+  const singlePrintRef = useRef<HTMLDivElement | null>(null);
+
+  const handleBulkPrint = useReactToPrint({
+    content: () => bulkPrintRef.current,
+    documentTitle: "Student-Credentials",
+    pageStyle: `
+      @page { size: A4 portrait; margin: 10mm; }
+      @media print {
+        html, body { background: #fff; }
+        .break-after { page-break-after: always; }
+      }
+    `,
+    onAfterPrint: () => setBulkPrintData([]),
+  });
+  const handleSinglePrint = useReactToPrint({
+    content: () => singlePrintRef.current,
+    documentTitle: generatedCredentials
+      ? `ID-${generatedCredentials.studentId}`
+      : "Student-Credential",
+    pageStyle: `@page { size: A6 portrait; margin: 8mm; }`,
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
@@ -868,6 +914,27 @@ const AdminStudentManagement = () => {
                 </div>
               </div>
               <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                {/* hidden single print content for the newly created/reset credentials */}
+                {generatedCredentials && (
+                  <div
+                    className="sr-only print:not-sr-only"
+                    ref={singlePrintRef}
+                  >
+                    <StudentPrintCard
+                      data={{
+                        name: generatedCredentials.fullName,
+                        studentId: generatedCredentials.studentId,
+                        password: generatedCredentials.password,
+                      }}
+                    />
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  onClick={() => handleSinglePrint && handleSinglePrint()}
+                >
+                  Print
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -963,9 +1030,52 @@ const AdminStudentManagement = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Bulk actions toolbar */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const data: StudentPrintData[] = students.map((s) => ({
+                      name: `${s.firstName} ${s.lastName}`,
+                      studentId: s.studentId,
+                      password: credentialsMap[s.studentId] ?? "N/A",
+                    }));
+                    setBulkPrintData(data);
+                    setTimeout(() => handleBulkPrint && handleBulkPrint(), 0);
+                  }}
+                  disabled={students.length === 0}
+                >
+                  Print All Students
+                </Button>
+                <Button
+                  onClick={() => {
+                    const data: StudentPrintData[] = selectedStudents.map(
+                      (s) => ({
+                        name: `${s.firstName} ${s.lastName}`,
+                        studentId: s.studentId,
+                        password: credentialsMap[s.studentId] ?? "N/A",
+                      })
+                    );
+                    setBulkPrintData(data);
+                    setTimeout(() => handleBulkPrint && handleBulkPrint(), 0);
+                  }}
+                  disabled={printSelectedDisabled}
+                >
+                  Print Selected
+                </Button>
+              </div>
+            </div>
             <Table>
               <TableHeader>
                 <TableRow className="border-gray-200 hover:bg-gray-50">
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={toggleAll}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
                   <TableHead className="text-gray-700 font-semibold">
                     Student ID
                   </TableHead>
@@ -992,6 +1102,13 @@ const AdminStudentManagement = () => {
                     key={student.id}
                     className="border-gray-200 hover:bg-gray-50"
                   >
+                    <TableCell>
+                      <Checkbox
+                        checked={!!selected[student.id]}
+                        onCheckedChange={(v) => toggleOne(student.id, v)}
+                        aria-label={`Select ${getStudentFullName(student)}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-sm text-gray-900">
                       {student.studentId}
                     </TableCell>
@@ -1109,6 +1226,12 @@ const AdminStudentManagement = () => {
             </Table>
           </CardContent>
         </Card>
+        {/* Hidden bulk print container */}
+        {bulkPrintData.length > 0 && (
+          <div className="sr-only print:not-sr-only" ref={bulkPrintRef}>
+            <StudentPrintSheet items={bulkPrintData} />
+          </div>
+        )}
       </div>
       {/* View Student Dialog (pro-level) */}
       <Dialog

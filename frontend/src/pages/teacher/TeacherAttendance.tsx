@@ -5,7 +5,7 @@ import {
   ClipboardCheck,
   Clock,
   RefreshCcw,
-  TrendingDown,
+  TrendingUp,
   Users,
   XCircle,
 } from "lucide-react";
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -33,7 +34,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -43,6 +43,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 
 type AttendanceStatus = "present" | "absent" | "late" | "excused";
 
@@ -114,6 +121,50 @@ const statusMeta: Record<
   },
 };
 
+const statusVisuals: Record<
+  AttendanceStatus,
+  {
+    card: string;
+    badge: string;
+    button: string;
+    buttonActive: string;
+  }
+> = {
+  present: {
+    card: "border-emerald-200 bg-emerald-50/70",
+    badge: "bg-emerald-500/10 text-emerald-600",
+    button: "border-emerald-200 text-emerald-600 hover:bg-emerald-50",
+    buttonActive:
+      "border-emerald-500 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-100",
+  },
+  absent: {
+    card: "border-red-200 bg-red-50/70",
+    badge: "bg-red-500/10 text-red-600",
+    button: "border-red-200 text-red-600 hover:bg-red-50",
+    buttonActive: "border-red-500 bg-red-500/10 text-red-700 hover:bg-red-100",
+  },
+  late: {
+    card: "border-amber-200 bg-amber-50/70",
+    badge: "bg-amber-500/10 text-amber-600",
+    button: "border-amber-200 text-amber-600 hover:bg-amber-50",
+    buttonActive:
+      "border-amber-500 bg-amber-500/10 text-amber-700 hover:bg-amber-100",
+  },
+  excused: {
+    card: "border-sky-200 bg-sky-50/70",
+    badge: "bg-sky-500/10 text-sky-600",
+    button: "border-sky-200 text-sky-600 hover:bg-sky-50",
+    buttonActive: "border-sky-500 bg-sky-500/10 text-sky-700 hover:bg-sky-100",
+  },
+};
+
+const statusOrder: AttendanceStatus[] = [
+  "present",
+  "absent",
+  "late",
+  "excused",
+];
+
 const TeacherAttendance = () => {
   const { toast } = useToast();
 
@@ -134,6 +185,11 @@ const TeacherAttendance = () => {
     homeroom: "Room 305",
     session: "Academic Year 2024/2025",
   };
+
+  const [activeTab, setActiveTab] = useState<"daily" | "requests" | "summary">(
+    "daily"
+  );
+  const [selectedClass, setSelectedClass] = useState<string>(assignedClass.id);
 
   const today = formatDateForInput(new Date());
   const [selectedDate, setSelectedDate] = useState<string>(today);
@@ -275,62 +331,30 @@ const TeacherAttendance = () => {
     setHistoryModalOpen(true);
   };
 
-  const stats = useMemo(
+  const initialAbsenceRequests = useMemo(
     () => [
       {
-        title: "Marked Present",
-        value: statusSummary.present,
-        total: students.length,
-        icon: CheckCircle,
-        color: "text-emerald-500",
+        id: 1,
+        student: "Michael Brown",
+        rollNo: "11A-003",
+        date: formatDateForInput(new Date(Date.now() - 86400000)),
+        reason: "Medical appointment",
+        status: "pending" as const,
       },
       {
-        title: "Marked Absent",
-        value: statusSummary.absent,
-        total: students.length,
-        icon: XCircle,
-        color: "text-red-500",
-      },
-      {
-        title: "Marked Late",
-        value: statusSummary.late,
-        total: students.length,
-        icon: Clock,
-        color: "text-amber-500",
-      },
-      {
-        title: "Excused",
-        value: statusSummary.excused,
-        total: students.length,
-        icon: Users,
-        color: "text-blue-500",
+        id: 2,
+        student: "Sarah Davis",
+        rollNo: "11A-004",
+        date: formatDateForInput(new Date(Date.now() - 3 * 86400000)),
+        reason: "Family emergency",
+        status: "pending" as const,
       },
     ],
-    [
-      statusSummary.absent,
-      statusSummary.excused,
-      statusSummary.late,
-      statusSummary.present,
-      students.length,
-    ]
+    []
   );
-
-  const absenceRequests = [
-    {
-      id: 1,
-      student: "Michael Brown",
-      rollNo: "11A-003",
-      date: formatDateForInput(new Date(Date.now() - 86400000)),
-      reason: "Medical appointment",
-    },
-    {
-      id: 2,
-      student: "Sarah Davis",
-      rollNo: "11A-004",
-      date: formatDateForInput(new Date(Date.now() - 3 * 86400000)),
-      reason: "Family emergency",
-    },
-  ];
+  const [absenceRequests, setAbsenceRequests] = useState(
+    initialAbsenceRequests
+  );
 
   const attendanceHistory = useMemo(
     () =>
@@ -358,6 +382,136 @@ const TeacherAttendance = () => {
         }),
     [attendanceByDate, students]
   );
+
+  const pendingRequests = useMemo(
+    () =>
+      absenceRequests.filter((request) => request.status === "pending").length,
+    [absenceRequests]
+  );
+
+  const totalStudents = students.length;
+  const selectedDateObj = useMemo(
+    () => new Date(`${selectedDate}T00:00:00`),
+    [selectedDate]
+  );
+  const selectedDateLabel = useMemo(
+    () =>
+      new Date(`${selectedDate}T00:00:00`).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+    [selectedDate]
+  );
+  const dailyAttendanceRate = useMemo(() => {
+    if (!totalStudents) return 0;
+    const rate = (statusSummary.present / totalStudents) * 100;
+    return Math.round(rate * 10) / 10;
+  }, [statusSummary.present, totalStudents]);
+  const summaryCards = useMemo(
+    () => [
+      {
+        key: "total" as const,
+        label: "Total",
+        value: totalStudents,
+        icon: Users,
+        accent: "bg-muted text-foreground border-border",
+      },
+      {
+        key: "present" as const,
+        label: "Present",
+        value: statusSummary.present,
+        icon: CheckCircle,
+        accent: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      },
+      {
+        key: "absent" as const,
+        label: "Absent",
+        value: statusSummary.absent,
+        icon: XCircle,
+        accent: "bg-red-50 text-red-700 border-red-200",
+      },
+      {
+        key: "late" as const,
+        label: "Late",
+        value: statusSummary.late,
+        icon: Clock,
+        accent: "bg-amber-50 text-amber-700 border-amber-200",
+      },
+      {
+        key: "excused" as const,
+        label: "Excused",
+        value: statusSummary.excused,
+        icon: Users,
+        accent: "bg-sky-50 text-sky-700 border-sky-200",
+      },
+    ],
+    [
+      statusSummary.absent,
+      statusSummary.excused,
+      statusSummary.late,
+      statusSummary.present,
+      totalStudents,
+    ]
+  );
+
+  const monthlyAggregate = useMemo(() => {
+    if (!attendanceHistory.length || !totalStudents) {
+      return {
+        sessions: attendanceHistory.length,
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0,
+        averageRate: 0,
+      };
+    }
+
+    const totals = attendanceHistory.reduce(
+      (acc, entry) => ({
+        sessions: acc.sessions + 1,
+        present: acc.present + entry.totals.present,
+        absent: acc.absent + entry.totals.absent,
+        late: acc.late + entry.totals.late,
+        excused: acc.excused + entry.totals.excused,
+      }),
+      { sessions: 0, present: 0, absent: 0, late: 0, excused: 0 }
+    );
+
+    const averageRate =
+      Math.round(
+        (totals.present / (totals.sessions * totalStudents)) * 100 * 10
+      ) / 10;
+
+    return { ...totals, averageRate };
+  }, [attendanceHistory, totalStudents]);
+
+  const handleApproveRequest = (id: number) => {
+    setAbsenceRequests((prev) =>
+      prev.map((request) =>
+        request.id === id
+          ? { ...request, status: "approved" as const }
+          : request
+      )
+    );
+    toast({
+      title: "Request approved",
+      description: "Absence request has been approved and recorded.",
+    });
+  };
+
+  const handleDenyRequest = (id: number) => {
+    setAbsenceRequests((prev) =>
+      prev.map((request) =>
+        request.id === id ? { ...request, status: "denied" as const } : request
+      )
+    );
+    toast({
+      title: "Request denied",
+      description: "The absence request has been denied.",
+      variant: "destructive",
+    });
+  };
 
   const handleStatusChange = (studentId: number, status: AttendanceStatus) => {
     setCurrentAttendance((previous) => {
@@ -410,368 +564,417 @@ const TeacherAttendance = () => {
 
   return (
     <>
-      <div className="p-4 md:p-8 space-y-6">
-        <div className="space-y-2">
-          <Badge variant="secondary" className="uppercase tracking-wide">
-            Head Class Teacher
-          </Badge>
-          <h1 className="text-3xl font-bold text-foreground">
-            Attendance Management
-          </h1>
-          <p className="text-muted-foreground">
-            Record the daily attendance for {assignedClass.name} and keep a
-            complete log for your homeroom.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Assigned Class Overview</CardTitle>
-              <CardDescription>
-                Your head class details for quick reference
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Class</span>
-                <span className="text-sm font-medium text-foreground">
-                  {assignedClass.name}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Homeroom</span>
-                <span className="text-sm font-medium text-foreground">
-                  {assignedClass.homeroom}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  Students Assigned
-                </span>
-                <span className="text-sm font-medium text-foreground">
-                  {students.length}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Session</span>
-                <span className="text-sm font-medium text-foreground">
-                  {assignedClass.session}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Submission Status</CardTitle>
-              <CardDescription>
-                Track progress for the selected date
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Selected Date</p>
-                  <p className="text-lg font-semibold text-foreground">
-                    {formatReadableDate(selectedDate)}
-                  </p>
-                </div>
-                <Badge variant={hasSavedRecord ? "default" : "outline"}>
-                  {hasSavedRecord ? "Submitted" : "Draft"}
-                </Badge>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleMarkAll("present")}
-                  className="gap-2"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  Mark all present
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleMarkAll("absent")}
-                  className="gap-2"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Mark all absent
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleMarkAll("late")}
-                  className="gap-2"
-                >
-                  <Clock className="h-4 w-4" />
-                  Everyone late
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={handleResetDay}
-                  className="gap-2"
-                >
-                  <RefreshCcw className="h-4 w-4" />
-                  Reset day
-                </Button>
-              </div>
-              <Button
-                type="button"
-                className="gap-2"
-                onClick={handleSubmitAttendance}
-                disabled={!hasUnsavedChanges}
-              >
-                <ClipboardCheck className="h-4 w-4" />
-                {hasSavedRecord ? "Update attendance" : "Submit attendance"}
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => (
-            <Card key={stat.title}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="mb-1 text-sm text-muted-foreground">
-                      {stat.title}
-                    </p>
-                    <p className="text-3xl font-bold text-foreground">
-                      {stat.value}
-                      <span className="text-lg text-muted-foreground">
-                        /{stat.total}
-                      </span>
-                    </p>
-                  </div>
-                  <div className={`rounded-lg bg-secondary ${stat.color} p-3`}>
-                    <stat.icon className="h-6 w-6" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Take Attendance</CardTitle>
-            <CardDescription>
-              Attendance is restricted to your assigned head class
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-4 md:flex-row md:items-end">
-              <div className="flex-1">
-                <p className="mb-2 text-sm text-muted-foreground">Homeroom</p>
-                <Input value={assignedClass.name} readOnly />
-              </div>
-              <div className="flex-1">
-                <p className="mb-2 text-sm text-muted-foreground">
-                  Attendance date
-                </p>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="date"
-                    value={selectedDate}
-                    max={today}
-                    onChange={(event) => setSelectedDate(event.target.value)}
-                    className="flex-1"
-                  />
+      <div className="min-h-screen bg-background p-6">
+        <div className="mx-auto max-w-7xl space-y-6">
+          <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">
+                Attendance Management
+              </h1>
+              <p className="text-muted-foreground">
+                Track and manage student attendance for your classes.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Select value={selectedClass} onValueChange={setSelectedClass}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Select class" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="11A">Grade 11-A</SelectItem>
+                </SelectContent>
+              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
                   <Button
-                    type="button"
                     variant="outline"
-                    onClick={() => setSelectedDate(today)}
+                    className="w-full justify-start gap-2 text-left sm:w-48"
                   >
                     <Calendar className="h-4 w-4" />
-                    Today
+                    {selectedDateLabel}
                   </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Student Attendance</CardTitle>
-            <CardDescription>
-              Update the status for each student and submit when complete
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">#</TableHead>
-                  <TableHead>Roll No</TableHead>
-                  <TableHead>Student Name</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-center">Attendance Rate</TableHead>
-                  <TableHead className="text-right"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {students.map((student, index) => (
-                  <TableRow key={student.id}>
-                    <TableCell className="font-medium">{index + 1}</TableCell>
-                    <TableCell className="font-medium">
-                      {student.rollNo}
-                    </TableCell>
-                    <TableCell>{student.name}</TableCell>
-                    <TableCell className="text-center">
-                      <Select
-                        value={currentAttendance[student.id]}
-                        onValueChange={(value) =>
-                          handleStatusChange(
-                            student.id,
-                            value as AttendanceStatus
-                          )
-                        }
-                      >
-                        <SelectTrigger className="mx-auto w-36">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="present">Present</SelectItem>
-                          <SelectItem value="absent">Absent</SelectItem>
-                          <SelectItem value="late">Late</SelectItem>
-                          <SelectItem value="excused">Excused</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Badge
-                          variant={
-                            student.attendanceRate >= 85
-                              ? "default"
-                              : student.attendanceRate >= 75
-                              ? "secondary"
-                              : "destructive"
-                          }
-                        >
-                          {student.attendanceRate}%
-                        </Badge>
-                        {student.attendanceRate < 75 && (
-                          <TrendingDown className="h-4 w-4 text-destructive" />
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenStudentHistory(student.id)}
-                      >
-                        View history
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Absence Requests
-            </CardTitle>
-            <CardDescription>
-              Review and approve student absence requests
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {absenceRequests.map((request) => (
-                <div
-                  key={request.id}
-                  className="flex items-center justify-between rounded-lg bg-secondary p-4"
-                >
-                  <div className="flex-1">
-                    <div className="mb-1 flex items-center gap-2">
-                      <p className="font-medium text-foreground">
-                        {request.student}
-                      </p>
-                      <Badge variant="outline">{request.rollNo}</Badge>
-                    </div>
-                    <p className="mb-1 text-sm text-muted-foreground">
-                      Date: {formatReadableDate(request.date)}
-                    </p>
-                    <p className="text-sm text-foreground">
-                      Reason: {request.reason}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="sm">
-                      Deny
-                    </Button>
-                    <Button type="button" size="sm">
-                      Approve
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Recent Attendance History
-            </CardTitle>
-            <CardDescription>
-              Saved submissions for your head class
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {attendanceHistory.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                No saved attendance yet. Submit today to populate the history.
-              </p>
-            )}
-            {attendanceHistory.map((entry) => (
-              <div
-                key={entry.date}
-                className="flex flex-col gap-2 rounded-lg border border-border p-4 md:flex-row md:items-center md:justify-between"
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <CalendarPicker
+                    mode="single"
+                    selected={selectedDateObj}
+                    onSelect={(date) =>
+                      date && setSelectedDate(formatDateForInput(date))
+                    }
+                    disabled={(date) => date > new Date()}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setSelectedDate(today)}
               >
-                <div>
-                  <p className="font-medium text-foreground">
-                    {formatReadableDate(entry.date)}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {assignedClass.name} · {students.length} students
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <Badge variant="outline" className="gap-1">
-                    <CheckCircle className="h-3 w-3" /> {entry.totals.present}{" "}
-                    present
-                  </Badge>
-                  <Badge variant="outline" className="gap-1">
-                    <XCircle className="h-3 w-3" /> {entry.totals.absent} absent
-                  </Badge>
-                  <Badge variant="outline" className="gap-1">
-                    <Clock className="h-3 w-3" /> {entry.totals.late} late
-                  </Badge>
-                  <Badge variant="outline" className="gap-1">
-                    <Users className="h-3 w-3" /> {entry.totals.excused} excused
-                  </Badge>
-                </div>
-              </div>
+                <RefreshCcw className="h-4 w-4" />
+                Today
+              </Button>
+            </div>
+          </header>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5">
+            {summaryCards.map((card) => (
+              <Card
+                key={card.key}
+                className={cn(
+                  "rounded-2xl border shadow-sm transition-colors",
+                  card.accent
+                )}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        {card.label}
+                      </p>
+                      <p className="text-3xl font-semibold text-foreground">
+                        {card.value}
+                      </p>
+                      {card.key === "present" && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {dailyAttendanceRate}% present today
+                        </p>
+                      )}
+                      {card.key === "total" && pendingRequests > 0 && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {pendingRequests} permission request
+                          {pendingRequests > 1 ? "s" : ""} pending
+                        </p>
+                      )}
+                    </div>
+                    <div className="rounded-lg bg-white/60 p-2">
+                      <card.icon className="h-5 w-5" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) =>
+              setActiveTab(value as "daily" | "requests" | "summary")
+            }
+            className="space-y-6"
+          >
+            <TabsList className="grid w-full grid-cols-3 gap-2 sm:w-auto">
+              <TabsTrigger value="daily">Daily Attendance</TabsTrigger>
+              <TabsTrigger value="requests">Permission Requests</TabsTrigger>
+              <TabsTrigger value="summary">Monthly Summary</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="daily" className="space-y-6">
+              <Card>
+                <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <CardTitle>Mark Attendance – {selectedDateLabel}</CardTitle>
+                    <CardDescription>
+                      {assignedClass.name} • Homeroom {assignedClass.homeroom}
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-emerald-600">
+                    <TrendingUp className="h-4 w-4" />
+                    {dailyAttendanceRate}% present
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {students.map((student) => {
+                      const status = currentAttendance[student.id] ?? "present";
+                      const visuals = statusVisuals[status];
+
+                      return (
+                        <div
+                          key={student.id}
+                          className={cn(
+                            "rounded-2xl border p-4 transition-colors",
+                            visuals.card
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                {student.rollNo}
+                              </p>
+                              <p className="text-lg font-semibold text-foreground">
+                                {student.name}
+                              </p>
+                            </div>
+                            <Badge
+                              className={cn(
+                                "rounded-full px-3 py-1 text-xs font-semibold",
+                                visuals.badge
+                              )}
+                            >
+                              {statusMeta[status].label}
+                            </Badge>
+                          </div>
+                          <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Attendance rate</span>
+                            <span className="font-medium text-foreground">
+                              {student.attendanceRate}%
+                            </span>
+                          </div>
+                          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            {statusOrder.map((option) => (
+                              <Button
+                                key={option}
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleStatusChange(student.id, option)
+                                }
+                                className={cn(
+                                  "justify-center text-xs font-medium",
+                                  statusVisuals[option].button,
+                                  option === status &&
+                                    statusVisuals[option].buttonActive
+                                )}
+                              >
+                                {statusMeta[option].label}
+                              </Button>
+                            ))}
+                          </div>
+                          <div className="mt-4 flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">
+                              {attendanceByDate[selectedDate]?.[student.id]
+                                ? "Saved in last submission"
+                                : "Not yet submitted"}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs"
+                              onClick={() =>
+                                handleOpenStudentHistory(student.id)
+                              }
+                            >
+                              View history
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleMarkAll("present")}
+                      >
+                        Mark all present
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleMarkAll("absent")}
+                      >
+                        Mark all absent
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleMarkAll("late")}
+                      >
+                        Mark all late
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Badge variant={hasSavedRecord ? "default" : "secondary"}>
+                        {hasSavedRecord ? "Submitted" : "Draft"}
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        className="gap-2"
+                        onClick={handleResetDay}
+                      >
+                        <RefreshCcw className="h-4 w-4" />
+                        Reset
+                      </Button>
+                      <Button
+                        className="gap-2"
+                        onClick={handleSubmitAttendance}
+                        disabled={!hasUnsavedChanges}
+                      >
+                        <ClipboardCheck className="h-4 w-4" />
+                        Save Attendance
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="requests">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Permission Requests</CardTitle>
+                  <CardDescription>
+                    Review absence or permission requests submitted by students
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {absenceRequests.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No permission requests have been submitted.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {absenceRequests.map((request) => (
+                        <div
+                          key={request.id}
+                          className="flex flex-col gap-3 rounded-xl border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div>
+                            <p className="font-semibold text-foreground">
+                              {request.student}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {request.rollNo} •{" "}
+                              {formatReadableDate(request.date)}
+                            </p>
+                            <p className="mt-1 text-sm text-foreground">
+                              {request.reason}
+                            </p>
+                            <Badge
+                              variant={
+                                request.status === "pending"
+                                  ? "secondary"
+                                  : request.status === "approved"
+                                  ? "default"
+                                  : "destructive"
+                              }
+                              className="mt-2"
+                            >
+                              {request.status === "pending"
+                                ? "Pending approval"
+                                : request.status === "approved"
+                                ? "Approved"
+                                : "Denied"}
+                            </Badge>
+                          </div>
+                          {request.status === "pending" && (
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                onClick={() => handleDenyRequest(request.id)}
+                              >
+                                Deny
+                              </Button>
+                              <Button
+                                onClick={() => handleApproveRequest(request.id)}
+                              >
+                                Approve
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="summary" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Monthly Overview</CardTitle>
+                  <CardDescription>
+                    Attendance submissions captured for {assignedClass.name}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {monthlyAggregate.sessions === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Submit attendance to start building your monthly summary.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="rounded-xl border border-border p-4">
+                        <p className="text-xs text-muted-foreground uppercase">
+                          Sessions submitted
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-foreground">
+                          {monthlyAggregate.sessions}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-border p-4">
+                        <p className="text-xs text-muted-foreground uppercase">
+                          Present total
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-foreground">
+                          {monthlyAggregate.present}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-border p-4">
+                        <p className="text-xs text-muted-foreground uppercase">
+                          Absences recorded
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-foreground">
+                          {monthlyAggregate.absent}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-border p-4">
+                        <p className="text-xs text-muted-foreground uppercase">
+                          Average attendance
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-foreground">
+                          {monthlyAggregate.averageRate}%
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-xl border border-border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Present</TableHead>
+                          <TableHead>Absent</TableHead>
+                          <TableHead>Late</TableHead>
+                          <TableHead>Excused</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {attendanceHistory.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={5}
+                              className="py-6 text-center text-sm text-muted-foreground"
+                            >
+                              No attendance history recorded yet.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          attendanceHistory.map((entry) => (
+                            <TableRow key={entry.date}>
+                              <TableCell className="font-medium">
+                                {formatReadableDate(entry.date)}
+                              </TableCell>
+                              <TableCell>{entry.totals.present}</TableCell>
+                              <TableCell>{entry.totals.absent}</TableCell>
+                              <TableCell>{entry.totals.late}</TableCell>
+                              <TableCell>{entry.totals.excused}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
 
       <Dialog open={historyModalOpen} onOpenChange={handleHistoryDialogChange}>

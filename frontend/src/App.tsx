@@ -22,6 +22,7 @@ import TeacherProfile from "./pages/teacher/TeacherProfile";
 import TeacherAttendance from "./pages/teacher/TeacherAttendance";
 import HeadClassGradeManagement from "./pages/teacher/HeadClassGradeManagement";
 import HeadClassAttendance from "./pages/teacher/HeadClassAttendance";
+import TeacherMessages from "./pages/teacher/TeacherMessages";
 import HeadLayout from "./components/HeadLayout";
 import HeadDashboard from "./pages/head/HeadDashboard";
 import TeacherManagement from "./pages/head/TeacherManagement";
@@ -30,6 +31,7 @@ import ScheduleManagement from "./pages/head/ScheduleManagement";
 import AssignmentManagement from "./pages/head/AssignmentManagement";
 import HeadAnnouncements from "./pages/head/HeadAnnouncements";
 import HeadProfile from "./pages/head/HeadProfile";
+import HeadMessages from "./pages/head/HeadMessages";
 import AdminLayout from "./components/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminStudentManagement from "./pages/admin/AdminStudentManagement";
@@ -90,6 +92,7 @@ const App = () => (
             <Route path="grades" element={<TeacherGrades />} />
             <Route path="classes" element={<TeacherClasses />} />
             <Route path="announcements" element={<TeacherAnnouncements />} />
+            <Route path="messages" element={<TeacherMessages />} />
             <Route path="attendance" element={<TeacherAttendance />} />
             <Route path="head-grades" element={<HeadClassGradeManagement />} />
             <Route
@@ -115,6 +118,7 @@ const App = () => (
             <Route path="schedules" element={<ScheduleManagement />} />
             <Route path="assignments" element={<AssignmentManagement />} />
             <Route path="announcements" element={<HeadAnnouncements />} />
+            <Route path="messages" element={<HeadMessages />} />
             <Route path="profile" element={<HeadProfile />} />
           </Route>
 

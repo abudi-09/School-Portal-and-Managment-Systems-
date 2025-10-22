@@ -12,6 +12,8 @@ import {
   Users,
   LogOut,
   Award,
+  MessageCircle,
+  CalendarCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/useAuth";
@@ -35,12 +37,18 @@ const TeacherLayout = () => {
   // Navigation items that appear before profile
   const preProfileNavigation = [
     { name: "My Classes", href: "/teacher/classes", icon: BookOpen },
+    { name: "Messages", href: "/teacher/messages", icon: MessageCircle },
     { name: "Announcements", href: "/teacher/announcements", icon: Bell },
     { name: "Profile", href: "/teacher/profile", icon: User },
   ];
 
   // Additional navigation for Head Class Teachers (appears after profile)
   const headClassTeacherNavigation = [
+    {
+      name: "Teacher Attendance",
+      href: "/teacher/attendance",
+      icon: CalendarCheck,
+    },
     {
       name: "Attendance Management",
       href: "/teacher/head-attendance",
@@ -128,7 +136,7 @@ const TeacherLayout = () => {
             {isHeadClassTeacher && (
               <>
                 <div className="px-4 pt-4 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Additional Role
+                  Head Class Teacher
                 </div>
                 {headClassTeacherNavigation.map((item) => (
                   <NavLink

@@ -11,6 +11,7 @@ import {
   X,
   ClipboardList,
   LogOut,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/useAuth";
@@ -22,10 +23,11 @@ const navigation = [
   { name: "Student Management", href: "/head/students", icon: GraduationCap },
   { name: "Schedule Management", href: "/head/schedules", icon: Calendar },
   {
-    name: "Assignment M anagement",
+    name: "Assignment Management",
     href: "/head/assignments",
     icon: ClipboardList,
   },
+  { name: "Messages", href: "/head/messages", icon: MessageCircle },
   { name: "Announcements", href: "/head/announcements", icon: Bell },
   { name: "Profile", href: "/head/profile", icon: User },
 ];

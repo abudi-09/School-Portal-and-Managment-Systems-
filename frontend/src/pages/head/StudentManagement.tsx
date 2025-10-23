@@ -106,17 +106,17 @@ const StudentManagement = () => {
   const apiBaseUrl =
     import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
 
-  // Only allow head role to use this page
+  // Only allow head (and allow admin in dev/ops) to use this page
   useEffect(() => {
     // If auth finished loading and the user is present but not a head, block access
     if (!authLoading) {
-      if (!user || user.role !== "head") {
+      if (!user || (user.role !== "head" && user.role !== "admin")) {
         window.location.href = "/unauthorized";
       }
     }
   }, [user, authLoading]);
 
-  // Fetch students for Head (use dedicated endpoint)
+  // Fetch students for Head (use dedicated backend endpoint)
   const allStudentsQuery = useQuery<Student[], Error>({
     queryKey: ["head", "students", "all"],
     queryFn: async () => {
@@ -128,20 +128,25 @@ const StudentManagement = () => {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       } as Record<string, string>;
 
-      // Try primary endpoint
-      let res = await fetch(`${apiBaseUrl}/api/students/all`, { headers });
-      // If not found, try legacy/admin endpoint
-      if (res.status === 404) {
-        res = await fetch(`${apiBaseUrl}/api/users/students?limit=100`, {
-          headers,
-        });
-      }
+      // Head-accessible endpoint (mounted under /api/users)
+      const res = await fetch(
+        `${apiBaseUrl}/api/users/students/all?limit=100`,
+        { headers }
+      );
 
       const json = await res.json().catch(() => null);
       if (!res.ok) {
         const statusText = res.statusText || String(res.status);
+        const serverMsg = (json && (json.message || json.error)) || "";
+        // Friendly errors for common auth cases
+        if (res.status === 401 || res.status === 403) {
+          throw new Error(
+            serverMsg ||
+              "Access denied. Please log in as Head (or Admin) to view students."
+          );
+        }
         throw new Error(
-          `Failed to load students (status: ${res.status} ${statusText})`
+          `Failed to load students (status: ${res.status} ${statusText}) ${serverMsg}`.trim()
         );
       }
       type RawStudent = {

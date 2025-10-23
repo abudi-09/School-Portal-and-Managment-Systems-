@@ -1,5 +1,13 @@
-import { useState, useEffect } from "react";
-import { Save, Send, Download, Users } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import {
+  Save,
+  Send,
+  Download,
+  Users,
+  Plus,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import {
   Card,
   CardContent,
@@ -27,58 +35,151 @@ import {
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import TablePagination from "@/components/shared/TablePagination";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const TeacherGrades = () => {
   const [selectedClass, setSelectedClass] = useState("11a");
   const [status, setStatus] = useState<
     "draft" | "submitted" | "verified" | "approved"
   >("draft");
-  const [grades, setGrades] = useState<{
-    [key: string]: { [key: string]: number };
-  }>({});
+  // ----- Dynamic Columns and Grades (local state only) -----
+  type Column = { id: string; name: string; maxScore: number };
+  type ScoreValue = number | ""; // empty string when unset for nicer input UX
+  type StudentRow = { id: number; name: string; rollNo: string };
 
-  const students = [
-    {
-      id: 1,
-      name: "John Smith",
-      rollNo: "11A-001",
-      test: 85,
-      exam: 92,
-      assignment: 88,
-      total: 265,
-      average: 88.3,
-    },
-    {
-      id: 2,
-      name: "Emma Wilson",
-      rollNo: "11A-002",
-      test: 90,
-      exam: 95,
-      assignment: 92,
-      total: 277,
-      average: 92.3,
-    },
-    {
-      id: 3,
-      name: "Michael Brown",
-      rollNo: "11A-003",
-      test: 78,
-      exam: 82,
-      assignment: 80,
-      total: 240,
-      average: 80.0,
-    },
-    {
-      id: 4,
-      name: "Sarah Davis",
-      rollNo: "11A-004",
-      test: 88,
-      exam: 90,
-      assignment: 85,
-      total: 263,
-      average: 87.7,
-    },
+  const initialStudents: StudentRow[] = [
+    { id: 1, name: "John Smith", rollNo: "11A-001" },
+    { id: 2, name: "Emma Wilson", rollNo: "11A-002" },
+    { id: 3, name: "Michael Brown", rollNo: "11A-003" },
+    { id: 4, name: "Sarah Davis", rollNo: "11A-004" },
   ];
+
+  // Start with three standard columns
+  const [columns, setColumns] = useState<Column[]>([
+    { id: "col_test", name: "Test", maxScore: 100 },
+    { id: "col_exam", name: "Exam", maxScore: 100 },
+    { id: "col_assignment", name: "Assignment", maxScore: 100 },
+  ]);
+
+  // Grades per student per column
+  const [scores, setScores] = useState<
+    Record<number, Record<string, ScoreValue>>
+  >(() => {
+    const map: Record<number, Record<string, ScoreValue>> = {};
+    for (const s of initialStudents) {
+      map[s.id] = { col_test: 85, col_exam: 92, col_assignment: 88 };
+    }
+    return map;
+  });
+
+  const students: StudentRow[] = initialStudents;
+
+  // Derived totals and averages per student
+  const colMaxTotal = useMemo(
+    () => columns.reduce((sum, c) => sum + (Number(c.maxScore) || 0), 0),
+    [columns]
+  );
+
+  const getStudentTotal = (studentId: number) => {
+    const row = scores[studentId] || {};
+    return columns.reduce((sum, c) => {
+      const v = row[c.id];
+      return sum + (typeof v === "number" ? v : 0);
+    }, 0);
+  };
+
+  const getStudentAveragePct = (studentId: number) => {
+    const total = getStudentTotal(studentId);
+    const denom = colMaxTotal || 1;
+    return (total / denom) * 100;
+  };
+
+  // Add Column dialog state
+  const [addOpen, setAddOpen] = useState(false);
+  const [newColName, setNewColName] = useState("");
+  const [newColMax, setNewColMax] = useState("100");
+
+  const addColumn = () => {
+    const name = newColName.trim();
+    const max = Number(newColMax);
+    if (!name) return;
+    if (!Number.isFinite(max) || max <= 0) return;
+    const id = `col_${Math.random().toString(36).slice(2, 9)}`;
+    const col: Column = { id, name, maxScore: max };
+    setColumns((prev) => [...prev, col]);
+    setScores((prev) => {
+      const next = { ...prev };
+      for (const s of students) {
+        next[s.id] = { ...(next[s.id] || {}), [id]: "" };
+      }
+      return next;
+    });
+    setAddOpen(false);
+    setNewColName("");
+    setNewColMax("100");
+  };
+
+  // Edit Column dialog state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingCol, setEditingCol] = useState<Column | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editMax, setEditMax] = useState("100");
+
+  const startEdit = (col: Column) => {
+    setEditingCol(col);
+    setEditName(col.name);
+    setEditMax(String(col.maxScore));
+    setEditOpen(true);
+  };
+
+  const saveEdit = () => {
+    if (!editingCol) return;
+    const name = editName.trim();
+    const max = Number(editMax);
+    if (!name) return;
+    if (!Number.isFinite(max) || max <= 0) return;
+    setColumns((prev) =>
+      prev.map((c) =>
+        c.id === editingCol.id ? { ...c, name, maxScore: max } : c
+      )
+    );
+    setEditOpen(false);
+    setEditingCol(null);
+  };
+
+  // Delete Column confirm state
+  const [deleteCol, setDeleteCol] = useState<Column | null>(null);
+  const confirmDelete = () => {
+    if (!deleteCol) return;
+    const id = deleteCol.id;
+    setColumns((prev) => prev.filter((c) => c.id !== id));
+    setScores((prev) => {
+      const next: typeof prev = {};
+      for (const sId of Object.keys(prev)) {
+        const row = { ...prev[Number(sId)] };
+        delete row[id];
+        next[Number(sId)] = row;
+      }
+      return next;
+    });
+    setDeleteCol(null);
+  };
 
   // Pagination for grades table
   const ROWS_PER_PAGE = 6;
@@ -317,13 +418,21 @@ const TeacherGrades = () => {
         </CardContent>
       </Card>
 
-      {/* Grades Table */}
+      {/* Grades Table (Dynamic Columns) */}
       <Card>
         <CardHeader>
-          <CardTitle>Student Grades</CardTitle>
-          <CardDescription>
-            Enter test, exam, and assignment scores for each student
-          </CardDescription>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle>Student Grades</CardTitle>
+              <CardDescription>
+                Create, rename, and delete evaluation columns. Scores update
+                totals automatically.
+              </CardDescription>
+            </div>
+            <Button className="gap-2" onClick={() => setAddOpen(true)}>
+              <Plus className="h-4 w-4" /> Add Column
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -333,12 +442,35 @@ const TeacherGrades = () => {
                   <TableHead className="w-12">#</TableHead>
                   <TableHead>Roll No</TableHead>
                   <TableHead>Student Name</TableHead>
-                  <TableHead className="text-center">Test (100)</TableHead>
-                  <TableHead className="text-center">Exam (100)</TableHead>
-                  <TableHead className="text-center">
-                    Assignment (100)
-                  </TableHead>
-                  <TableHead className="text-center">Total (300)</TableHead>
+                  {columns.map((col) => (
+                    <TableHead
+                      key={col.id}
+                      className="text-center align-middle"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <span>
+                          {col.name} ({col.maxScore})
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => startEdit(col)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive"
+                          onClick={() => setDeleteCol(col)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableHead>
+                  ))}
+                  <TableHead className="text-center">Total</TableHead>
                   <TableHead className="text-center">Average (%)</TableHead>
                 </TableRow>
               </TableHeader>
@@ -350,43 +482,44 @@ const TeacherGrades = () => {
                       {student.rollNo}
                     </TableCell>
                     <TableCell>{student.name}</TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        defaultValue={student.test}
-                        className="w-20 text-center"
-                        min="0"
-                        max="100"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        defaultValue={student.exam}
-                        className="w-20 text-center"
-                        min="0"
-                        max="100"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        defaultValue={student.assignment}
-                        className="w-20 text-center"
-                        min="0"
-                        max="100"
-                      />
-                    </TableCell>
+                    {columns.map((col) => (
+                      <TableCell key={col.id} className="text-center">
+                        <Input
+                          type="number"
+                          className="w-24 text-center"
+                          min={0}
+                          max={col.maxScore}
+                          value={scores[student.id]?.[col.id] ?? ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setScores((prev) => {
+                              const cur = { ...(prev[student.id] || {}) };
+                              // store number if numeric else empty string
+                              const n = Number(val);
+                              cur[col.id] =
+                                val === ""
+                                  ? ""
+                                  : Number.isFinite(n)
+                                  ? Math.max(0, Math.min(n, col.maxScore))
+                                  : "";
+                              return { ...prev, [student.id]: cur };
+                            });
+                          }}
+                        />
+                      </TableCell>
+                    ))}
                     <TableCell className="text-center font-semibold">
-                      {student.total}
+                      {getStudentTotal(student.id)}
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge
                         variant={
-                          student.average >= 85 ? "default" : "secondary"
+                          getStudentAveragePct(student.id) >= 85
+                            ? "default"
+                            : "secondary"
                         }
                       >
-                        {student.average.toFixed(1)}%
+                        {getStudentAveragePct(student.id).toFixed(1)}%
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -403,6 +536,100 @@ const TeacherGrades = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Add Column Modal */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Evaluation Column</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Evaluation Name</Label>
+              <Input
+                value={newColName}
+                onChange={(e) => setNewColName(e.target.value)}
+                placeholder="e.g., Quiz, Project, Mid Exam"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Max Score</Label>
+              <Input
+                type="number"
+                min={1}
+                value={newColMax}
+                onChange={(e) => setNewColMax(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <Button onClick={addColumn}>Add</Button>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Column Modal */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Column</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Evaluation Name</Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Max Score</Label>
+              <Input
+                type="number"
+                min={1}
+                value={editMax}
+                onChange={(e) => setEditMax(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <Button onClick={saveEdit} disabled={!editingCol}>
+              Save
+            </Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Column Confirmation */}
+      <AlertDialog
+        open={!!deleteCol}
+        onOpenChange={(open) => !open && setDeleteCol(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this column?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the column "{deleteCol?.name}" and
+              all scores under it? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDelete}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

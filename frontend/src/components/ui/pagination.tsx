@@ -1,4 +1,8 @@
-import { Button } from "@/components/ui/button";
+import * as React from "react";
+import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+import { Button, ButtonProps, buttonVariants } from "@/components/ui/button";
 
 type PaginationProps = {
   currentPage: number; // 1-based
@@ -7,8 +11,8 @@ type PaginationProps = {
   className?: string;
 };
 
-// Reusable pagination control: [ Prev ]  Page X of Y  [ Next ]
-export function Pagination({
+// Simple pagination control: [ Prev ]  Page X of Y  [ Next ]
+export function PaginationSimple({
   currentPage,
   totalPages,
   onPageChange,
@@ -44,13 +48,6 @@ export function Pagination({
     </div>
   );
 }
-
-export default Pagination;
-import * as React from "react";
-import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
-
-import { cn } from "@/lib/utils";
-import { ButtonProps, buttonVariants } from "@/components/ui/button";
 
 const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (
   <nav
@@ -154,8 +151,10 @@ const PaginationEllipsis = ({
 );
 PaginationEllipsis.displayName = "PaginationEllipsis";
 
+// Export the components used by other parts of the app. PaginationSimple is
+// already declared above, so export it together with the rest.
 export {
-  Pagination,
+  // PaginationSimple is exported at its declaration above.
   PaginationContent,
   PaginationEllipsis,
   PaginationItem,

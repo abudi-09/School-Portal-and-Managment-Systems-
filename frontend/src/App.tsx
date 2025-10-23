@@ -39,6 +39,7 @@ import AdminUserManagement from "./pages/admin/AdminUserManagement";
 import AdminHeadManagement from "./pages/admin/AdminHeadManagement";
 import AdminRegistrationControl from "./pages/admin/AdminRegistrationControl";
 import AdminProfile from "./pages/admin/AdminProfile";
+import AdminMessages from "./pages/admin/AdminMessages";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import PendingApproval from "./pages/PendingApproval";
@@ -135,6 +136,7 @@ const App = () => (
             <Route path="students" element={<AdminStudentManagement />} />
             <Route path="head-management" element={<AdminHeadManagement />} />
             <Route path="users" element={<AdminUserManagement />} />
+            <Route path="messages" element={<AdminMessages />} />
             <Route path="registration" element={<AdminRegistrationControl />} />
             <Route path="profile" element={<AdminProfile />} />
           </Route>

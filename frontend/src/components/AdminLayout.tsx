@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   X,
+e  MessageCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/useAuth";
@@ -30,6 +31,7 @@ const AdminLayout = () => {
       icon: GraduationCap,
     },
     { name: "User Management", href: "/admin/users", icon: UserCog },
+    { name: "Messages", href: "/admin/messages", icon: MessageCircle },
     {
       name: "Registration Control",
       href: "/admin/registration",

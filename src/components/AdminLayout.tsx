@@ -6,6 +6,7 @@ import {
   Settings,
   User,
   ClipboardCheck,
+  MessageCircle,
   LogOut,
   Menu,
   X,
@@ -21,6 +22,7 @@ const AdminLayout = () => {
   const navigation = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { name: "Student Management", href: "/admin/students", icon: Users },
+    { name: "Messages", href: "/admin/messages", icon: MessageCircle },
     { name: "User Management", href: "/admin/users", icon: UserCog },
     {
       name: "Registration Control",

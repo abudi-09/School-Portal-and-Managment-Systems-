@@ -476,6 +476,30 @@ router.post(
 // @route   GET /api/users/students
 // @desc    Get students with pagination and filters
 // @access  Private/Admin
+// @route   GET /api/students/all
+// @desc    Get students for Head (no pagination, optional limit)
+// @access  Private (head or admin)
+router.get(
+  "/students/all",
+  authMiddleware,
+  authorizeRoles("head", "admin"),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const limit = parseInt(String(req.query.limit || "100")) || 100;
+      const result = await StudentService.getStudents({ page: 1, limit });
+      // return array for compatibility with older clients
+      res.json({ success: true, students: result.students });
+    } catch (error: any) {
+      console.error("Get students (head) error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error retrieving students",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
 router.get(
   "/students",
   authMiddleware,

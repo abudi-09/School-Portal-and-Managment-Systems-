@@ -68,6 +68,17 @@ type StudentHistoryEntry = {
   saved: boolean;
 };
 
+type AbsenceStatus = "pending" | "approved" | "denied";
+
+interface AbsenceRequest {
+  id: number;
+  student: string;
+  rollNo: string;
+  date: string;
+  reason: string;
+  status: AbsenceStatus;
+}
+
 const formatDateForInput = (date: Date) => {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return local.toISOString().split("T")[0];
@@ -339,7 +350,7 @@ const TeacherAttendance = () => {
         rollNo: "11A-003",
         date: formatDateForInput(new Date(Date.now() - 86400000)),
         reason: "Medical appointment",
-        status: "pending" as const,
+        status: "pending" as AbsenceStatus,
       },
       {
         id: 2,
@@ -347,13 +358,13 @@ const TeacherAttendance = () => {
         rollNo: "11A-004",
         date: formatDateForInput(new Date(Date.now() - 3 * 86400000)),
         reason: "Family emergency",
-        status: "pending" as const,
+        status: "pending" as AbsenceStatus,
       },
     ],
     []
   );
-  const [absenceRequests, setAbsenceRequests] = useState(
-    initialAbsenceRequests
+  const [absenceRequests, setAbsenceRequests] = useState<AbsenceRequest[]>(
+    initialAbsenceRequests as AbsenceRequest[]
   );
 
   const attendanceHistory = useMemo(

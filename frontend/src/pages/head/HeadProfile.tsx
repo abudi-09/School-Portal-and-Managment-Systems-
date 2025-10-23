@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   User,
   Mail,
@@ -8,7 +8,6 @@ import {
   Camera,
   Shield,
 } from "lucide-react";
-import { useEffect } from "react";
 import { SkeletonAvatar, SkeletonLine } from "@/components/skeleton";
 import {
   Card,
@@ -22,26 +21,72 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import {
+  getMe,
+  updateProfile,
+  uploadAvatar,
+  changePassword,
+  type Profile,
+} from "@/lib/api/profileApi";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const HeadProfile = () => {
+  const { toast } = useToast();
+
   const [isEditing, setIsEditing] = useState(false);
-  const [isDemoLoading, setIsDemoLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // clear demo loading after a short delay — replace with real query flags when available
+  // Profile state
+  const [profile, setProfile] = useState<
+    Pick<Profile, "firstName" | "lastName" | "email" | "phoneNumber" | "avatar">
+  >({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phoneNumber: "",
+    avatar: "",
+  });
+
+  // Form-local fields for Head-specific UI
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [office, setOffice] = useState("");
+  const [experience, setExperience] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
   useEffect(() => {
-    const t = setTimeout(() => setIsDemoLoading(false), 500);
-    return () => clearTimeout(t);
-  }, []);
-
-  const profileInfo = {
-    name: "Dr. Robert Anderson",
-    position: "Head of School",
-    email: "robert.anderson@school.edu",
-    phone: "+1 (555) 987-6543",
-    office: "Administration Building, Room 101",
-    joinDate: "2018-07-01",
-    experience: "15 years in education administration",
-  };
+    const fetchProfile = async () => {
+      try {
+        const me = await getMe();
+        setProfile({
+          firstName: me.firstName ?? "",
+          lastName: me.lastName ?? "",
+          email: me.email ?? "",
+          phoneNumber: me.phoneNumber ?? "",
+          avatar: me.avatar ?? "",
+        });
+        setFullName([me.firstName, me.lastName].filter(Boolean).join(" "));
+        setPhone(me.phoneNumber ?? "");
+        setOffice(me.address ?? "");
+        setExperience(me.employmentInfo?.responsibilities ?? "");
+      } catch (err: unknown) {
+        toast({
+          title: "Failed to load profile",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, [toast]);
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -69,7 +114,7 @@ const HeadProfile = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-6">
-                {isDemoLoading ? (
+                {loading ? (
                   <div className="flex items-center gap-6" aria-hidden>
                     <SkeletonAvatar size={96} />
                     <div className="space-y-2">
@@ -80,12 +125,22 @@ const HeadProfile = () => {
                 ) : (
                   <>
                     <div className="relative">
-                      <div className="w-24 h-24 rounded-full bg-accent flex items-center justify-center">
-                        <span className="text-3xl font-semibold text-accent-foreground">
-                          DR
-                        </span>
+                      <div className="w-24 h-24">
+                        <Avatar className="w-24 h-24">
+                          {profile.avatar ? (
+                            <AvatarImage src={profile.avatar} alt="Profile" />
+                          ) : (
+                            <AvatarFallback className="text-3xl bg-accent text-accent-foreground">
+                              {profile.firstName?.[0]?.toUpperCase()}
+                            </AvatarFallback>
+                          )}
+                        </Avatar>
                       </div>
-                      <button className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors">
+                      <button
+                        className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+                        onClick={() => fileInputRef.current?.click()}
+                        type="button"
+                      >
                         <Camera className="h-4 w-4" />
                       </button>
                     </div>
@@ -93,9 +148,42 @@ const HeadProfile = () => {
                       <p className="text-sm text-muted-foreground mb-2">
                         Allowed formats: JPG, PNG (Max 5MB)
                       </p>
-                      <Button variant="outline" size="sm">
-                        Upload New Photo
-                      </Button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setUploading(true);
+                          try {
+                            const updated = await uploadAvatar(file);
+                            setProfile((p) => ({
+                              ...p,
+                              avatar: updated.avatar || p.avatar,
+                            }));
+                            toast({
+                              title: "Photo updated",
+                              description:
+                                "Your profile photo has been changed.",
+                            });
+                          } catch (err: unknown) {
+                            toast({
+                              title: "Upload failed",
+                              description:
+                                err instanceof Error
+                                  ? err.message
+                                  : String(err),
+                              variant: "destructive",
+                            });
+                          } finally {
+                            setUploading(false);
+                            if (fileInputRef.current)
+                              fileInputRef.current.value = "";
+                          }
+                        }}
+                      />
                     </div>
                   </>
                 )}
@@ -123,8 +211,50 @@ const HeadProfile = () => {
                     >
                       Cancel
                     </Button>
-                    <Button onClick={() => setIsEditing(false)}>
-                      Save Changes
+                    <Button
+                      onClick={async () => {
+                        setSaving(true);
+                        try {
+                          // split fullName into first/last
+                          const parts = fullName.trim().split(/\s+/);
+                          const firstName = parts.shift() || "";
+                          const lastName = parts.join(" ") || "";
+                          const updated = await updateProfile({
+                            firstName,
+                            lastName,
+                            phoneNumber: phone || undefined,
+                            address: office || undefined,
+                            employmentInfo: {
+                              responsibilities: experience || undefined,
+                              position: undefined,
+                            },
+                          });
+                          setProfile((p) => ({ ...p, ...updated }));
+                          setFullName(
+                            [updated.firstName, updated.lastName]
+                              .filter(Boolean)
+                              .join(" ")
+                          );
+                          setPhone(updated.phoneNumber ?? "");
+                          toast({
+                            title: "Profile updated",
+                            description:
+                              "Your profile information has been saved.",
+                          });
+                          setIsEditing(false);
+                        } catch (err: unknown) {
+                          toast({
+                            title: "Update failed",
+                            description:
+                              err instanceof Error ? err.message : String(err),
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                    >
+                      {saving ? "Saving..." : "Save Changes"}
                     </Button>
                   </div>
                 )}
@@ -141,7 +271,8 @@ const HeadProfile = () => {
                   </Label>
                   <Input
                     id="name"
-                    defaultValue={profileInfo.name}
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
                     disabled={!isEditing}
                   />
                 </div>
@@ -152,11 +283,7 @@ const HeadProfile = () => {
                       Position
                     </div>
                   </Label>
-                  <Input
-                    id="position"
-                    defaultValue={profileInfo.position}
-                    disabled
-                  />
+                  <Input id="position" value={"Head of School"} disabled />
                 </div>
               </div>
 
@@ -171,8 +298,8 @@ const HeadProfile = () => {
                   <Input
                     id="email"
                     type="email"
-                    defaultValue={profileInfo.email}
-                    disabled={!isEditing}
+                    value={profile.email}
+                    disabled
                   />
                 </div>
                 <div className="space-y-2">
@@ -184,7 +311,8 @@ const HeadProfile = () => {
                   </Label>
                   <Input
                     id="phone"
-                    defaultValue={profileInfo.phone}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     disabled={!isEditing}
                   />
                 </div>
@@ -200,7 +328,8 @@ const HeadProfile = () => {
                   </Label>
                   <Input
                     id="office"
-                    defaultValue={profileInfo.office}
+                    value={office}
+                    onChange={(e) => setOffice(e.target.value)}
                     disabled={!isEditing}
                   />
                 </div>
@@ -208,19 +337,16 @@ const HeadProfile = () => {
                   <Label htmlFor="experience">Experience</Label>
                   <Input
                     id="experience"
-                    defaultValue={profileInfo.experience}
-                    disabled
+                    value={experience}
+                    onChange={(e) => setExperience(e.target.value)}
+                    disabled={!isEditing}
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="joinDate">Date Joined</Label>
-                <Input
-                  id="joinDate"
-                  defaultValue={profileInfo.joinDate}
-                  disabled
-                />
+                <Input id="joinDate" defaultValue={"2018-07-01"} disabled />
               </div>
             </CardContent>
           </Card>
@@ -238,17 +364,74 @@ const HeadProfile = () => {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="currentPassword">Current Password</Label>
-                <Input id="currentPassword" type="password" />
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="newPassword">New Password</Label>
-                <Input id="newPassword" type="password" />
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                <Input id="confirmPassword" type="password" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
               </div>
-              <Button className="mt-4">Update Password</Button>
+              <Button
+                className="mt-4"
+                onClick={async () => {
+                  if (!currentPassword || !newPassword || !confirmPassword) {
+                    toast({
+                      title: "Missing fields",
+                      description: "Fill all password fields.",
+                    });
+                    return;
+                  }
+                  if (newPassword !== confirmPassword) {
+                    toast({
+                      title: "Password mismatch",
+                      description: "New passwords do not match.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  try {
+                    await changePassword({
+                      currentPassword,
+                      newPassword,
+                      confirmPassword,
+                    });
+                    toast({
+                      title: "Password changed",
+                      description: "Your password has been updated.",
+                    });
+                    setCurrentPassword("");
+                    setNewPassword("");
+                    setConfirmPassword("");
+                  } catch (err: unknown) {
+                    toast({
+                      title: "Change failed",
+                      description:
+                        err instanceof Error ? err.message : String(err),
+                      variant: "destructive",
+                    });
+                  }
+                }}
+              >
+                Update Password
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   User,
   Mail,
@@ -8,7 +8,15 @@ import {
   Lock,
   Camera,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  getMe,
+  updateProfile,
+  uploadAvatar,
+  changePassword,
+  type Profile,
+} from "@/lib/api/profileApi";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { SkeletonAvatar, SkeletonLine } from "@/components/skeleton";
 import {
   Card,
@@ -24,25 +32,53 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 
 const TeacherProfile = () => {
+  const { toast } = useToast();
+
   const [isEditing, setIsEditing] = useState(false);
-  const [isDemoLoading, setIsDemoLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [profile, setProfile] = useState<
+    Pick<Profile, "firstName" | "lastName" | "email" | "phoneNumber" | "avatar">
+  >({ firstName: "", lastName: "", email: "", phoneNumber: "", avatar: "" });
+
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [office, setOffice] = useState("");
+  const [experience, setExperience] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
-    const t = setTimeout(() => setIsDemoLoading(false), 500);
-    return () => clearTimeout(t);
-  }, []);
-
-  const teacherInfo = {
-    name: "Ms. Jane Smith",
-    employeeId: "EMP-2024-M-045",
-    email: "jane.smith@school.edu",
-    phone: "+1 (555) 123-4567",
-    department: "Mathematics",
-    subjects: ["Algebra", "Calculus", "Trigonometry", "Statistics"],
-    joinDate: "2020-08-15",
-    qualification: "M.Sc. Mathematics",
-    experience: "8 years",
-  };
+    const fetchProfile = async () => {
+      try {
+        const me = await getMe();
+        setProfile({
+          firstName: me.firstName ?? "",
+          lastName: me.lastName ?? "",
+          email: me.email ?? "",
+          phoneNumber: me.phoneNumber ?? "",
+          avatar: me.avatar ?? "",
+        });
+        setFullName([me.firstName, me.lastName].filter(Boolean).join(" "));
+        setPhone(me.phoneNumber ?? "");
+        setOffice(me.address ?? "");
+        setExperience(me.employmentInfo?.responsibilities ?? "");
+      } catch (err: unknown) {
+        toast({
+          title: "Failed to load profile",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, [toast]);
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -69,7 +105,7 @@ const TeacherProfile = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-6">
-                {isDemoLoading ? (
+                {loading ? (
                   <div className="flex items-center gap-6" aria-hidden>
                     <SkeletonAvatar size={96} />
                     <div className="space-y-2">
@@ -80,12 +116,22 @@ const TeacherProfile = () => {
                 ) : (
                   <>
                     <div className="relative">
-                      <div className="w-24 h-24 rounded-full bg-accent flex items-center justify-center">
-                        <span className="text-3xl font-semibold text-accent-foreground">
-                          MJ
-                        </span>
+                      <div className="w-24 h-24">
+                        <Avatar className="w-24 h-24">
+                          {profile.avatar ? (
+                            <AvatarImage src={profile.avatar} alt="Profile" />
+                          ) : (
+                            <AvatarFallback className="text-3xl bg-accent text-accent-foreground">
+                              {profile.firstName?.[0]?.toUpperCase()}
+                            </AvatarFallback>
+                          )}
+                        </Avatar>
                       </div>
-                      <button className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors">
+                      <button
+                        className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+                        onClick={() => fileInputRef.current?.click()}
+                        type="button"
+                      >
                         <Camera className="h-4 w-4" />
                       </button>
                     </div>
@@ -93,9 +139,42 @@ const TeacherProfile = () => {
                       <p className="text-sm text-muted-foreground mb-2">
                         Allowed formats: JPG, PNG (Max 5MB)
                       </p>
-                      <Button variant="outline" size="sm">
-                        Upload New Photo
-                      </Button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setUploading(true);
+                          try {
+                            const updated = await uploadAvatar(file);
+                            setProfile((p) => ({
+                              ...p,
+                              avatar: updated.avatar || p.avatar,
+                            }));
+                            toast({
+                              title: "Photo updated",
+                              description:
+                                "Your profile photo has been changed.",
+                            });
+                          } catch (err: unknown) {
+                            toast({
+                              title: "Upload failed",
+                              description:
+                                err instanceof Error
+                                  ? err.message
+                                  : String(err),
+                              variant: "destructive",
+                            });
+                          } finally {
+                            setUploading(false);
+                            if (fileInputRef.current)
+                              fileInputRef.current.value = "";
+                          }
+                        }}
+                      />
                     </div>
                   </>
                 )}
@@ -123,8 +202,49 @@ const TeacherProfile = () => {
                     >
                       Cancel
                     </Button>
-                    <Button onClick={() => setIsEditing(false)}>
-                      Save Changes
+                    <Button
+                      onClick={async () => {
+                        setSaving(true);
+                        try {
+                          const parts = fullName.trim().split(/\s+/);
+                          const firstName = parts.shift() || "";
+                          const lastName = parts.join(" ") || "";
+                          const updated = await updateProfile({
+                            firstName,
+                            lastName,
+                            phoneNumber: phone || undefined,
+                            address: office || undefined,
+                            employmentInfo: {
+                              responsibilities: experience || undefined,
+                              position: undefined,
+                            },
+                          });
+                          setProfile((p) => ({ ...p, ...updated }));
+                          setFullName(
+                            [updated.firstName, updated.lastName]
+                              .filter(Boolean)
+                              .join(" ")
+                          );
+                          setPhone(updated.phoneNumber ?? "");
+                          toast({
+                            title: "Profile updated",
+                            description:
+                              "Your profile information has been saved.",
+                          });
+                          setIsEditing(false);
+                        } catch (err: unknown) {
+                          toast({
+                            title: "Update failed",
+                            description:
+                              err instanceof Error ? err.message : String(err),
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                    >
+                      {saving ? "Saving..." : "Save Changes"}
                     </Button>
                   </div>
                 )}
@@ -141,7 +261,8 @@ const TeacherProfile = () => {
                   </Label>
                   <Input
                     id="name"
-                    defaultValue={teacherInfo.name}
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
                     disabled={!isEditing}
                   />
                 </div>
@@ -149,7 +270,7 @@ const TeacherProfile = () => {
                   <Label htmlFor="employeeId">Employee ID</Label>
                   <Input
                     id="employeeId"
-                    defaultValue={teacherInfo.employeeId}
+                    defaultValue={"EMP-2024-M-045"}
                     disabled
                   />
                 </div>
@@ -166,8 +287,8 @@ const TeacherProfile = () => {
                   <Input
                     id="email"
                     type="email"
-                    defaultValue={teacherInfo.email}
-                    disabled={!isEditing}
+                    value={profile.email}
+                    disabled
                   />
                 </div>
                 <div className="space-y-2">
@@ -179,7 +300,8 @@ const TeacherProfile = () => {
                   </Label>
                   <Input
                     id="phone"
-                    defaultValue={teacherInfo.phone}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     disabled={!isEditing}
                   />
                 </div>
@@ -195,51 +317,55 @@ const TeacherProfile = () => {
                   </Label>
                   <Input
                     id="department"
-                    defaultValue={teacherInfo.department}
+                    defaultValue={"Mathematics"}
                     disabled
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="qualification">Qualification</Label>
                   <Input
                     id="qualification"
-                    defaultValue={teacherInfo.qualification}
+                    defaultValue={"M.Sc. Mathematics"}
                     disabled={!isEditing}
                   />
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label>
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-muted-foreground" />
-                    Subjects Taught
+                <div className="space-y-2">
+                  <Label>
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-muted-foreground" />
+                      Subjects Taught
+                    </div>
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">Algebra</Badge>
+                    <Badge variant="secondary">Calculus</Badge>
                   </div>
-                </Label>
-                <div className="flex flex-wrap gap-2">
-                  {teacherInfo.subjects.map((subject) => (
-                    <Badge key={subject} variant="secondary">
-                      {subject}
-                    </Badge>
-                  ))}
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="joinDate">Join Date</Label>
+                  <Input id="joinDate" defaultValue={"2020-08-15"} disabled />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="office">Office Location</Label>
                   <Input
-                    id="joinDate"
-                    defaultValue={teacherInfo.joinDate}
-                    disabled
+                    id="office"
+                    value={office}
+                    onChange={(e) => setOffice(e.target.value)}
+                    disabled={!isEditing}
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="experience">Experience</Label>
                   <Input
                     id="experience"
-                    defaultValue={teacherInfo.experience}
-                    disabled
+                    value={experience}
+                    onChange={(e) => setExperience(e.target.value)}
+                    disabled={!isEditing}
                   />
                 </div>
               </div>

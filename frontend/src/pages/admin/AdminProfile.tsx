@@ -58,6 +58,9 @@ const AdminProfile = () => {
     avatar: "",
   });
 
+  const [office, setOffice] = useState("");
+  const [experience, setExperience] = useState("");
+
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -73,6 +76,8 @@ const AdminProfile = () => {
           phoneNumber: me.phoneNumber ?? "",
           avatar: me.avatar ?? "",
         });
+        setOffice(me.address ?? "");
+        setExperience(me.employmentInfo?.responsibilities ?? "");
       } catch (err: unknown) {
         toast({
           title: "Failed to load profile",
@@ -116,6 +121,11 @@ const AdminProfile = () => {
         firstName: profile.firstName,
         lastName: profile.lastName,
         phoneNumber: profile.phoneNumber,
+        address: office || undefined,
+        employmentInfo: {
+          responsibilities: experience || undefined,
+          position: undefined,
+        },
       });
       setProfile((p) => ({ ...p, ...updated }));
       toast({

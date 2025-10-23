@@ -24,6 +24,10 @@ export interface Profile {
   gender?: string;
   dateOfBirth?: string;
   avatar?: string;
+  employmentInfo?: {
+    position?: string;
+    responsibilities?: string;
+  };
 }
 
 export const getMe = async () => {

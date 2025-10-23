@@ -30,6 +30,7 @@ import { useState, useEffect } from "react";
 import { StatCardSkeleton } from "@/components/shared/LoadingSkeletons";
 import { useNavigate } from "react-router-dom";
 import StatCard from "@/components/StatCard";
+import StatsGrid from "@/components/admin/StatsGrid";
 
 type Notification = {
   id: number;
@@ -294,42 +295,23 @@ const AdminDashboard = () => {
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {isDemoLoading
-              ? Array.from({ length: 4 }).map((_, i) => (
-                  <StatCardSkeleton key={i} />
-                ))
-              : stats.map((stat) => (
-                  <Card
-                    key={stat.title}
-                    className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-600 mb-2">
-                            {stat.title}
-                          </p>
-                          <p className="text-3xl font-bold text-gray-900 mb-3">
-                            {stat.value}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <TrendingUp className="h-4 w-4 text-green-600" />
-                            <span className="text-sm font-medium text-green-600">
-                              {stat.change}
-                            </span>
-                          </div>
-                        </div>
-                        <div
-                          className={`p-3 rounded-xl bg-gray-100 ${stat.color} ml-4`}
-                        >
-                          <stat.icon className="h-6 w-6" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-          </div>
+          {isDemoLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <StatCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : (
+            <StatsGrid
+              stats={stats.map((s) => ({
+                title: s.title,
+                value: s.value,
+                change: s.change,
+                icon: s.icon,
+                color: s.color,
+              }))}
+            />
+          )}
         </section>
         {/* Registration Status Alert */}
         <Alert className="border-blue-200 bg-blue-50/50 rounded-xl shadow-sm">
@@ -371,7 +353,39 @@ const AdminDashboard = () => {
             </AlertDescription>
           </Alert>
         )}
-        {/* duplicate stats grid removed */}
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {stats.map((stat) => (
+            <Card
+              key={stat.title}
+              className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-600 mb-2">
+                      {stat.title}
+                    </p>
+                    <p className="text-3xl font-bold text-gray-900 mb-3">
+                      {stat.value}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-green-600" />
+                      <span className="text-sm font-medium text-green-600">
+                        {stat.change}
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className={`p-3 rounded-xl bg-gray-100 ${stat.color} ml-4`}
+                  >
+                    <stat.icon className="h-6 w-6" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
         {/* Quick Actions */}
         <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
           <CardHeader className="pb-4">

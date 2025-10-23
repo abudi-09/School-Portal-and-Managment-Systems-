@@ -10,7 +10,7 @@ import {
   LogOut,
   Menu,
   X,
-e  MessageCircle,
+  MessageCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/useAuth";

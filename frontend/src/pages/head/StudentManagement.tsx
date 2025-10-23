@@ -49,6 +49,10 @@ import TablePagination from "@/components/shared/TablePagination";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import {
+  StatCardSkeleton,
+  TableSkeletonRows,
+} from "@/components/shared/LoadingSkeletons";
 
 type StudentStatus = "active" | "inactive" | "on-leave";
 
@@ -81,164 +85,7 @@ type Student = {
   attendanceHistory: AttendanceSnapshot[];
 };
 
-const STUDENTS: Student[] = [
-  {
-    id: 1,
-    name: "John Smith",
-    studentId: "STU-2024-001",
-    gradeLevel: "Grade 11",
-    section: "Science A",
-    classRank: 4,
-    gradeAverage: 91,
-    gpa: 3.85,
-    attendanceRate: 95,
-    status: "active",
-    guardian: "Robert Smith",
-    contact: "robert.smith@example.com",
-    alerts: [],
-    subjects: [
-      { subject: "Mathematics", grade: "A", classAverage: 89 },
-      { subject: "Physics", grade: "A", classAverage: 87 },
-      { subject: "Chemistry", grade: "B+", classAverage: 85 },
-      { subject: "English", grade: "A", classAverage: 91 },
-    ],
-    attendanceHistory: [
-      { period: "September", rate: 97 },
-      { period: "October", rate: 95 },
-      { period: "November", rate: 93 },
-    ],
-  },
-  {
-    id: 2,
-    name: "Emma Wilson",
-    studentId: "STU-2024-002",
-    gradeLevel: "Grade 11",
-    section: "Science A",
-    classRank: 2,
-    gradeAverage: 94,
-    gpa: 3.92,
-    attendanceRate: 98,
-    status: "active",
-    guardian: "Laura Wilson",
-    contact: "laura.wilson@example.com",
-    alerts: ["Monitor workload to avoid burnout"],
-    subjects: [
-      { subject: "Mathematics", grade: "A", classAverage: 89 },
-      { subject: "Physics", grade: "A+", classAverage: 90 },
-      { subject: "Chemistry", grade: "A", classAverage: 88 },
-      { subject: "English", grade: "A", classAverage: 91 },
-    ],
-    attendanceHistory: [
-      { period: "September", rate: 98 },
-      { period: "October", rate: 99 },
-      { period: "November", rate: 97 },
-    ],
-  },
-  {
-    id: 3,
-    name: "Michael Brown",
-    studentId: "STU-2024-003",
-    gradeLevel: "Grade 11",
-    section: "Commerce B",
-    classRank: 18,
-    gradeAverage: 73,
-    gpa: 2.91,
-    attendanceRate: 72,
-    status: "active",
-    guardian: "Stephanie Brown",
-    contact: "stephanie.brown@example.com",
-    alerts: ["Low attendance flagged", "Follow-up tutoring recommended"],
-    subjects: [
-      { subject: "Accounting", grade: "C", classAverage: 74 },
-      { subject: "Business Studies", grade: "B-", classAverage: 76 },
-      { subject: "Mathematics", grade: "C", classAverage: 71 },
-      { subject: "English", grade: "B", classAverage: 78 },
-    ],
-    attendanceHistory: [
-      { period: "September", rate: 75 },
-      { period: "October", rate: 70 },
-      { period: "November", rate: 71 },
-    ],
-  },
-  {
-    id: 4,
-    name: "Sarah Davis",
-    studentId: "STU-2024-004",
-    gradeLevel: "Grade 10",
-    section: "STEM A",
-    classRank: 6,
-    gradeAverage: 88,
-    gpa: 3.45,
-    attendanceRate: 88,
-    status: "active",
-    guardian: "Karen Davis",
-    contact: "karen.davis@example.com",
-    alerts: ["Upcoming science fair project"],
-    subjects: [
-      { subject: "Mathematics", grade: "A-", classAverage: 86 },
-      { subject: "Biology", grade: "A", classAverage: 88 },
-      { subject: "Chemistry", grade: "B+", classAverage: 84 },
-      { subject: "English", grade: "A", classAverage: 90 },
-    ],
-    attendanceHistory: [
-      { period: "September", rate: 90 },
-      { period: "October", rate: 87 },
-      { period: "November", rate: 88 },
-    ],
-  },
-  {
-    id: 5,
-    name: "James Wilson",
-    studentId: "STU-2024-005",
-    gradeLevel: "Grade 12",
-    section: "Humanities A",
-    classRank: 8,
-    gradeAverage: 86,
-    gpa: 3.3,
-    attendanceRate: 92,
-    status: "active",
-    guardian: "Peter Wilson",
-    contact: "peter.wilson@example.com",
-    alerts: ["Pending university application essays"],
-    subjects: [
-      { subject: "History", grade: "A", classAverage: 84 },
-      { subject: "Geography", grade: "B+", classAverage: 82 },
-      { subject: "Economics", grade: "B", classAverage: 80 },
-      { subject: "English", grade: "A-", classAverage: 88 },
-    ],
-    attendanceHistory: [
-      { period: "September", rate: 93 },
-      { period: "October", rate: 92 },
-      { period: "November", rate: 91 },
-    ],
-  },
-  {
-    id: 6,
-    name: "Lisa Anderson",
-    studentId: "STU-2024-006",
-    gradeLevel: "Grade 10",
-    section: "STEM B",
-    classRank: 26,
-    gradeAverage: 65,
-    gpa: 2.4,
-    attendanceRate: 68,
-    status: "inactive",
-    guardian: "Michael Anderson",
-    contact: "michael.anderson@example.com",
-    alerts: ["Extended leave approved", "Requires reintegration plan"],
-    subjects: [
-      { subject: "Mathematics", grade: "D+", classAverage: 73 },
-      { subject: "Biology", grade: "C", classAverage: 76 },
-      { subject: "Chemistry", grade: "C-", classAverage: 72 },
-      { subject: "English", grade: "C", classAverage: 78 },
-    ],
-    attendanceHistory: [
-      { period: "September", rate: 70 },
-      { period: "October", rate: 66 },
-      { period: "November", rate: 68 },
-    ],
-  },
-];
+// STUDENTS mock removed — StudentManagement now uses backend results exclusively
 
 const StudentManagement = () => {
   const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
@@ -270,7 +117,7 @@ const StudentManagement = () => {
   }, [user, authLoading]);
 
   // Fetch students for Head (use dedicated endpoint)
-  const allStudentsQuery = useQuery({
+  const allStudentsQuery = useQuery<Student[], Error>({
     queryKey: ["head", "students", "all"],
     queryFn: async () => {
       const token = localStorage.getItem("token");
@@ -297,53 +144,88 @@ const StudentManagement = () => {
           `Failed to load students (status: ${res.status} ${statusText})`
         );
       }
+      type RawStudent = {
+        _id?: string;
+        id?: string;
+        name?: string;
+        firstName?: string;
+        lastName?: string;
+        studentId?: string;
+        studentID?: string;
+        gradeLevel?: string;
+        grade?: string;
+        academicInfo?: { grade?: string; class?: string; average?: number };
+        section?: string;
+        classRank?: number;
+        rank?: number;
+        gradeAverage?: number;
+        gpa?: number;
+        attendanceRate?: number;
+        attendance?: number;
+        status?: string;
+        isActive?: boolean;
+        guardian?: string;
+        profile?: { guardian?: string; phone?: string };
+        contact?: string;
+        email?: string;
+        alerts?: string[];
+        subjects?: unknown[];
+        attendanceHistory?: unknown[];
+      };
+
       const rawStudents = (json?.students ?? json) as unknown[];
       const mapped = (Array.isArray(rawStudents) ? rawStudents : []).map(
-        (s: any, idx) => ({
-          id: s._id ?? s.id ?? idx,
-          name:
-            s.name ??
-            [s.firstName, s.lastName].filter(Boolean).join(" ") ??
-            s.studentId ??
-            "Unknown",
-          studentId: s.studentId ?? s.studentID ?? s.id ?? String(idx),
-          gradeLevel: s.gradeLevel ?? s.academicInfo?.grade ?? s.grade ?? "-",
-          section: s.section ?? s.academicInfo?.class ?? "-",
-          classRank: s.classRank ?? s.rank ?? 0,
-          gradeAverage: s.gradeAverage ?? s.academicInfo?.average ?? 0,
-          gpa: s.gpa ?? 0,
-          attendanceRate: s.attendanceRate ?? s.attendance ?? 0,
-          status:
-            (s.status as StudentStatus) ??
-            (s.isActive ? "active" : "inactive") ??
-            "active",
-          guardian: s.guardian ?? s.profile?.guardian ?? "",
-          contact: s.contact ?? s.email ?? s.profile?.phone ?? "",
-          alerts: s.alerts ?? [],
-          subjects: s.subjects ?? [],
-          attendanceHistory: s.attendanceHistory ?? [],
-        })
+        (s: unknown, idx: number) => {
+          const si = s as RawStudent;
+          return {
+            id: si._id ?? si.id ?? idx,
+            name:
+              si.name ??
+              [si.firstName, si.lastName].filter(Boolean).join(" ") ??
+              si.studentId ??
+              "Unknown",
+            studentId: si.studentId ?? si.studentID ?? si.id ?? String(idx),
+            gradeLevel:
+              si.gradeLevel ?? si.academicInfo?.grade ?? si.grade ?? "-",
+            section: si.section ?? si.academicInfo?.class ?? "-",
+            classRank: si.classRank ?? si.rank ?? 0,
+            gradeAverage: si.gradeAverage ?? si.academicInfo?.average ?? 0,
+            gpa: si.gpa ?? 0,
+            attendanceRate: si.attendanceRate ?? si.attendance ?? 0,
+            status:
+              (si.status as StudentStatus) ||
+              (si.isActive ? "active" : "inactive") ||
+              "active",
+            guardian: si.guardian ?? si.profile?.guardian ?? "",
+            contact: si.contact ?? si.email ?? si.profile?.phone ?? "",
+            alerts: si.alerts ?? [],
+            subjects: (si.subjects ?? []) as SubjectPerformance[],
+            attendanceHistory: (si.attendanceHistory ??
+              []) as AttendanceSnapshot[],
+          } as Student;
+        }
       ) as Student[];
       return mapped;
     },
     retry: 2,
-    onError(error) {
-      console.error("Error fetching students:", error);
-      const msg =
-        typeof error === "string"
-          ? error
-          : error instanceof Error
-          ? error.message
-          : "Unknown error";
+  });
+
+  const students = useMemo(
+    () => allStudentsQuery.data ?? [],
+    [allStudentsQuery.data]
+  );
+
+  useEffect(() => {
+    if (allStudentsQuery.error) {
+      const err = allStudentsQuery.error;
+      const msg = err instanceof Error ? err.message : String(err);
       toast({
         title: "Failed to load students",
         description: msg,
         variant: "destructive",
       });
-    },
-  });
-
-  const students = allStudentsQuery.data ?? STUDENTS;
+    }
+  }, [allStudentsQuery.error, toast]);
 
   // Combine the active filters for flexible exploration.
   const filteredStudents = useMemo(() => {

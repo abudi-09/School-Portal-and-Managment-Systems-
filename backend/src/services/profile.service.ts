@@ -28,6 +28,10 @@ const updateProfile = async (
     lastName?: string;
     phoneNumber?: string;
     address?: string;
+    employmentInfo?: {
+      position?: string;
+      responsibilities?: string;
+    };
   }
 ) => {
   const user = await User.findById(userId);
@@ -46,6 +50,16 @@ const updateProfile = async (
   }
   if (payload.address !== undefined) {
     user.address = payload.address;
+  }
+  if (payload.employmentInfo !== undefined) {
+    user.employmentInfo = user.employmentInfo || {};
+    if (payload.employmentInfo.position !== undefined) {
+      user.employmentInfo.position = payload.employmentInfo.position;
+    }
+    if (payload.employmentInfo.responsibilities !== undefined) {
+      user.employmentInfo.responsibilities =
+        payload.employmentInfo.responsibilities;
+    }
   }
 
   await user.save();

@@ -69,7 +69,6 @@ const TeacherGrades = () => {
     { id: 3, name: "Michael Brown", rollNo: "11A-003" },
     { id: 4, name: "Sarah Davis", rollNo: "11A-004" },
   ];
-
   // Start with three standard columns
   const [columns, setColumns] = useState<Column[]>([
     { id: "col_test", name: "Test", maxScore: 100 },

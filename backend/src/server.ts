@@ -10,6 +10,8 @@ import adminRoutes from "./routes/admin";
 import headRoutes from "./routes/head";
 import profileRoutes from "./routes/profile";
 import evaluationRoutes from "./routes/evaluations";
+import classScheduleRoutes from "./routes/classSchedules";
+import examScheduleRoutes from "./routes/examSchedules";
 import { errorHandler } from "./middleware/errorHandler";
 import { env } from "./config/env";
 import { seedSuperAdmin } from "./utils/seedSuperAdmin";
@@ -58,6 +60,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/head", headRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/evaluations", evaluationRoutes);
+app.use("/api/schedules/class", classScheduleRoutes);
+app.use("/api/schedules/exam", examScheduleRoutes);
 
 // 404 handler
 app.use((req, res) => {

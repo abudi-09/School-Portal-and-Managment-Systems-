@@ -16,17 +16,25 @@ router.post(
   authorizeRoles("head"),
   async (req: Request, res: Response) => {
     try {
-      const { section, day, period, startTime, endTime, subject, teacherId, room } =
-        req.body as {
-          section: string;
-          day: string;
-          period?: string;
-          startTime: string;
-          endTime: string;
-          subject: string;
-          teacherId?: string;
-          room?: string;
-        };
+      const {
+        section,
+        day,
+        period,
+        startTime,
+        endTime,
+        subject,
+        teacherId,
+        room,
+      } = req.body as {
+        section: string;
+        day: string;
+        period?: string;
+        startTime: string;
+        endTime: string;
+        subject: string;
+        teacherId?: string;
+        room?: string;
+      };
 
       if (!section || !day || !startTime || !endTime || !subject) {
         return res
@@ -45,12 +53,10 @@ router.post(
         isOverlap(startTime, endTime, e.startTime, e.endTime)
       );
       if (conflict) {
-        return res
-          .status(409)
-          .json({
-            success: false,
-            message: "Overlapping schedule for this section and day",
-          });
+        return res.status(409).json({
+          success: false,
+          message: "Overlapping schedule for this section and day",
+        });
       }
 
       const created = await ClassSchedule.create({
@@ -108,7 +114,12 @@ router.get("/", authMiddleware, async (req: Request, res: Response) => {
 
     // Build combined filter when both grade and section are present
     let mongoFilter: Record<string, any> = filter;
-    if (grade && /^(9|10|11|12)$/.test(grade) && section && /^[A-I]$/i.test(section)) {
+    if (
+      grade &&
+      /^(9|10|11|12)$/.test(grade) &&
+      section &&
+      /^[A-I]$/i.test(section)
+    ) {
       mongoFilter = {
         $and: [
           { section: { $regex: `^${grade}`, $options: "i" } },
@@ -163,12 +174,10 @@ router.put(
         isOverlap(startTime, endTime, e.startTime, e.endTime)
       );
       if (conflict) {
-        return res
-          .status(409)
-          .json({
-            success: false,
-            message: "Overlapping schedule for this section and day",
-          });
+        return res.status(409).json({
+          success: false,
+          message: "Overlapping schedule for this section and day",
+        });
       }
 
       Object.assign(item, req.body);

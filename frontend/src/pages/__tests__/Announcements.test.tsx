@@ -5,27 +5,32 @@ import Announcements from "@/pages/Announcements";
 
 vi.mock("@/lib/api/announcementsApi", async () => {
   return {
-    getAnnouncements: vi.fn(async ({ type }: { type: "school" | "teacher" }) => {
-      if (type === "school") {
-        return {
-          items: [
-            {
-              _id: "a1",
-              title: "Test Announcement",
-              postedBy: { user: "u1", name: "Head", role: "head" },
-              date: new Date().toISOString(),
-              type: "school",
-              message: "A long message that should be truncated because it exceeds 150 characters. ".repeat(4),
-              attachments: [],
-              isRead: false,
-            },
-          ],
-          total: 1,
-          unreadCount: 1,
-        };
+    getAnnouncements: vi.fn(
+      async ({ type }: { type: "school" | "teacher" }) => {
+        if (type === "school") {
+          return {
+            items: [
+              {
+                _id: "a1",
+                title: "Test Announcement",
+                postedBy: { user: "u1", name: "Head", role: "head" },
+                date: new Date().toISOString(),
+                type: "school",
+                message:
+                  "A long message that should be truncated because it exceeds 150 characters. ".repeat(
+                    4
+                  ),
+                attachments: [],
+                isRead: false,
+              },
+            ],
+            total: 1,
+            unreadCount: 1,
+          };
+        }
+        return { items: [], total: 0, unreadCount: 0 };
       }
-      return { items: [], total: 0, unreadCount: 0 };
-    }),
+    ),
     getUnreadCount: vi.fn(async () => 1),
     markRead: vi.fn(async () => {}),
   };

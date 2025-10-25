@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { getAnnouncements, markRead, markReadBulk, getUnreadCount } from "../controllers/announcement.controller";
+import {
+  getAnnouncements,
+  markRead,
+  markReadBulk,
+  getUnreadCount,
+} from "../controllers/announcement.controller";
 import { authMiddleware, optionalAuth } from "../middleware/auth";
 
 const router = Router();
@@ -17,4 +22,3 @@ router.put("/mark-read-bulk", authMiddleware, markReadBulk);
 router.get("/unread-count", optionalAuth, getUnreadCount);
 
 export default router;
-

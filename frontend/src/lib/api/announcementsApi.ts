@@ -14,7 +14,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error("Announcements API Error:", error.response?.status, error.response?.data);
+    console.error(
+      "Announcements API Error:",
+      error.response?.status,
+      error.response?.data
+    );
     return Promise.reject(error);
   }
 );
@@ -39,7 +43,11 @@ export interface AnnouncementItem {
   isRead?: boolean;
 }
 
-export async function getAnnouncements(params: { type: AnnouncementType; page: number; pageSize: number }) {
+export async function getAnnouncements(params: {
+  type: AnnouncementType;
+  page: number;
+  pageSize: number;
+}) {
   const { data } = await api.get<{
     success: boolean;
     data: { items: AnnouncementItem[]; total: number; unreadCount: number };
@@ -56,8 +64,9 @@ export async function markReadBulk(ids: string[]) {
 }
 
 export async function getUnreadCount() {
-  const { data } = await api.get<{ success: boolean; data: { unreadCount: number } }>(
-    "/api/announcements/unread-count"
-  );
+  const { data } = await api.get<{
+    success: boolean;
+    data: { unreadCount: number };
+  }>("/api/announcements/unread-count");
   return data.data.unreadCount;
 }

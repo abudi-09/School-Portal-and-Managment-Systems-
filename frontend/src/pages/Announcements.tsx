@@ -41,8 +41,12 @@ const Announcements = () => {
   const [schoolPage, setSchoolPage] = useState(1);
   const [teacherPage, setTeacherPage] = useState(1);
 
-  const [schoolAnnouncements, setSchoolAnnouncements] = useState<Announcement[]>([]);
-  const [teacherAnnouncements, setTeacherAnnouncements] = useState<Announcement[]>([]);
+  const [schoolAnnouncements, setSchoolAnnouncements] = useState<
+    Announcement[]
+  >([]);
+  const [teacherAnnouncements, setTeacherAnnouncements] = useState<
+    Announcement[]
+  >([]);
   const [schoolTotal, setSchoolTotal] = useState(0);
   const [teacherTotal, setTeacherTotal] = useState(0);
   const [unreadTotal, setUnreadTotal] = useState<number>(0);
@@ -68,7 +72,8 @@ const Announcements = () => {
     return (
       <div className="space-y-4">
         {announcements.map((announcement) => {
-          const isExpanded = expandedId === announcement._id || expandedId === announcement.id;
+          const isExpanded =
+            expandedId === announcement._id || expandedId === announcement.id;
           const truncatedMessage =
             announcement.message.length > 150 && !isExpanded
               ? announcement.message.substring(0, 150) + "..."
@@ -93,7 +98,10 @@ const Announcements = () => {
                           {announcement.title}
                         </CardTitle>
                         <CardDescription>
-                          Posted by {"postedBy" in announcement ? (announcement.postedBy?.name || "Unknown") : "Unknown"}
+                          Posted by{" "}
+                          {"postedBy" in announcement
+                            ? announcement.postedBy?.name || "Unknown"
+                            : "Unknown"}
                         </CardDescription>
                       </div>
                     </div>
@@ -134,7 +142,9 @@ const Announcements = () => {
                     className="p-0 h-auto"
                     aria-expanded={isExpanded}
                     onClick={async () => {
-                      const next = isExpanded ? null : (announcement._id || announcement.id);
+                      const next = isExpanded
+                        ? null
+                        : announcement._id || announcement.id;
                       setExpandedId(next);
                       // Optimistically mark as read
                       if (!announcement.isRead && next) {
@@ -146,11 +156,16 @@ const Announcements = () => {
                           try {
                             const count = await getUnreadCount();
                             setUnreadTotal(count);
-                          } catch { /* ignore */ }
+                          } catch {
+                            /* ignore */
+                          }
                         } catch (err) {
                           // Revert on failure
                           announcement.isRead = false;
-                          toast({ title: "Failed to mark as read", variant: "destructive" });
+                          toast({
+                            title: "Failed to mark as read",
+                            variant: "destructive",
+                          });
                         }
                       }
                     }}
@@ -164,27 +179,28 @@ const Announcements = () => {
                   </Button>
                 )}
 
-                {announcement.attachments && announcement.attachments.length > 0 && (
-                  <div className="pt-4 border-t">
-                    <p className="text-sm font-medium text-foreground mb-2">
-                      Attachments:
-                    </p>
-                    <div className="space-y-2">
-                      {announcement.attachments.map((att, index) => (
-                        <a
-                          key={index}
-                          href={att.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-sm underline underline-offset-4"
-                        >
-                          <Paperclip className="h-4 w-4" />
-                          {att.filename}
-                        </a>
-                      ))}
+                {announcement.attachments &&
+                  announcement.attachments.length > 0 && (
+                    <div className="pt-4 border-t">
+                      <p className="text-sm font-medium text-foreground mb-2">
+                        Attachments:
+                      </p>
+                      <div className="space-y-2">
+                        {announcement.attachments.map((att, index) => (
+                          <a
+                            key={index}
+                            href={att.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-sm underline underline-offset-4"
+                          >
+                            <Paperclip className="h-4 w-4" />
+                            {att.filename}
+                          </a>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </CardContent>
             </Card>
           );
@@ -201,8 +217,16 @@ const Announcements = () => {
       setError(null);
       try {
         const [schoolRes, teacherRes, unread] = await Promise.all([
-          getAnnouncements({ type: "school", page: schoolPage, pageSize: PAGE_SIZE }),
-          getAnnouncements({ type: "teacher", page: teacherPage, pageSize: PAGE_SIZE }),
+          getAnnouncements({
+            type: "school",
+            page: schoolPage,
+            pageSize: PAGE_SIZE,
+          }),
+          getAnnouncements({
+            type: "teacher",
+            page: teacherPage,
+            pageSize: PAGE_SIZE,
+          }),
           getUnreadCount().catch(() => 0),
         ]);
         if (cancelled) return;
@@ -218,7 +242,8 @@ const Announcements = () => {
       } catch (e: unknown) {
         let message = "Failed to load announcements";
         if (e && typeof e === "object" && "response" in e) {
-          const r = (e as { response?: { data?: { message?: string } } }).response;
+          const r = (e as { response?: { data?: { message?: string } } })
+            .response;
           message = r?.data?.message || message;
         }
         if (!cancelled) setError(message);
@@ -232,8 +257,14 @@ const Announcements = () => {
     };
   }, [schoolPage, teacherPage]);
 
-  const schoolTotalPages = useMemo(() => Math.max(1, Math.ceil(schoolTotal / PAGE_SIZE)), [schoolTotal]);
-  const teacherTotalPages = useMemo(() => Math.max(1, Math.ceil(teacherTotal / PAGE_SIZE)), [teacherTotal]);
+  const schoolTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(schoolTotal / PAGE_SIZE)),
+    [schoolTotal]
+  );
+  const teacherTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(teacherTotal / PAGE_SIZE)),
+    [teacherTotal]
+  );
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -254,7 +285,11 @@ const Announcements = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AnnouncementType)} className="space-y-6">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as AnnouncementType)}
+        className="space-y-6"
+      >
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="school" className="flex items-center gap-2">
             <School className="h-4 w-4" />
@@ -271,14 +306,18 @@ const Announcements = () => {
             <h2 className="text-xl font-semibold text-foreground">
               General School Announcements
             </h2>
-            <Badge variant="secondary">
-              {schoolTotal} announcements
-            </Badge>
+            <Badge variant="secondary">{schoolTotal} announcements</Badge>
           </div>
           {error && (
             <div className="text-sm text-destructive flex items-center justify-between p-3 border rounded-md">
               <span>{error}</span>
-              <Button size="sm" variant="outline" onClick={() => setSchoolPage(1)}>Retry</Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setSchoolPage(1)}
+              >
+                Retry
+              </Button>
             </div>
           )}
           <SkeletonWrapper
@@ -299,14 +338,18 @@ const Announcements = () => {
             <h2 className="text-xl font-semibold text-foreground">
               Teacher-Specific Announcements
             </h2>
-            <Badge variant="secondary">
-              {teacherTotal} announcements
-            </Badge>
+            <Badge variant="secondary">{teacherTotal} announcements</Badge>
           </div>
           {error && (
             <div className="text-sm text-destructive flex items-center justify-between p-3 border rounded-md">
               <span>{error}</span>
-              <Button size="sm" variant="outline" onClick={() => setTeacherPage(1)}>Retry</Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setTeacherPage(1)}
+              >
+                Retry
+              </Button>
             </div>
           )}
           <SkeletonWrapper

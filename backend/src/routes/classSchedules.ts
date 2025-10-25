@@ -16,10 +16,11 @@ router.post(
   authorizeRoles("head"),
   async (req: Request, res: Response) => {
     try {
-      const { section, day, startTime, endTime, subject, teacherId, room } =
+      const { section, day, period, startTime, endTime, subject, teacherId, room } =
         req.body as {
           section: string;
           day: string;
+          period?: string;
           startTime: string;
           endTime: string;
           subject: string;
@@ -55,6 +56,7 @@ router.post(
       const created = await ClassSchedule.create({
         section,
         day,
+        period,
         startTime,
         endTime,
         subject,
@@ -74,14 +76,50 @@ router.post(
   }
 );
 
-// List (any role can view)
+// List (any role can view) with advanced filters
+// Supports query params: grade (9-12), section (A-I), day (Mon-Sun), teacherId
 router.get("/", authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { section, day } = req.query as { section?: string; day?: string };
+    const { grade, section, day, teacherId } = req.query as {
+      grade?: string;
+      section?: string; // A-I
+      day?: string;
+      teacherId?: string;
+    };
+
     const filter: Record<string, any> = {};
-    if (section) filter.section = section;
+
+    // Grade filter (based on section prefix)
+    if (grade && /^(9|10|11|12)$/.test(grade)) {
+      filter.section = { $regex: `^${grade}`, $options: "i" };
+    }
+
+    // Section letter filter (based on section suffix)
+    if (section && /^[A-I]$/i.test(section)) {
+      if (filter.section) {
+        // We'll use $and later to combine grade+section regexes
+      } else {
+        filter.section = { $regex: `${section}$`, $options: "i" };
+      }
+    }
+
     if (day) filter.day = day;
-    const items = await ClassSchedule.find(filter).sort({
+    if (teacherId) filter.teacherId = teacherId;
+
+    // Build combined filter when both grade and section are present
+    let mongoFilter: Record<string, any> = filter;
+    if (grade && /^(9|10|11|12)$/.test(grade) && section && /^[A-I]$/i.test(section)) {
+      mongoFilter = {
+        $and: [
+          { section: { $regex: `^${grade}`, $options: "i" } },
+          { section: { $regex: `${section}$`, $options: "i" } },
+        ],
+        ...(day ? { day } : {}),
+        ...(teacherId ? { teacherId } : {}),
+      };
+    }
+
+    const items = await ClassSchedule.find(mongoFilter).sort({
       day: 1,
       startTime: 1,
     });

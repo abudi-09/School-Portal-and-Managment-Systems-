@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from "mongoose";
 export interface IClassSchedule extends Document {
   section: string; // e.g., "10A"
   day: string; // e.g., "Monday"
+  period?: string; // e.g., "1st", "2nd"
   startTime: string; // HH:mm
   endTime: string; // HH:mm
   subject: string;
@@ -17,6 +18,7 @@ const ClassScheduleSchema = new Schema<IClassSchedule>(
   {
     section: { type: String, required: true, index: true, trim: true },
     day: { type: String, required: true, trim: true, index: true },
+    period: { type: String, trim: true },
     startTime: { type: String, required: true },
     endTime: { type: String, required: true },
     subject: { type: String, required: true, trim: true },

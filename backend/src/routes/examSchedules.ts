@@ -82,13 +82,13 @@ router.post(
   }
 );
 
-// List (any role view)
+// List (any role view) with filters: type and room (grade/section not used here)
 router.get("/", authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { grade, date } = req.query as { grade?: string; date?: string };
+    const { type, room } = req.query as { type?: string; room?: string };
     const filter: Record<string, any> = {};
-    if (grade) filter.grade = grade;
-    if (date) filter.date = new Date(date);
+    if (type) filter.type = type;
+    if (room) filter.room = room;
     const items = await ExamSchedule.find(filter).sort({
       date: 1,
       startTime: 1,

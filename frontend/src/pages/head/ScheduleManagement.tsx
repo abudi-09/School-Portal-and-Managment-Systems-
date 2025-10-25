@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Calendar, Clock, Plus, FileDown, Edit, Trash2 } from "lucide-react";
 import {
   Card,
@@ -37,29 +37,56 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import TablePagination from "@/components/shared/TablePagination";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/useAuth";
+import {
+  createClassSchedule,
+  createExamSchedule,
+  deleteClassSchedule,
+  deleteExamSchedule,
+  getClassSchedules,
+  getExamSchedules,
+  getTeachers,
+  getRooms,
+  createRoom,
+  updateRoom,
+  deleteRoom,
+  updateClassSchedule,
+  updateExamSchedule,
+  type BackendClassSchedule,
+  type BackendExamSchedule,
+  type Room,
+} from "@/lib/api/schedulesApi";
 
 interface ClassScheduleItem {
+  _id?: string;
   day: string;
-  period: string;
-  time: string;
-  class: string;
+  period?: string;
+  time: string; // HH:mm-HH:mm
+  class: string; // section
   subject: string;
-  teacher: string;
-  room: string;
+  teacher?: string; // display name
+  teacherId?: string; // for editing
+  room?: string;
 }
 
 interface ExamScheduleItem {
-  id: number;
-  date: string;
-  time: string;
-  class: string;
+  _id: string;
+  date: string; // yyyy-mm-dd
+  time: string; // HH:mm-HH:mm
+  class: string; // grade
   subject: string;
   type: string;
-  invigilator: string;
-  room: string;
+  invigilator?: string;
+  room?: string;
 }
 
 const ScheduleManagement = () => {
+  const { toast } = useToast();
+  const { user, isAuthenticated } = useAuth();
+
+  console.log("ScheduleManagement - Auth status:", { user, isAuthenticated });
+
   const [open, setOpen] = useState(false);
   const [examDialogOpen, setExamDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -68,7 +95,17 @@ const ScheduleManagement = () => {
   >(null);
   const [isEditingExam, setIsEditingExam] = useState(false);
 
-  // Form state for add/edit dialogs
+  // Filters
+  // Class filters
+  const [filterGrade, setFilterGrade] = useState<string>("all");
+  const [filterSection, setFilterSection] = useState<string>("all");
+  const [filterDay, setFilterDay] = useState<string>("all");
+  const [filterTeacher, setFilterTeacher] = useState<string>("all");
+  // Exam filters
+  const [filterExamType, setFilterExamType] = useState<string>("all");
+  const [filterExamRoom, setFilterExamRoom] = useState<string>("all");
+
+  // Form state
   const [formData, setFormData] = useState({
     day: "",
     period: "",
@@ -83,78 +120,50 @@ const ScheduleManagement = () => {
     invigilator: "",
   });
 
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+  const days = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
   const periods = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th"];
 
-  const [classSchedule, setClassSchedule] = useState<ClassScheduleItem[]>([
-    {
-      day: "Monday",
-      period: "1st",
-      time: "08:00-09:00",
-      class: "11A",
-      subject: "Math",
-      teacher: "Ms. Smith",
-      room: "R-201",
-    },
-    {
-      day: "Monday",
-      period: "2nd",
-      time: "09:00-10:00",
-      class: "10A",
-      subject: "English",
-      teacher: "Dr. Williams",
-      room: "R-105",
-    },
-    {
-      day: "Tuesday",
-      period: "1st",
-      time: "08:00-09:00",
-      class: "12A",
-      subject: "Physics",
-      teacher: "Mr. Johnson",
-      room: "Lab-1",
-    },
-  ]);
-
-  const [examSchedule, setExamSchedule] = useState<ExamScheduleItem[]>([
-    {
-      id: 1,
-      date: "2024-11-20",
-      time: "09:00-11:00",
-      class: "11A",
-      subject: "Mathematics",
-      type: "Mid-Term",
-      invigilator: "Ms. Smith",
-      room: "Exam Hall A",
-    },
-    {
-      id: 2,
-      date: "2024-11-22",
-      time: "09:00-11:00",
-      class: "10A",
-      subject: "English",
-      type: "Mid-Term",
-      invigilator: "Dr. Williams",
-      room: "Exam Hall B",
-    },
-    {
-      id: 3,
-      date: "2024-11-25",
-      time: "13:00-15:00",
-      class: "12A",
-      subject: "Physics",
-      type: "Mid-Term",
-      invigilator: "Mr. Johnson",
-      room: "Exam Hall A",
-    },
-  ]);
+  const [classSchedule, setClassSchedule] = useState<ClassScheduleItem[]>([]);
+  const [examSchedule, setExamSchedule] = useState<ExamScheduleItem[]>([]);
+  const [loadingClass, setLoadingClass] = useState(false);
+  const [loadingExam, setLoadingExam] = useState(false);
+  const [teachers, setTeachers] = useState<
+    Array<{
+      _id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+    }>
+  >([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomsDialogOpen, setRoomsDialogOpen] = useState(false);
+  const [roomForm, setRoomForm] = useState<{
+    _id?: string;
+    name: string;
+    capacity?: number;
+    active: boolean;
+  }>({ name: "", capacity: undefined, active: true });
 
   const ROWS_PER_PAGE = 6;
   const [classPage, setClassPage] = useState(1);
   const [examPage, setExamPage] = useState(1);
 
-  const classTotalPages = Math.max(1, Math.ceil(classSchedule.length / ROWS_PER_PAGE));
-  const examTotalPages = Math.max(1, Math.ceil(examSchedule.length / ROWS_PER_PAGE));
+  const classTotalPages = Math.max(
+    1,
+    Math.ceil(classSchedule.length / ROWS_PER_PAGE)
+  );
+  const examTotalPages = Math.max(
+    1,
+    Math.ceil(examSchedule.length / ROWS_PER_PAGE)
+  );
 
   useEffect(() => {
     if (classPage > classTotalPages) setClassPage(classTotalPages);
@@ -163,39 +172,318 @@ const ScheduleManagement = () => {
     if (examPage > examTotalPages) setExamPage(examTotalPages);
   }, [examPage, examTotalPages]);
 
-  const pagedClassSchedule = classSchedule.slice((classPage - 1) * ROWS_PER_PAGE, classPage * ROWS_PER_PAGE);
-  const pagedExamSchedule = examSchedule.slice((examPage - 1) * ROWS_PER_PAGE, examPage * ROWS_PER_PAGE);
+  const pagedClassSchedule = classSchedule.slice(
+    (classPage - 1) * ROWS_PER_PAGE,
+    classPage * ROWS_PER_PAGE
+  );
+  const pagedExamSchedule = examSchedule.slice(
+    (examPage - 1) * ROWS_PER_PAGE,
+    examPage * ROWS_PER_PAGE
+  );
 
-  // CRUD functions
-  const handleAddClassPeriod = () => {
-    const newPeriod: ClassScheduleItem = {
-      day: formData.day,
-      period: formData.period,
-      time: `${formData.startTime}-${formData.endTime}`,
-      class: formData.class,
-      subject: formData.subject,
-      teacher: formData.teacher,
-      room: formData.room,
+  const gradeOptions = useMemo(() => ["9", "10", "11", "12"], []);
+  const sectionOptions = useMemo(
+    () => ["A", "B", "C", "D", "E", "F", "G", "H", "I"],
+    []
+  );
+  const classSectionOptions = useMemo(() => {
+    const grades = ["9", "10", "11", "12"];
+    const sections = ["A", "B", "C", "D", "E", "F", "G", "H", "I"];
+    const combos: string[] = [];
+    for (const g of grades) {
+      for (const s of sections) combos.push(`${g}${s}`);
+    }
+    return combos;
+  }, []);
+
+  // Load class schedules when filters change
+  useEffect(() => {
+    const loadClass = async () => {
+      console.log("Loading class schedules with filters:", {
+        filterGrade,
+        filterSection,
+        filterDay,
+        filterTeacher,
+      });
+      try {
+        setLoadingClass(true);
+        const items = await getClassSchedules({
+          grade: filterGrade === "all" ? undefined : filterGrade,
+          section: filterSection === "all" ? undefined : filterSection,
+          day: filterDay === "all" ? undefined : filterDay,
+          teacherId: filterTeacher === "all" ? undefined : filterTeacher,
+        });
+        const mapped: ClassScheduleItem[] = items.map(
+          (it: BackendClassSchedule) => {
+            const teacher = teachers.find((t) => t._id === it.teacherId);
+            const teacherName = teacher
+              ? `${teacher.firstName} ${teacher.lastName}`
+              : undefined;
+            return {
+              _id: it._id,
+              day: it.day,
+              period: it.period || "",
+              time: `${it.startTime}-${it.endTime}`,
+              class: it.section,
+              subject: it.subject,
+              teacher: teacherName,
+              teacherId: it.teacherId,
+              room: it.room,
+            };
+          }
+        );
+        setClassSchedule(mapped);
+      } catch (err: any) {
+        console.error("Failed to load class schedules:", err);
+        toast({
+          title: "Failed to load class schedules",
+          description: String(
+            err?.response?.data?.message ?? err?.message ?? err
+          ),
+          variant: "destructive" as any,
+        });
+      } finally {
+        setLoadingClass(false);
+      }
     };
-    setClassSchedule([...classSchedule, newPeriod]);
-    resetForm();
-    setOpen(false);
+    void loadClass();
+    setClassPage(1);
+  }, [filterGrade, filterSection, filterDay, filterTeacher, teachers, toast]);
+
+  // Load exam schedules when filters change
+  useEffect(() => {
+    const loadExam = async () => {
+      try {
+        setLoadingExam(true);
+        const items = await getExamSchedules({
+          type: filterExamType === "all" ? undefined : filterExamType,
+          room: filterExamRoom === "all" ? undefined : filterExamRoom,
+        });
+        const mapped: ExamScheduleItem[] = items.map(
+          (it: BackendExamSchedule) => ({
+            _id: it._id,
+            date: new Date(it.date).toISOString().slice(0, 10),
+            time: `${it.startTime}-${it.endTime}`,
+            class: it.grade,
+            subject: it.subject,
+            type: it.type,
+            invigilator: it.invigilator,
+            room: it.room,
+          })
+        );
+        setExamSchedule(mapped);
+      } catch (err: any) {
+        toast({
+          title: "Failed to load exam schedules",
+          description: String(
+            err?.response?.data?.message ?? err?.message ?? err
+          ),
+          variant: "destructive" as any,
+        });
+      } finally {
+        setLoadingExam(false);
+      }
+    };
+    void loadExam();
+    setExamPage(1);
+  }, [filterExamType, filterExamRoom, toast]);
+
+  // Load teachers on component mount
+  useEffect(() => {
+    const loadTeachers = async () => {
+      try {
+        const teachersData = await getTeachers();
+        setTeachers(teachersData);
+      } catch (err: any) {
+        console.error("Failed to load teachers:", err);
+        // Don't show toast for teachers loading failure as it's not critical
+      }
+    };
+    void loadTeachers();
+  }, []);
+
+  // Load rooms on component mount
+  useEffect(() => {
+    const loadRooms = async () => {
+      try {
+        const roomsData = await getRooms();
+        setRooms(roomsData);
+      } catch (err) {
+        console.error("Failed to load rooms:", err);
+      }
+    };
+    void loadRooms();
+  }, []);
+
+  const resetForm = () => {
+    setFormData({
+      day: "",
+      period: "",
+      startTime: "",
+      endTime: "",
+      class: "",
+      subject: "",
+      teacher: "",
+      room: "",
+      date: "",
+      type: "",
+      invigilator: "",
+    });
   };
 
-  const handleAddExam = () => {
-    const newExam: ExamScheduleItem = {
-      id: Math.max(...examSchedule.map((e) => e.id)) + 1,
-      date: formData.date,
-      time: `${formData.startTime}-${formData.endTime}`,
-      class: formData.class,
-      subject: formData.subject,
-      type: formData.type,
-      invigilator: formData.invigilator,
-      room: formData.room,
-    };
-    setExamSchedule([...examSchedule, newExam]);
-    resetForm();
-    setExamDialogOpen(false);
+  const handleAddClassPeriod = async () => {
+    try {
+      const created = await createClassSchedule({
+        section: formData.class,
+        day: formData.day,
+        period: formData.period || undefined,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        subject: formData.subject,
+        teacherId: formData.teacher || undefined,
+        room: formData.room || undefined,
+      });
+      // Find teacher name for display
+      const teacher = teachers.find((t) => t._id === formData.teacher);
+      const teacherName = teacher
+        ? `${teacher.firstName} ${teacher.lastName}`
+        : undefined;
+
+      setClassSchedule((prev) => [
+        ...prev,
+        {
+          _id: created._id,
+          day: created.day,
+          period: formData.period,
+          time: `${created.startTime}-${created.endTime}`,
+          class: created.section,
+          subject: created.subject,
+          teacher: teacherName,
+          teacherId: formData.teacher,
+          room: created.room,
+        },
+      ]);
+      toast({ title: "Class period added" });
+      resetForm();
+      setOpen(false);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ?? err?.message ?? "Failed to add";
+      toast({
+        title: "Add failed",
+        description: String(msg),
+        variant: "destructive" as any,
+      });
+    }
+  };
+
+  const handleAddExam = async () => {
+    try {
+      const created = await createExamSchedule({
+        grade: formData.class,
+        date: formData.date,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        subject: formData.subject,
+        type: formData.type,
+        invigilator: formData.invigilator || undefined,
+        room: formData.room || undefined,
+      });
+      setExamSchedule((prev) => [
+        ...prev,
+        {
+          _id: created._id,
+          date: new Date(created.date).toISOString().slice(0, 10),
+          time: `${created.startTime}-${created.endTime}`,
+          class: created.grade,
+          subject: created.subject,
+          type: created.type,
+          invigilator: created.invigilator,
+          room: created.room,
+        },
+      ]);
+      toast({ title: "Exam scheduled" });
+      resetForm();
+      setExamDialogOpen(false);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ?? err?.message ?? "Failed to schedule";
+      toast({
+        title: "Schedule failed",
+        description: String(msg),
+        variant: "destructive" as any,
+      });
+    }
+  };
+
+  // Rooms management handlers
+  const refreshRooms = async () => {
+    try {
+      const data = await getRooms();
+      setRooms(data);
+    } catch (e) {
+      console.error("Failed to refresh rooms", e);
+    }
+  };
+
+  const handleSaveRoom = async () => {
+    try {
+      if (roomForm._id) {
+        await updateRoom(roomForm._id, {
+          name: roomForm.name,
+          capacity: roomForm.capacity,
+          active: roomForm.active,
+        });
+        toast({ title: "Room updated" });
+      } else {
+        await createRoom({
+          name: roomForm.name,
+          capacity: roomForm.capacity,
+          active: roomForm.active,
+        });
+        toast({ title: "Room created" });
+      }
+      await refreshRooms();
+      setRoomForm({
+        _id: undefined,
+        name: "",
+        capacity: undefined,
+        active: true,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Room save failed",
+        description: String(
+          err?.response?.data?.message ?? err?.message ?? err
+        ),
+        variant: "destructive" as any,
+      });
+    }
+  };
+
+  const handleEditRoom = (r: Room) => {
+    setRoomForm({
+      _id: r._id,
+      name: r.name,
+      capacity: r.capacity,
+      active: r.active,
+    });
+  };
+
+  const handleDeleteRoom = async (id: string) => {
+    try {
+      await deleteRoom(id);
+      await refreshRooms();
+      toast({ title: "Room deleted" });
+    } catch (err: any) {
+      toast({
+        title: "Delete failed",
+        description: String(
+          err?.response?.data?.message ?? err?.message ?? err
+        ),
+        variant: "destructive" as any,
+      });
+    }
   };
 
   const handleEdit = (
@@ -215,23 +503,23 @@ const ScheduleManagement = () => {
         class: exam.class,
         subject: exam.subject,
         teacher: "",
-        room: exam.room,
+        room: exam.room ?? "",
         date: exam.date,
         type: exam.type,
-        invigilator: exam.invigilator,
+        invigilator: exam.invigilator ?? "",
       });
     } else {
       const cls = item as ClassScheduleItem;
       const [startTime, endTime] = cls.time.split("-");
       setFormData({
         day: cls.day,
-        period: cls.period,
+        period: cls.period ?? "",
         startTime,
         endTime,
         class: cls.class,
         subject: cls.subject,
-        teacher: cls.teacher,
-        room: cls.room,
+        teacher: cls.teacherId ?? "",
+        room: cls.room ?? "",
         date: "",
         type: "",
         invigilator: "",
@@ -240,74 +528,118 @@ const ScheduleManagement = () => {
     setEditDialogOpen(true);
   };
 
-  const handleUpdate = () => {
-    if (isEditingExam) {
-      const updatedExam: ExamScheduleItem = {
-        ...(editingItem as ExamScheduleItem),
-        date: formData.date,
-        time: `${formData.startTime}-${formData.endTime}`,
-        class: formData.class,
-        subject: formData.subject,
-        type: formData.type,
-        invigilator: formData.invigilator,
-        room: formData.room,
-      };
-      setExamSchedule(
-        examSchedule.map((exam) =>
-          exam.id === updatedExam.id ? updatedExam : exam
-        )
-      );
-    } else {
-      const updatedClass: ClassScheduleItem = {
-        ...(editingItem as ClassScheduleItem),
-        day: formData.day,
-        period: formData.period,
-        time: `${formData.startTime}-${formData.endTime}`,
-        class: formData.class,
-        subject: formData.subject,
-        teacher: formData.teacher,
-        room: formData.room,
-      };
-      setClassSchedule(
-        classSchedule.map((cls, index) =>
-          index === classSchedule.indexOf(editingItem as ClassScheduleItem)
-            ? updatedClass
-            : cls
-        )
-      );
+  const handleUpdate = async () => {
+    try {
+      if (isEditingExam) {
+        const current = editingItem as ExamScheduleItem | null;
+        if (!current?._id) throw new Error("Missing exam id");
+        const payload = {
+          grade: formData.class,
+          date: formData.date,
+          startTime: formData.startTime,
+          endTime: formData.endTime,
+          subject: formData.subject,
+          type: formData.type,
+          invigilator: formData.invigilator || undefined,
+          room: formData.room || undefined,
+        };
+        const updated = await updateExamSchedule(current._id, payload);
+        setExamSchedule((prev) =>
+          prev.map((e) =>
+            e._id === current._id
+              ? {
+                  _id: updated._id,
+                  date: new Date(updated.date).toISOString().slice(0, 10),
+                  time: `${updated.startTime}-${updated.endTime}`,
+                  class: updated.grade,
+                  subject: updated.subject,
+                  type: updated.type,
+                  invigilator: updated.invigilator,
+                  room: updated.room,
+                }
+              : e
+          )
+        );
+        toast({ title: "Exam updated" });
+      } else {
+        const current = editingItem as ClassScheduleItem | null;
+        if (!current?._id) throw new Error("Missing class schedule id");
+        const payload = {
+          section: formData.class,
+          day: formData.day,
+          period: formData.period || undefined,
+          startTime: formData.startTime,
+          endTime: formData.endTime,
+          subject: formData.subject,
+          teacherId: formData.teacher || undefined,
+          room: formData.room || undefined,
+        };
+        const updated = await updateClassSchedule(current._id, payload);
+        // Find teacher name for display
+        const teacher = teachers.find((t) => t._id === formData.teacher);
+        const teacherName = teacher
+          ? `${teacher.firstName} ${teacher.lastName}`
+          : undefined;
+
+        setClassSchedule((prev) =>
+          prev.map((c) =>
+            c._id === current._id
+              ? {
+                  _id: updated._id,
+                  day: updated.day,
+                  period: formData.period,
+                  time: `${updated.startTime}-${updated.endTime}`,
+                  class: updated.section,
+                  subject: updated.subject,
+                  teacher: teacherName,
+                  teacherId: formData.teacher,
+                  room: updated.room,
+                }
+              : c
+          )
+        );
+        toast({ title: "Class schedule updated" });
+      }
+      resetForm();
+      setEditDialogOpen(false);
+      setEditingItem(null);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ?? err?.message ?? "Update failed";
+      toast({
+        title: "Update failed",
+        description: String(msg),
+        variant: "destructive" as any,
+      });
     }
-    resetForm();
-    setEditDialogOpen(false);
-    setEditingItem(null);
   };
 
-  const handleDelete = (
+  const handleDelete = async (
     item: ClassScheduleItem | ExamScheduleItem,
     isExam: boolean
   ) => {
-    if (isExam) {
-      setExamSchedule(
-        examSchedule.filter((exam) => exam.id !== (item as ExamScheduleItem).id)
-      );
-    } else {
-      setClassSchedule(classSchedule.filter((cls) => cls !== item));
+    try {
+      if (isExam) {
+        const id = (item as ExamScheduleItem)._id;
+        await deleteExamSchedule(id);
+        setExamSchedule((prev) => prev.filter((e) => e._id !== id));
+        toast({ title: "Exam deleted" });
+      } else {
+        const id = (item as ClassScheduleItem)._id;
+        if (!id) throw new Error("Missing id");
+        await deleteClassSchedule(id);
+        setClassSchedule((prev) => prev.filter((c) => c._id !== id));
+        toast({ title: "Class period deleted" });
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ?? err?.message ?? "Delete failed";
+      toast({
+        title: "Delete failed",
+        description: String(msg),
+        variant: "destructive" as any,
+      });
     }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      day: "",
-      period: "",
-      startTime: "",
-      endTime: "",
-      class: "",
-      subject: "",
-      teacher: "",
-      room: "",
-      date: "",
-      type: "",
-      invigilator: "",
-    });
   };
 
   return (
@@ -336,170 +668,265 @@ const ScheduleManagement = () => {
         </TabsList>
 
         <TabsContent value="class" className="space-y-6">
-          <div className="flex justify-end">
-            <Dialog
-              open={open}
-              onOpenChange={(isOpen) => {
-                setOpen(isOpen);
-                if (isOpen) resetForm();
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Class Period
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add Class Period</DialogTitle>
-                  <DialogDescription>
-                    Schedule a new class period in the timetable
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Day</Label>
-                      <Select
-                        value={formData.day}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, day: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select day" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {days.map((day) => (
-                            <SelectItem key={day} value={day}>
-                              {day}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Period</Label>
-                      <Select
-                        value={formData.period}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, period: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select period" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {periods.map((period) => (
-                            <SelectItem key={period} value={period}>
-                              {period}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Start Time</Label>
-                      <Input
-                        type="time"
-                        value={formData.startTime}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            startTime: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>End Time</Label>
-                      <Input
-                        type="time"
-                        value={formData.endTime}
-                        onChange={(e) =>
-                          setFormData({ ...formData, endTime: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Class</Label>
-                    <Select
-                      value={formData.class}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, class: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select class" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="10A">10A</SelectItem>
-                        <SelectItem value="10B">10B</SelectItem>
-                        <SelectItem value="11A">11A</SelectItem>
-                        <SelectItem value="11B">11B</SelectItem>
-                        <SelectItem value="12A">12A</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Subject</Label>
-                    <Input
-                      placeholder="Enter subject"
-                      value={formData.subject}
-                      onChange={(e) =>
-                        setFormData({ ...formData, subject: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Teacher</Label>
-                    <Select
-                      value={formData.teacher}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, teacher: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select teacher" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Ms. Smith">Ms. Smith</SelectItem>
-                        <SelectItem value="Mr. Johnson">Mr. Johnson</SelectItem>
-                        <SelectItem value="Dr. Williams">
-                          Dr. Williams
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Room</Label>
-                    <Input
-                      placeholder="Enter room number"
-                      value={formData.room}
-                      onChange={(e) =>
-                        setFormData({ ...formData, room: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setOpen(false);
-                      resetForm();
-                    }}
-                  >
-                    Cancel
+          <div className="flex flex-col md:flex-row md:items-end gap-3 md:gap-4 md:justify-between">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 w-full md:w-auto">
+              <div className="space-y-1">
+                <Label>Grade</Label>
+                <Select value={filterGrade} onValueChange={setFilterGrade}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {gradeOptions.map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {g}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Section</Label>
+                <Select value={filterSection} onValueChange={setFilterSection}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {sectionOptions.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Day</Label>
+                <Select value={filterDay} onValueChange={setFilterDay}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All days" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {days.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Teacher</Label>
+                <Select value={filterTeacher} onValueChange={setFilterTeacher}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All teachers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {teachers.map((t) => (
+                      <SelectItem key={t._id} value={t._id}>
+                        {t.firstName} {t.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex items-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFilterGrade("all");
+                  setFilterSection("all");
+                  setFilterDay("all");
+                  setFilterTeacher("all");
+                }}
+              >
+                Clear Filters
+              </Button>
+              <Dialog
+                open={open}
+                onOpenChange={(isOpen) => {
+                  setOpen(isOpen);
+                  if (isOpen) resetForm();
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add Class Period
                   </Button>
-                  <Button onClick={handleAddClassPeriod}>Add Period</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add Class Period</DialogTitle>
+                    <DialogDescription>
+                      Schedule a new class period in the timetable
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Day</Label>
+                        <Select
+                          value={formData.day}
+                          onValueChange={(value) =>
+                            setFormData({ ...formData, day: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select day" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {days.map((day) => (
+                              <SelectItem key={day} value={day}>
+                                {day}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Period</Label>
+                        <Select
+                          value={formData.period}
+                          onValueChange={(value) =>
+                            setFormData({ ...formData, period: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select period" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {periods.map((period) => (
+                              <SelectItem key={period} value={period}>
+                                {period}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Start Time</Label>
+                        <Input
+                          type="time"
+                          value={formData.startTime}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              startTime: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>End Time</Label>
+                        <Input
+                          type="time"
+                          value={formData.endTime}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              endTime: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Class</Label>
+                      <Select
+                        value={formData.class}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, class: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {classSectionOptions.map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {s}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Subject</Label>
+                      <Input
+                        placeholder="Enter subject"
+                        value={formData.subject}
+                        onChange={(e) =>
+                          setFormData({ ...formData, subject: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Teacher</Label>
+                      <Select
+                        value={formData.teacher}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, teacher: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select teacher" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teachers.map((teacher) => (
+                            <SelectItem key={teacher._id} value={teacher._id}>
+                              {teacher.firstName} {teacher.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Room</Label>
+                      <Select
+                        value={formData.room}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, room: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select room" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {rooms
+                            .filter((r) => r.active)
+                            .map((r) => (
+                              <SelectItem key={r._id} value={r.name}>
+                                {r.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setOpen(false);
+                        resetForm();
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button onClick={handleAddClassPeriod}>Add Period</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+            {/* close header wrapper */}
           </div>
 
           <Card>
@@ -527,48 +954,69 @@ const ScheduleManagement = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedClassSchedule.map((schedule, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium">
-                        {schedule.day}
-                      </TableCell>
-                      <TableCell>{schedule.period}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          {schedule.time}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{schedule.class}</Badge>
-                      </TableCell>
-                      <TableCell>{schedule.subject}</TableCell>
-                      <TableCell>{schedule.teacher}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {schedule.room}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(schedule, false)}
-                          >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(schedule, false)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </Button>
-                        </div>
+                  {loadingClass && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center text-sm text-muted-foreground"
+                      >
+                        Loading...
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )}
+                  {!loadingClass && pagedClassSchedule.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center text-sm text-muted-foreground"
+                      >
+                        No schedules found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!loadingClass &&
+                    pagedClassSchedule.map((schedule, index) => (
+                      <TableRow key={schedule._id ?? index}>
+                        <TableCell className="font-medium">
+                          {schedule.day}
+                        </TableCell>
+                        <TableCell>{schedule.period}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            {schedule.time}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{schedule.class}</Badge>
+                        </TableCell>
+                        <TableCell>{schedule.subject}</TableCell>
+                        <TableCell>{schedule.teacher}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {schedule.room}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(schedule, false)}
+                            >
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(schedule, false)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
                 </TableBody>
               </Table>
               <TablePagination
@@ -581,157 +1029,356 @@ const ScheduleManagement = () => {
         </TabsContent>
 
         <TabsContent value="exam" className="space-y-6">
-          <div className="flex justify-end">
-            <Dialog
-              open={examDialogOpen}
-              onOpenChange={(isOpen) => {
-                setExamDialogOpen(isOpen);
-                if (isOpen) resetForm();
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Schedule Exam
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Schedule Exam</DialogTitle>
-                  <DialogDescription>
-                    Schedule a new examination in the timetable
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Date</Label>
-                    <Input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) =>
-                        setFormData({ ...formData, date: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Start Time</Label>
-                      <Input
-                        type="time"
-                        value={formData.startTime}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            startTime: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>End Time</Label>
-                      <Input
-                        type="time"
-                        value={formData.endTime}
-                        onChange={(e) =>
-                          setFormData({ ...formData, endTime: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Class</Label>
-                    <Select
-                      value={formData.class}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, class: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select class" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="10A">10A</SelectItem>
-                        <SelectItem value="10B">10B</SelectItem>
-                        <SelectItem value="11A">11A</SelectItem>
-                        <SelectItem value="11B">11B</SelectItem>
-                        <SelectItem value="12A">12A</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Subject</Label>
-                    <Input
-                      placeholder="Enter subject"
-                      value={formData.subject}
-                      onChange={(e) =>
-                        setFormData({ ...formData, subject: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Exam Type</Label>
-                    <Select
-                      value={formData.type}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, type: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select exam type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Mid-Term">Mid-Term</SelectItem>
-                        <SelectItem value="Final">Final</SelectItem>
-                        <SelectItem value="Quiz">Quiz</SelectItem>
-                        <SelectItem value="Test">Test</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Invigilator</Label>
-                    <Select
-                      value={formData.invigilator}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, invigilator: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select invigilator" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Ms. Smith">Ms. Smith</SelectItem>
-                        <SelectItem value="Mr. Johnson">Mr. Johnson</SelectItem>
-                        <SelectItem value="Dr. Williams">
-                          Dr. Williams
+          <div className="flex flex-col md:flex-row md:items-end gap-3 md:gap-4 md:justify-between">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full md:w-auto">
+              <div className="space-y-1">
+                <Label>Exam Type</Label>
+                <Select
+                  value={filterExamType}
+                  onValueChange={setFilterExamType}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="Mid-Term">Mid-Term</SelectItem>
+                    <SelectItem value="Final">Final</SelectItem>
+                    <SelectItem value="Quiz">Quiz</SelectItem>
+                    <SelectItem value="Test">Test</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Room</Label>
+                <Select
+                  value={filterExamRoom}
+                  onValueChange={setFilterExamRoom}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All rooms" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {rooms
+                      .filter((r) => r.active)
+                      .map((r) => (
+                        <SelectItem key={r._id} value={r.name}>
+                          {r.name}
                         </SelectItem>
-                      </SelectContent>
-                    </Select>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex items-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFilterExamType("all");
+                  setFilterExamRoom("all");
+                }}
+              >
+                Clear Filters
+              </Button>
+              <Dialog
+                open={roomsDialogOpen}
+                onOpenChange={(isOpen) => {
+                  setRoomsDialogOpen(isOpen);
+                  if (isOpen) void refreshRooms();
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button variant="outline">Manage Rooms</Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Manage Rooms</DialogTitle>
+                    <DialogDescription>
+                      Add, edit, or remove rooms
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-1 col-span-2">
+                        <Label>Name</Label>
+                        <Input
+                          placeholder="e.g. Room 101"
+                          value={roomForm.name}
+                          onChange={(e) =>
+                            setRoomForm({ ...roomForm, name: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Capacity</Label>
+                        <Input
+                          type="number"
+                          placeholder="Optional"
+                          value={roomForm.capacity ?? ""}
+                          onChange={(e) =>
+                            setRoomForm({
+                              ...roomForm,
+                              capacity: e.target.value
+                                ? Number(e.target.value)
+                                : undefined,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Status</Label>
+                        <Select
+                          value={roomForm.active ? "active" : "inactive"}
+                          onValueChange={(v) =>
+                            setRoomForm({ ...roomForm, active: v === "active" })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="inactive">Inactive</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-end">
+                        <Button onClick={handleSaveRoom}>
+                          {roomForm._id ? "Update" : "Add"} Room
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="border rounded-md">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Capacity</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">
+                              Actions
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {rooms.length === 0 ? (
+                            <TableRow>
+                              <TableCell
+                                colSpan={4}
+                                className="text-center text-sm text-muted-foreground"
+                              >
+                                No rooms
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            rooms.map((r) => (
+                              <TableRow key={r._id}>
+                                <TableCell>{r.name}</TableCell>
+                                <TableCell>{r.capacity ?? "-"}</TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant={r.active ? "default" : "secondary"}
+                                  >
+                                    {r.active ? "Active" : "Inactive"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex gap-2 justify-end">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleEditRoom(r)}
+                                    >
+                                      <Edit className="h-4 w-4 mr-2" /> Edit
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleDeleteRoom(r._id)}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" /> Delete
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Room</Label>
-                    <Input
-                      placeholder="Enter room number"
-                      value={formData.room}
-                      onChange={(e) =>
-                        setFormData({ ...formData, room: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setExamDialogOpen(false);
-                      resetForm();
-                    }}
-                  >
-                    Cancel
+                </DialogContent>
+              </Dialog>
+              <Dialog
+                open={examDialogOpen}
+                onOpenChange={(isOpen) => {
+                  setExamDialogOpen(isOpen);
+                  if (isOpen) resetForm();
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Schedule Exam
                   </Button>
-                  <Button onClick={handleAddExam}>Schedule Exam</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Schedule Exam</DialogTitle>
+                    <DialogDescription>
+                      Schedule a new examination in the timetable
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Date</Label>
+                      <Input
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) =>
+                          setFormData({ ...formData, date: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Start Time</Label>
+                        <Input
+                          type="time"
+                          value={formData.startTime}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              startTime: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>End Time</Label>
+                        <Input
+                          type="time"
+                          value={formData.endTime}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              endTime: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Class</Label>
+                      <Select
+                        value={formData.class}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, class: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {gradeOptions.map((g) => (
+                            <SelectItem key={g} value={g}>
+                              {g}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Subject</Label>
+                      <Input
+                        placeholder="Enter subject"
+                        value={formData.subject}
+                        onChange={(e) =>
+                          setFormData({ ...formData, subject: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Exam Type</Label>
+                      <Select
+                        value={formData.type}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, type: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select exam type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Mid-Term">Mid-Term</SelectItem>
+                          <SelectItem value="Final">Final</SelectItem>
+                          <SelectItem value="Quiz">Quiz</SelectItem>
+                          <SelectItem value="Test">Test</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Invigilator</Label>
+                      <Select
+                        value={formData.invigilator}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, invigilator: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select invigilator" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Ms. Smith">Ms. Smith</SelectItem>
+                          <SelectItem value="Mr. Johnson">
+                            Mr. Johnson
+                          </SelectItem>
+                          <SelectItem value="Dr. Williams">
+                            Dr. Williams
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Room</Label>
+                      <Select
+                        value={formData.room}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, room: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select room" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {rooms
+                            .filter((r) => r.active)
+                            .map((r) => (
+                              <SelectItem key={r._id} value={r.name}>
+                                {r.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setExamDialogOpen(false);
+                        resetForm();
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button onClick={handleAddExam}>Schedule Exam</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+            {/* close header wrapper */}
           </div>
 
           <Card>
@@ -757,48 +1404,71 @@ const ScheduleManagement = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedExamSchedule.map((exam) => (
-                    <TableRow key={exam.id}>
-                      <TableCell className="font-medium">{exam.date}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          {exam.time}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{exam.class}</Badge>
-                      </TableCell>
-                      <TableCell>{exam.subject}</TableCell>
-                      <TableCell>
-                        <Badge>{exam.type}</Badge>
-                      </TableCell>
-                      <TableCell>{exam.invigilator}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {exam.room}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(exam, true)}
-                          >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(exam, true)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </Button>
-                        </div>
+                  {loadingExam && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center text-sm text-muted-foreground"
+                      >
+                        Loading...
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )}
+                  {!loadingExam && pagedExamSchedule.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center text-sm text-muted-foreground"
+                      >
+                        No exams found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!loadingExam &&
+                    pagedExamSchedule.map((exam) => (
+                      <TableRow key={exam._id}>
+                        <TableCell className="font-medium">
+                          {exam.date}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            {exam.time}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{exam.class}</Badge>
+                        </TableCell>
+                        <TableCell>{exam.subject}</TableCell>
+                        <TableCell>
+                          <Badge>{exam.type}</Badge>
+                        </TableCell>
+                        <TableCell>{exam.invigilator}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {exam.room}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(exam, true)}
+                            >
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(exam, true)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
                 </TableBody>
               </Table>
               <TablePagination
@@ -973,9 +1643,11 @@ const ScheduleManagement = () => {
                       <SelectValue placeholder="Select teacher" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Ms. Smith">Ms. Smith</SelectItem>
-                      <SelectItem value="Mr. Johnson">Mr. Johnson</SelectItem>
-                      <SelectItem value="Dr. Williams">Dr. Williams</SelectItem>
+                      {teachers.map((teacher) => (
+                        <SelectItem key={teacher._id} value={teacher._id}>
+                          {teacher.firstName} {teacher.lastName}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -993,11 +1665,17 @@ const ScheduleManagement = () => {
                   <SelectValue placeholder="Select class" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="10A">10A</SelectItem>
-                  <SelectItem value="10B">10B</SelectItem>
-                  <SelectItem value="11A">11A</SelectItem>
-                  <SelectItem value="11B">11B</SelectItem>
-                  <SelectItem value="12A">12A</SelectItem>
+                  {isEditingExam
+                    ? gradeOptions.map((g) => (
+                        <SelectItem key={g} value={g}>
+                          {g}
+                        </SelectItem>
+                      ))
+                    : classSectionOptions.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1013,13 +1691,25 @@ const ScheduleManagement = () => {
             </div>
             <div className="space-y-2">
               <Label>Room</Label>
-              <Input
-                placeholder="Enter room number"
+              <Select
                 value={formData.room}
-                onChange={(e) =>
-                  setFormData({ ...formData, room: e.target.value })
+                onValueChange={(value) =>
+                  setFormData({ ...formData, room: value })
                 }
-              />
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select room" />
+                </SelectTrigger>
+                <SelectContent>
+                  {rooms
+                    .filter((r) => r.active)
+                    .map((r) => (
+                      <SelectItem key={r._id} value={r.name}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

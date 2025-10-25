@@ -48,9 +48,15 @@ const TeacherProfile = () => {
   const [phone, setPhone] = useState("");
   const [office, setOffice] = useState("");
   const [experience, setExperience] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [department, setDepartment] = useState("");
+  const [qualification, setQualification] = useState("");
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [joinDate, setJoinDate] = useState<string>("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -67,6 +73,15 @@ const TeacherProfile = () => {
         setPhone(me.phoneNumber ?? "");
         setOffice(me.address ?? "");
         setExperience(me.employmentInfo?.responsibilities ?? "");
+        setEmployeeId(me.employmentInfo?.employeeId ?? "");
+        setDepartment(me.employmentInfo?.department ?? "");
+        setQualification(me.employmentInfo?.position ?? "");
+        setSubjects(me.academicInfo?.subjects ?? []);
+        setJoinDate(
+          me.employmentInfo?.joinDate
+            ? new Date(me.employmentInfo.joinDate).toISOString().slice(0, 10)
+            : ""
+        );
       } catch (err: unknown) {
         toast({
           title: "Failed to load profile",
@@ -216,7 +231,11 @@ const TeacherProfile = () => {
                             address: office || undefined,
                             employmentInfo: {
                               responsibilities: experience || undefined,
-                              position: undefined,
+                              position: qualification || undefined,
+                              department: department || undefined,
+                              joinDate: joinDate
+                                ? new Date(joinDate)
+                                : undefined,
                             },
                           });
                           setProfile((p) => ({ ...p, ...updated }));
@@ -270,7 +289,8 @@ const TeacherProfile = () => {
                   <Label htmlFor="employeeId">Employee ID</Label>
                   <Input
                     id="employeeId"
-                    defaultValue={"EMP-2024-M-045"}
+                    value={employeeId}
+                    onChange={(e) => setEmployeeId(e.target.value)}
                     disabled
                   />
                 </div>
@@ -317,8 +337,9 @@ const TeacherProfile = () => {
                   </Label>
                   <Input
                     id="department"
-                    defaultValue={"Mathematics"}
-                    disabled
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    disabled={!isEditing}
                   />
                 </div>
 
@@ -326,7 +347,8 @@ const TeacherProfile = () => {
                   <Label htmlFor="qualification">Qualification</Label>
                   <Input
                     id="qualification"
-                    defaultValue={"M.Sc. Mathematics"}
+                    value={qualification}
+                    onChange={(e) => setQualification(e.target.value)}
                     disabled={!isEditing}
                   />
                 </div>
@@ -339,14 +361,29 @@ const TeacherProfile = () => {
                     </div>
                   </Label>
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant="secondary">Algebra</Badge>
-                    <Badge variant="secondary">Calculus</Badge>
+                    {subjects.length === 0 ? (
+                      <span className="text-sm text-muted-foreground">
+                        No subjects listed
+                      </span>
+                    ) : (
+                      subjects.map((s) => (
+                        <Badge key={s} variant="secondary">
+                          {s}
+                        </Badge>
+                      ))
+                    )}
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="joinDate">Join Date</Label>
-                  <Input id="joinDate" defaultValue={"2020-08-15"} disabled />
+                  <Input
+                    id="joinDate"
+                    type="date"
+                    value={joinDate}
+                    onChange={(e) => setJoinDate(e.target.value)}
+                    disabled
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -385,17 +422,77 @@ const TeacherProfile = () => {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="currentPassword">Current Password</Label>
-                <Input id="currentPassword" type="password" />
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="newPassword">New Password</Label>
-                <Input id="newPassword" type="password" />
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                <Input id="confirmPassword" type="password" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
               </div>
-              <Button className="mt-4">Update Password</Button>
+              <Button
+                className="mt-4"
+                onClick={async () => {
+                  // basic validation
+                  if (!currentPassword || !newPassword || !confirmPassword) {
+                    toast({
+                      title: "Validation failed",
+                      description: "Please fill all password fields",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  if (newPassword !== confirmPassword) {
+                    toast({
+                      title: "Validation failed",
+                      description: "New password and confirmation do not match",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  setChangingPassword(true);
+                  try {
+                    await changePassword({
+                      currentPassword,
+                      newPassword,
+                      confirmPassword,
+                    });
+                    toast({ title: "Password updated" });
+                    setCurrentPassword("");
+                    setNewPassword("");
+                    setConfirmPassword("");
+                  } catch (err: unknown) {
+                    toast({
+                      title: "Password update failed",
+                      description:
+                        err instanceof Error ? err.message : String(err),
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setChangingPassword(false);
+                  }
+                }}
+                disabled={changingPassword}
+              >
+                {changingPassword ? "Updating..." : "Update Password"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

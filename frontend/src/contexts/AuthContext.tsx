@@ -1,4 +1,5 @@
 ﻿import { createContext, useState, useEffect, ReactNode } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 import { AuthContextType, SignupData, User, UserRole } from "./auth-types";
 
@@ -43,6 +44,7 @@ const MOCK_USERS: User[] = [
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     const storedUser = localStorage.getItem("currentUser");
@@ -205,7 +207,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
     try {
       const [firstName, ...rest] = data.name.trim().split(" ");
-      const lastName = rest.join(" ") || "";
+      // If user provided a single name, use it for both first and last to satisfy backend validators
+      const lastName = rest.join(" ") || firstName;
 
       const payload: RegisterPayload = {
         email: data.email,
@@ -234,7 +237,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return true; // account created in pending state
       }
 
-      console.warn("Signup failed:", result?.message || response.statusText);
+      // Log full result for debugging
+      console.warn("Signup failed:", response.status, result);
+
+      // If there are validation errors from backend, show them in toast
+      if (Array.isArray(result?.errors) && result.errors.length > 0) {
+        const messages = result.errors.map(
+          (e: { msg?: string; message?: string }) =>
+            e.msg || e.message || JSON.stringify(e)
+        );
+        // show first error briefly and log others
+        toast({
+          title: "Registration failed",
+          description: messages.join("; "),
+          variant: "destructive",
+        });
+      } else if (result?.message) {
+        // Handle common friendly messages like duplicate email more explicitly
+        const msg = String(result.message || "Registration failed");
+        const isDuplicate =
+          msg.toLowerCase().includes("already exists") ||
+          response.status === 409;
+        toast({
+          title: isDuplicate
+            ? "Email already registered"
+            : "Registration failed",
+          description: msg,
+          variant: "destructive",
+        });
+      }
+
       return false;
     } catch (err) {
       console.warn(

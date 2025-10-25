@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -18,136 +18,36 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TablePagination from "@/components/shared/TablePagination";
+import { useToast } from "@/hooks/use-toast";
+import { SkeletonGrid, SkeletonWrapper } from "@/components/skeleton";
+import {
+  getAnnouncements,
+  getUnreadCount,
+  markRead,
+  type AnnouncementItem,
+  type AnnouncementType,
+} from "@/lib/api/announcementsApi";
 
-interface Announcement {
-  id: number;
-  title: string;
-  postedBy: string;
-  date: string;
-  type: string;
-  message: string;
-  attachments: string[];
-  isRead: boolean;
-}
+// Local, UI-friendly type mapped from API
+type Announcement = AnnouncementItem & { id: string };
 
 const Announcements = () => {
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  const schoolAnnouncements = [
-    {
-      id: 1,
-      title: "Midterm Examination Schedule Released",
-      postedBy: "Head of Academics",
-      date: "2025-10-13",
-      type: "exam",
-      message:
-        "The midterm examination schedule for all grades has been released. Please check the Timetable section for your personalized exam schedule. Make sure to arrive 15 minutes before your scheduled exam time.",
-      attachments: ["midterm_schedule.pdf"],
-      isRead: false,
-    },
-    {
-      id: 2,
-      title: "Science Fair Registration Open",
-      postedBy: "Science Department",
-      date: "2025-10-12",
-      type: "event",
-      message:
-        "The annual Science Fair will be held on November 5th. Students interested in participating should register by October 25th. This is a great opportunity to showcase your scientific projects and innovations.",
-      attachments: ["registration_form.pdf", "guidelines.pdf"],
-      isRead: false,
-    },
-    {
-      id: 3,
-      title: "Library Extended Hours",
-      postedBy: "School Administration",
-      date: "2025-10-11",
-      type: "info",
-      message:
-        "Due to the upcoming exam period, the library will extend its operating hours. The library will now be open from 7:00 AM to 9:00 PM on weekdays. Please take advantage of this extended time for your studies.",
-      attachments: [],
-      isRead: true,
-    },
-    {
-      id: 4,
-      title: "Parent-Teacher Conference",
-      postedBy: "Principal Office",
-      date: "2025-10-10",
-      type: "event",
-      message:
-        "Our semester parent-teacher conference is scheduled for October 30th. Parents can schedule individual meetings with teachers through the online portal. We encourage all parents to attend.",
-      attachments: ["conference_schedule.pdf"],
-      isRead: true,
-    },
-    {
-      id: 6,
-      title: "School Campus Safety Drill",
-      postedBy: "Safety Committee",
-      date: "2025-10-08",
-      type: "school",
-      message:
-        "A mandatory safety drill will be conducted on October 18th at 10:00 AM. All students and staff must participate. Please follow the instructions of your teachers during the drill.",
-      attachments: [],
-      isRead: true,
-    },
-  ];
+  // Server-driven lists and meta
+  const PAGE_SIZE = 6;
+  const [activeTab, setActiveTab] = useState<AnnouncementType>("school");
+  const [schoolPage, setSchoolPage] = useState(1);
+  const [teacherPage, setTeacherPage] = useState(1);
 
-  const teacherAnnouncements = [
-    {
-      id: 5,
-      title: "Mathematics Olympiad Team Selection",
-      postedBy: "Mr. Johnson (Mathematics Teacher)",
-      date: "2025-10-09",
-      type: "class",
-      message:
-        "Students interested in representing our school at the Regional Mathematics Olympiad should register for the selection test on October 20th. The test will cover topics from advanced algebra and geometry.",
-      attachments: ["olympiad_topics.pdf"],
-      isRead: true,
-    },
-    {
-      id: 7,
-      title: "Physics Lab Safety Guidelines",
-      postedBy: "Ms. Davis (Physics Teacher)",
-      date: "2025-10-07",
-      type: "class",
-      message:
-        "Important safety guidelines for the upcoming physics laboratory sessions. All students must review these guidelines before participating in any lab activities.",
-      attachments: ["lab_safety_guidelines.pdf"],
-      isRead: false,
-    },
-    {
-      id: 8,
-      title: "English Literature Assignment Extension",
-      postedBy: "Mrs. Wilson (English Teacher)",
-      date: "2025-10-06",
-      type: "class",
-      message:
-        "Due to the midterm examination schedule, the English literature essay deadline has been extended to November 10th. Please use this extra time to improve your work.",
-      attachments: ["assignment_rubric.pdf"],
-      isRead: true,
-    },
-    {
-      id: 9,
-      title: "Chemistry Lab Report Guidelines",
-      postedBy: "Dr. Brown (Chemistry Teacher)",
-      date: "2025-10-05",
-      type: "class",
-      message:
-        "Detailed guidelines for writing chemistry lab reports have been updated. Please review the new format requirements before submitting your next lab report.",
-      attachments: ["lab_report_format.pdf", "grading_criteria.pdf"],
-      isRead: false,
-    },
-    {
-      id: 10,
-      title: "History Project Presentation Schedule",
-      postedBy: "Mr. Anderson (History Teacher)",
-      date: "2025-10-04",
-      type: "class",
-      message:
-        "The presentation schedule for the World War II history project has been finalized. Check your assigned time slot and prepare accordingly.",
-      attachments: ["presentation_schedule.pdf"],
-      isRead: true,
-    },
-  ];
+  const [schoolAnnouncements, setSchoolAnnouncements] = useState<Announcement[]>([]);
+  const [teacherAnnouncements, setTeacherAnnouncements] = useState<Announcement[]>([]);
+  const [schoolTotal, setSchoolTotal] = useState(0);
+  const [teacherTotal, setTeacherTotal] = useState(0);
+  const [unreadTotal, setUnreadTotal] = useState<number>(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const getTypeColor = (
     type: string
@@ -168,7 +68,7 @@ const Announcements = () => {
     return (
       <div className="space-y-4">
         {announcements.map((announcement) => {
-          const isExpanded = expandedId === announcement.id;
+          const isExpanded = expandedId === announcement._id || expandedId === announcement.id;
           const truncatedMessage =
             announcement.message.length > 150 && !isExpanded
               ? announcement.message.substring(0, 150) + "..."
@@ -176,7 +76,7 @@ const Announcements = () => {
 
           return (
             <Card
-              key={announcement.id}
+              key={announcement._id || announcement.id}
               className={`hover:shadow-md transition-shadow ${
                 !announcement.isRead ? "border-accent/50 bg-accent/5" : ""
               }`}
@@ -193,7 +93,7 @@ const Announcements = () => {
                           {announcement.title}
                         </CardTitle>
                         <CardDescription>
-                          Posted by {announcement.postedBy}
+                          Posted by {"postedBy" in announcement ? (announcement.postedBy?.name || "Unknown") : "Unknown"}
                         </CardDescription>
                       </div>
                     </div>
@@ -232,9 +132,28 @@ const Announcements = () => {
                     variant="link"
                     size="sm"
                     className="p-0 h-auto"
-                    onClick={() =>
-                      setExpandedId(isExpanded ? null : announcement.id)
-                    }
+                    aria-expanded={isExpanded}
+                    onClick={async () => {
+                      const next = isExpanded ? null : (announcement._id || announcement.id);
+                      setExpandedId(next);
+                      // Optimistically mark as read
+                      if (!announcement.isRead && next) {
+                        try {
+                          announcement.isRead = true;
+                          // Persist to server
+                          await markRead(announcement._id || announcement.id);
+                          // Refresh unread counter lazily
+                          try {
+                            const count = await getUnreadCount();
+                            setUnreadTotal(count);
+                          } catch { /* ignore */ }
+                        } catch (err) {
+                          // Revert on failure
+                          announcement.isRead = false;
+                          toast({ title: "Failed to mark as read", variant: "destructive" });
+                        }
+                      }
+                    }}
                   >
                     {isExpanded ? "Show less" : "Read more"}
                     <ChevronDown
@@ -245,22 +164,23 @@ const Announcements = () => {
                   </Button>
                 )}
 
-                {announcement.attachments.length > 0 && (
+                {announcement.attachments && announcement.attachments.length > 0 && (
                   <div className="pt-4 border-t">
                     <p className="text-sm font-medium text-foreground mb-2">
                       Attachments:
                     </p>
                     <div className="space-y-2">
-                      {announcement.attachments.map((file, index) => (
-                        <Button
+                      {announcement.attachments.map((att, index) => (
+                        <a
                           key={index}
-                          variant="outline"
-                          size="sm"
-                          className="gap-2"
+                          href={att.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-sm underline underline-offset-4"
                         >
                           <Paperclip className="h-4 w-4" />
-                          {file}
-                        </Button>
+                          {att.filename}
+                        </a>
                       ))}
                     </div>
                   </div>
@@ -273,35 +193,47 @@ const Announcements = () => {
     );
   };
 
-  // Pagination for the two announcement lists
-  const ROWS_PER_PAGE = 6;
-  const [schoolPage, setSchoolPage] = useState(1);
-  const [teacherPage, setTeacherPage] = useState(1);
-
-  const schoolTotalPages = Math.max(
-    1,
-    Math.ceil(schoolAnnouncements.length / ROWS_PER_PAGE)
-  );
-  const teacherTotalPages = Math.max(
-    1,
-    Math.ceil(teacherAnnouncements.length / ROWS_PER_PAGE)
-  );
-
+  // Fetch lists when page/tab changes
   useEffect(() => {
-    if (schoolPage > schoolTotalPages) setSchoolPage(schoolTotalPages);
-  }, [schoolPage, schoolTotalPages]);
-  useEffect(() => {
-    if (teacherPage > teacherTotalPages) setTeacherPage(teacherTotalPages);
-  }, [teacherPage, teacherTotalPages]);
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [schoolRes, teacherRes, unread] = await Promise.all([
+          getAnnouncements({ type: "school", page: schoolPage, pageSize: PAGE_SIZE }),
+          getAnnouncements({ type: "teacher", page: teacherPage, pageSize: PAGE_SIZE }),
+          getUnreadCount().catch(() => 0),
+        ]);
+        if (cancelled) return;
+        setSchoolAnnouncements(
+          schoolRes.items.map((i) => ({ ...i, id: i._id }))
+        );
+        setTeacherAnnouncements(
+          teacherRes.items.map((i) => ({ ...i, id: i._id }))
+        );
+        setSchoolTotal(schoolRes.total);
+        setTeacherTotal(teacherRes.total);
+        setUnreadTotal(typeof unread === "number" ? unread : 0);
+      } catch (e: unknown) {
+        let message = "Failed to load announcements";
+        if (e && typeof e === "object" && "response" in e) {
+          const r = (e as { response?: { data?: { message?: string } } }).response;
+          message = r?.data?.message || message;
+        }
+        if (!cancelled) setError(message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolPage, teacherPage]);
 
-  const pagedSchoolAnnouncements = schoolAnnouncements.slice(
-    (schoolPage - 1) * ROWS_PER_PAGE,
-    schoolPage * ROWS_PER_PAGE
-  );
-  const pagedTeacherAnnouncements = teacherAnnouncements.slice(
-    (teacherPage - 1) * ROWS_PER_PAGE,
-    teacherPage * ROWS_PER_PAGE
-  );
+  const schoolTotalPages = useMemo(() => Math.max(1, Math.ceil(schoolTotal / PAGE_SIZE)), [schoolTotal]);
+  const teacherTotalPages = useMemo(() => Math.max(1, Math.ceil(teacherTotal / PAGE_SIZE)), [teacherTotal]);
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -316,17 +248,13 @@ const Announcements = () => {
         <div className="flex items-center gap-2">
           <Bell className="h-5 w-5 text-accent" />
           <Badge variant="destructive" className="rounded-full">
-            {
-              [...schoolAnnouncements, ...teacherAnnouncements].filter(
-                (a) => !a.isRead
-              ).length
-            }
+            {unreadTotal}
           </Badge>
         </div>
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="school" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AnnouncementType)} className="space-y-6">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="school" className="flex items-center gap-2">
             <School className="h-4 w-4" />
@@ -338,16 +266,27 @@ const Announcements = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="school" className="space-y-4">
+        <TabsContent value="school" className="space-y-4" aria-busy={loading}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-foreground">
               General School Announcements
             </h2>
             <Badge variant="secondary">
-              {schoolAnnouncements.length} announcements
+              {schoolTotal} announcements
             </Badge>
           </div>
-          {renderAnnouncements(pagedSchoolAnnouncements)}
+          {error && (
+            <div className="text-sm text-destructive flex items-center justify-between p-3 border rounded-md">
+              <span>{error}</span>
+              <Button size="sm" variant="outline" onClick={() => setSchoolPage(1)}>Retry</Button>
+            </div>
+          )}
+          <SkeletonWrapper
+            isLoading={loading}
+            skeleton={<SkeletonGrid count={6} columns={2} cardLines={4} />}
+          >
+            {renderAnnouncements(schoolAnnouncements)}
+          </SkeletonWrapper>
           <TablePagination
             currentPage={schoolPage}
             totalPages={schoolTotalPages}
@@ -355,16 +294,27 @@ const Announcements = () => {
           />
         </TabsContent>
 
-        <TabsContent value="teacher" className="space-y-4">
+        <TabsContent value="teacher" className="space-y-4" aria-busy={loading}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-foreground">
               Teacher-Specific Announcements
             </h2>
             <Badge variant="secondary">
-              {teacherAnnouncements.length} announcements
+              {teacherTotal} announcements
             </Badge>
           </div>
-          {renderAnnouncements(pagedTeacherAnnouncements)}
+          {error && (
+            <div className="text-sm text-destructive flex items-center justify-between p-3 border rounded-md">
+              <span>{error}</span>
+              <Button size="sm" variant="outline" onClick={() => setTeacherPage(1)}>Retry</Button>
+            </div>
+          )}
+          <SkeletonWrapper
+            isLoading={loading}
+            skeleton={<SkeletonGrid count={6} columns={2} cardLines={4} />}
+          >
+            {renderAnnouncements(teacherAnnouncements)}
+          </SkeletonWrapper>
           <TablePagination
             currentPage={teacherPage}
             totalPages={teacherTotalPages}

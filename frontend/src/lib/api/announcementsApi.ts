@@ -70,3 +70,52 @@ export async function getUnreadCount() {
   }>("/api/announcements/unread-count");
   return data.data.unreadCount;
 }
+
+export type AudienceScope = "all" | "teachers" | "students" | "class";
+
+export interface CreateAnnouncementInput {
+  title: string;
+  message: string;
+  type: AnnouncementType; // teachers can only create 'teacher'
+  attachments?: AnnouncementAttachment[]; // URL-based attachments
+  audience?: { scope?: AudienceScope; classId?: string };
+  date?: string | Date;
+}
+
+export async function createAnnouncement(input: CreateAnnouncementInput) {
+  const { data } = await api.post<{ success: boolean; data: AnnouncementItem }>(
+    "/api/announcements",
+    input
+  );
+  return data.data;
+}
+
+export interface UpdateAnnouncementInput {
+  title?: string;
+  message?: string;
+  type?: AnnouncementType; // only admin/head can change
+  attachments?: AnnouncementAttachment[];
+  audience?: { scope?: AudienceScope; classId?: string };
+  date?: string | Date;
+  archived?: boolean;
+}
+
+export async function updateAnnouncement(
+  id: string,
+  input: UpdateAnnouncementInput
+) {
+  const { data } = await api.put<{ success: boolean; data: AnnouncementItem }>(
+    `/api/announcements/${id}`,
+    input
+  );
+  return data.data;
+}
+
+export async function deleteAnnouncement(
+  id: string,
+  opts?: { hard?: boolean }
+) {
+  await api.delete(`/api/announcements/${id}`, {
+    params: { hard: opts?.hard ? "true" : undefined },
+  });
+}

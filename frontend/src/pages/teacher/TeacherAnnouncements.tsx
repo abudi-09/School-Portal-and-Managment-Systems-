@@ -1,4 +1,11 @@
 import { useState, useEffect } from "react";
+import { SkeletonGrid, SkeletonWrapper } from "@/components/skeleton";
+import {
+  getAnnouncements,
+  type AnnouncementItem,
+  createAnnouncement as apiCreate,
+  updateAnnouncement as apiUpdate,
+} from "@/lib/api/announcementsApi";
 import { Plus, Bell, Paperclip, Filter, Edit2 } from "lucide-react";
 import {
   Card,
@@ -32,7 +39,7 @@ import { toast } from "sonner";
 import TablePagination from "@/components/shared/TablePagination";
 
 interface Announcement {
-  id: number;
+  id: string;
   title: string;
   author: string;
   audience: string;
@@ -55,62 +62,12 @@ const TeacherAnnouncements = () => {
     content: "",
   });
 
-  const [announcements, setAnnouncements] = useState<Announcement[]>([
-    {
-      id: 1,
-      title: "Homework Reminder - Chapter 5",
-      author: "You",
-      audience: "Class 11A",
-      date: "2024-11-15",
-      category: "homework",
-      content: "Don't forget to complete exercises 5.1 to 5.5 by Friday.",
-      hasAttachment: false,
-    },
-    {
-      id: 2,
-      title: "Mid-Term Exam Schedule",
-      author: "Head of School",
-      audience: "All Teachers",
-      date: "2024-11-14",
-      category: "exam",
-      content:
-        "Mid-term examinations will begin on November 20th. Please ensure all grades are updated.",
-      hasAttachment: true,
-    },
-    {
-      id: 3,
-      title: "Parent-Teacher Conference",
-      author: "Admin",
-      audience: "All Teachers",
-      date: "2024-11-13",
-      category: "event",
-      content:
-        "Parent-teacher conferences scheduled for November 25-26. Please review your schedule.",
-      hasAttachment: false,
-    },
-    {
-      id: 4,
-      title: "Mathematics Department Meeting",
-      author: "Department Head",
-      audience: "Mathematics Dept",
-      date: "2024-11-12",
-      category: "meeting",
-      content:
-        "Department meeting on Friday at 2 PM to discuss curriculum updates.",
-      hasAttachment: false,
-    },
-    {
-      id: 5,
-      title: "Assignment Extension Notice",
-      author: "You",
-      audience: "Class 12A",
-      date: "2024-11-11",
-      category: "assignment",
-      content:
-        "Due to technical issues, the calculus assignment deadline has been extended to Monday.",
-      hasAttachment: false,
-    },
-  ]);
+  const PAGE_SIZE = 6;
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleNewAnnouncement = () => {
     setIsEditing(false);
@@ -136,7 +93,7 @@ const TeacherAnnouncements = () => {
     setOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (
       !formData.title ||
       !formData.audience ||
@@ -146,47 +103,62 @@ const TeacherAnnouncements = () => {
       toast.error("Please fill in all required fields");
       return;
     }
-
-    if (isEditing && editingAnnouncement) {
-      // Update existing announcement
-      setAnnouncements((prev) =>
-        prev.map((ann) =>
-          ann.id === editingAnnouncement.id
+    try {
+      if (isEditing && editingAnnouncement) {
+        await apiUpdate(editingAnnouncement.id, {
+          title: formData.title,
+          message: formData.content,
+          audience: formData.audience
             ? {
-                ...ann,
-                title: formData.title,
-                audience: formData.audience,
-                category: formData.category,
-                content: formData.content,
-                date: new Date().toISOString().split("T")[0], // Update date
+                scope: formData.audience === "All My Classes" ? "all" : "class",
+                classId:
+                  formData.audience === "All My Classes"
+                    ? undefined
+                    : formData.audience,
               }
-            : ann
-        )
-      );
-      toast.success("Announcement updated successfully");
-    } else {
-      // Create new announcement
-      const newAnnouncement: Announcement = {
-        id: Math.max(...announcements.map((a) => a.id)) + 1,
-        title: formData.title,
-        author: "You",
-        audience: formData.audience,
-        date: new Date().toISOString().split("T")[0],
-        category: formData.category,
-        content: formData.content,
-        hasAttachment: false, // For now, no attachment handling
-      };
-      setAnnouncements((prev) => [newAnnouncement, ...prev]);
-      toast.success("Announcement posted successfully");
+            : undefined,
+        });
+        toast.success("Announcement updated successfully");
+      } else {
+        await apiCreate({
+          title: formData.title,
+          message: formData.content,
+          type: "teacher",
+          audience: formData.audience
+            ? {
+                scope: formData.audience === "All My Classes" ? "all" : "class",
+                classId:
+                  formData.audience === "All My Classes"
+                    ? undefined
+                    : formData.audience,
+              }
+            : { scope: "all" },
+        });
+        toast.success("Announcement posted successfully");
+      }
+      setOpen(false);
+      setFormData({ title: "", audience: "", category: "", content: "" });
+      // Refresh list
+      const res = await getAnnouncements({
+        type: "teacher",
+        page,
+        pageSize: PAGE_SIZE,
+      });
+      const items = res.items.map((i: AnnouncementItem) => ({
+        id: i._id,
+        title: i.title,
+        author: i.postedBy?.name || "Unknown",
+        audience: "All Teachers",
+        date: new Date(i.date).toISOString().split("T")[0],
+        category: (i as unknown as { category?: string }).category || "general",
+        content: i.message,
+        hasAttachment: (i.attachments || []).length > 0,
+      }));
+      setAnnouncements(items);
+      setTotal(res.total);
+    } catch (e) {
+      toast.error("Failed to save announcement");
     }
-
-    setOpen(false);
-    setFormData({
-      title: "",
-      audience: "",
-      category: "",
-      content: "",
-    });
   };
 
   const getCategoryColor = (category: string) => {
@@ -213,20 +185,57 @@ const TeacherAnnouncements = () => {
       ? announcements.filter((a) => a.author === "You")
       : announcements.filter((a) => a.author !== "You");
 
-  const ROWS_PER_PAGE = 6;
-  const [page, setPage] = useState(1);
-  useEffect(() => setPage(1), [filter]);
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredAnnouncements.length / ROWS_PER_PAGE)
-  );
+  // pagination constants (PAGE_SIZE used for server requests)
+  useEffect(() => setPage(1), [filter, setPage]);
+
+  useEffect(() => {
+    // Fetch announcements for teacher audience from server
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await getAnnouncements({
+          type: "teacher",
+          page,
+          pageSize: PAGE_SIZE,
+        });
+        if (cancelled) return;
+        const items = res.items.map((i: AnnouncementItem) => ({
+          id: i._id,
+          title: i.title,
+          author: i.postedBy?.name || "Unknown",
+          audience: "All Teachers",
+          date: new Date(i.date).toISOString().split("T")[0],
+          category:
+            (i as unknown as { category?: string }).category || "general",
+          content: i.message,
+          hasAttachment: (i.attachments || []).length > 0,
+        }));
+        setAnnouncements(items);
+        setTotal(res.total);
+      } catch (err: unknown) {
+        let message = "Failed to load announcements";
+        if (err && typeof err === "object" && "response" in err) {
+          const r = (err as { response?: { data?: { message?: string } } })
+            .response;
+          message = r?.data?.message || message;
+        }
+        setError(message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [page, filter]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
-  const pagedAnnouncements = filteredAnnouncements.slice(
-    (page - 1) * ROWS_PER_PAGE,
-    page * ROWS_PER_PAGE
-  );
+  }, [page, totalPages, setPage]);
+  const pagedAnnouncements = announcements;
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -247,7 +256,7 @@ const TeacherAnnouncements = () => {
               New Announcement
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {isEditing ? "Edit Announcement" : "Create Announcement"}

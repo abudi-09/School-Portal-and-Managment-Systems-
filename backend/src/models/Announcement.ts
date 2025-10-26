@@ -20,6 +20,11 @@ export interface IAnnouncement extends Document {
   type: AnnouncementType;
   message: string;
   attachments: IAnnouncementAttachment[];
+  audience: {
+    scope: "all" | "teachers" | "students" | "class";
+    classId?: string; // optional class identifier/name for class-targeted posts
+  };
+  archived?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -50,12 +55,24 @@ const AnnouncementSchema = new Schema<IAnnouncement>(
     type: { type: String, required: true, enum: ["school", "teacher"] },
     message: { type: String, required: true },
     attachments: { type: [AttachmentSchema], default: [] },
+    audience: {
+      scope: {
+        type: String,
+        enum: ["all", "teachers", "students", "class"],
+        default: "all",
+        required: true,
+      },
+      classId: { type: String },
+    },
+    archived: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
 AnnouncementSchema.index({ type: 1, date: -1 });
 AnnouncementSchema.index({ "postedBy.user": 1 });
+AnnouncementSchema.index({ archived: 1 });
+AnnouncementSchema.index({ "audience.scope": 1 });
 
 const Announcement = mongoose.model<IAnnouncement>(
   "Announcement",

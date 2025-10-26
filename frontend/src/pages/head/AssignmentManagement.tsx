@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -29,16 +31,15 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 
-interface Teacher {
+// Local types
+type Teacher = {
   id: number;
   name: string;
   department: string;
@@ -49,18 +50,11 @@ interface Teacher {
   experience?: string;
   classTeacherAssignments?: string[];
   subjectAssignments?: { class: string; subject: string }[];
-}
+};
 
 const AssignmentManagement = () => {
-  const [selectedClass, setSelectedClass] = useState("");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [assignmentType, setAssignmentType] = useState<
-    "teacher" | "subject" | null
-  >(null);
-  const [teacherDetailsOpen, setTeacherDetailsOpen] = useState(false);
-  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
-
-  const classes = [
+  // Classes
+  const [classes, setClasses] = useState([
     {
       id: "10a",
       name: "10A",
@@ -96,9 +90,9 @@ const AssignmentManagement = () => {
       classTeacher: "Dr. Williams",
       subjects: 10,
     },
-  ];
+  ] as { id: string; name: string; students: number; classTeacher: string; subjects: number }[]);
 
-  const teachers: Teacher[] = [
+  const [teachers, setTeachers] = useState<Teacher[]>([
     {
       id: 1,
       name: "Ms. Smith",
@@ -194,15 +188,33 @@ const AssignmentManagement = () => {
         { class: "12A", subject: "Physical Education" },
       ],
     },
-  ];
+  ]);
 
-  const subjectAssignments = [
+  const [subjectAssignments, setSubjectAssignments] = useState([
     { class: "11A", subject: "Mathematics", teacher: "Ms. Smith" },
     { class: "11A", subject: "Physics", teacher: "Mr. Johnson" },
     { class: "11A", subject: "English", teacher: "Dr. Williams" },
     { class: "10A", subject: "Mathematics", teacher: "Ms. Smith" },
     { class: "10A", subject: "History", teacher: "Unassigned" },
-  ];
+  ] as { class: string; subject: string; teacher: string }[]);
+
+  // Search state
+  const [teacherSearch, setTeacherSearch] = useState("");
+  const [classSearch, setClassSearch] = useState("");
+  const [subjectSearch, setSubjectSearch] = useState("");
+
+  // UI state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [assignmentType, setAssignmentType] = useState<"teacher" | "subject">(
+    "teacher"
+  );
+  const [selectedClass, setSelectedClass] = useState<string | null>(null);
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(
+    null
+  );
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const [teacherDetailsOpen, setTeacherDetailsOpen] = useState(false);
+  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
 
   const unassignedCount =
     classes.filter((c) => c.classTeacher === "Unassigned").length +
@@ -210,12 +222,94 @@ const AssignmentManagement = () => {
 
   const openAssignmentDialog = (type: "teacher" | "subject") => {
     setAssignmentType(type);
+    setSelectedTeacherId(null);
     setDialogOpen(true);
   };
 
   const openTeacherDetails = (teacher: Teacher) => {
     setSelectedTeacher(teacher);
     setTeacherDetailsOpen(true);
+  };
+
+  const handleConfirmAssignment = () => {
+    if (!selectedTeacherId) {
+      setDialogOpen(false);
+      return;
+    }
+    const teacherIdNum = parseInt(selectedTeacherId, 10);
+    const teacher = teachers.find((t) => t.id === teacherIdNum);
+    if (!teacher) {
+      setDialogOpen(false);
+      return;
+    }
+
+    if (assignmentType === "teacher") {
+      const cls = classes.find((c) => c.id === selectedClass);
+      if (!cls) {
+        setDialogOpen(false);
+        return;
+      }
+      const prevTeacherName = cls.classTeacher;
+
+      // update class assignment
+      setClasses((prev) =>
+        prev.map((c) =>
+          c.id === selectedClass ? { ...c, classTeacher: teacher.name } : c
+        )
+      );
+
+      // remove previous teacher assignment if applicable
+      if (prevTeacherName && prevTeacherName !== "Unassigned") {
+        setTeachers((prev) =>
+          prev.map((t) =>
+            t.name === prevTeacherName
+              ? {
+                  ...t,
+                  assignedClasses: Math.max(0, (t.assignedClasses || 1) - 1),
+                  classTeacherAssignments: (
+                    t.classTeacherAssignments || []
+                  ).filter((x) => x !== cls.name),
+                }
+              : t
+          )
+        );
+      }
+
+      // add to new teacher
+      setTeachers((prev) =>
+        prev.map((t) =>
+          t.id === teacher.id
+            ? {
+                ...t,
+                assignedClasses: (t.assignedClasses || 0) + 1,
+                classTeacherAssignments: [
+                  ...(t.classTeacherAssignments || []),
+                  cls.name,
+                ],
+              }
+            : t
+        )
+      );
+    }
+
+    if (assignmentType === "subject") {
+      const clsName = classes.find((c) => c.id === selectedClass)?.name;
+      if (!clsName || !selectedSubject) {
+        setDialogOpen(false);
+        return;
+      }
+      setSubjectAssignments((prev) =>
+        prev.map((sa) =>
+          sa.class === clsName && sa.subject === selectedSubject
+            ? { ...sa, teacher: teacher.name }
+            : sa
+        )
+      );
+    }
+
+    setDialogOpen(false);
+    setSelectedTeacherId(null);
+    setSelectedSubject(null);
   };
 
   return (
@@ -352,47 +446,64 @@ const AssignmentManagement = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {classes.map((classItem) => (
-              <div
-                key={classItem.id}
-                className="flex items-center justify-between p-4 rounded-lg bg-secondary"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="font-medium text-foreground">
-                      Class {classItem.name}
-                    </p>
-                    <Badge variant="outline">
-                      {classItem.students} students
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Class Teacher:{" "}
-                    <span
-                      className={
-                        classItem.classTeacher === "Unassigned"
-                          ? "text-warning font-medium"
-                          : "text-foreground"
-                      }
-                    >
-                      {classItem.classTeacher}
-                    </span>
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedClass(classItem.id);
-                    openAssignmentDialog("teacher");
-                  }}
+            <div className="mb-3">
+              <Input
+                placeholder="Search classes by name or teacher"
+                value={classSearch}
+                onChange={(e) => setClassSearch(e.target.value)}
+              />
+            </div>
+
+            {classes
+              .filter((classItem) => {
+                if (!classSearch) return true;
+                const q = classSearch.toLowerCase();
+                return (
+                  classItem.name.toLowerCase().includes(q) ||
+                  classItem.classTeacher.toLowerCase().includes(q)
+                );
+              })
+              .map((classItem) => (
+                <div
+                  key={classItem.id}
+                  className="flex items-center justify-between p-4 rounded-lg bg-secondary"
                 >
-                  {classItem.classTeacher === "Unassigned"
-                    ? "Assign"
-                    : "Change"}
-                </Button>
-              </div>
-            ))}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-medium text-foreground">
+                        Class {classItem.name}
+                      </p>
+                      <Badge variant="outline">
+                        {classItem.students} students
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Class Teacher:{" "}
+                      <span
+                        className={
+                          classItem.classTeacher === "Unassigned"
+                            ? "text-warning font-medium"
+                            : "text-foreground"
+                        }
+                      >
+                        {classItem.classTeacher}
+                      </span>
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedClass(classItem.id);
+                      openAssignmentDialog("teacher");
+                    }}
+                  >
+                    {classItem.classTeacher === "Unassigned"
+                      ? "Assign"
+                      : "Change"}
+                  </Button>
+                </div>
+              ))}
           </CardContent>
         </Card>
 
@@ -457,7 +568,10 @@ const AssignmentManagement = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => openAssignmentDialog("subject")}
+                        onClick={() => {
+                          setSelectedSubject(assignment.subject);
+                          openAssignmentDialog("subject");
+                        }}
                       >
                         {assignment.teacher === "Unassigned"
                           ? "Assign"
@@ -528,16 +642,36 @@ const AssignmentManagement = () => {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Select Teacher</Label>
-              <Select>
+              <Input
+                placeholder="Search teacher by name or dept"
+                value={teacherSearch}
+                onChange={(e) => setTeacherSearch(e.target.value)}
+              />
+              <Select
+                value={selectedTeacherId ?? undefined}
+                onValueChange={(v) => setSelectedTeacherId(v ?? null)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Choose a teacher" />
                 </SelectTrigger>
                 <SelectContent>
-                  {teachers.map((teacher) => (
-                    <SelectItem key={teacher.id} value={teacher.id.toString()}>
-                      {teacher.name} - {teacher.department}
-                    </SelectItem>
-                  ))}
+                  {teachers
+                    .filter((t) => {
+                      if (!teacherSearch) return true;
+                      const q = teacherSearch.toLowerCase();
+                      return (
+                        t.name.toLowerCase().includes(q) ||
+                        t.department.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((teacher) => (
+                      <SelectItem
+                        key={teacher.id}
+                        value={teacher.id.toString()}
+                      >
+                        {teacher.name} - {teacher.department}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -546,7 +680,7 @@ const AssignmentManagement = () => {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => setDialogOpen(false)}>
+            <Button onClick={handleConfirmAssignment}>
               Confirm Assignment
             </Button>
           </DialogFooter>

@@ -90,11 +90,37 @@ const TeacherAssignments = () => {
   const ROWS_PER_PAGE = 6;
   const [assignmentsPage, setAssignmentsPage] = useState(1);
   const [homeworkPage, setHomeworkPage] = useState(1);
+  const [assignmentsQuery, setAssignmentsQuery] = useState("");
+  const [homeworkQuery, setHomeworkQuery] = useState("");
+  // filtered lists computed from queries
+  const filteredAssignments = assignments.filter((a) => {
+    if (!assignmentsQuery) return true;
+    const q = assignmentsQuery.toLowerCase();
+    return (
+      String(a.title).toLowerCase().includes(q) ||
+      String(a.subject).toLowerCase().includes(q) ||
+      String(a.class).toLowerCase().includes(q)
+    );
+  });
+
+  const filteredHomework = homework.filter((h) => {
+    if (!homeworkQuery) return true;
+    const q = homeworkQuery.toLowerCase();
+    return (
+      String(h.title).toLowerCase().includes(q) ||
+      String(h.subject).toLowerCase().includes(q) ||
+      String(h.class).toLowerCase().includes(q)
+    );
+  });
+
   const assignmentsTotal = Math.max(
     1,
-    Math.ceil(assignments.length / ROWS_PER_PAGE)
+    Math.ceil(filteredAssignments.length / ROWS_PER_PAGE)
   );
-  const homeworkTotal = Math.max(1, Math.ceil(homework.length / ROWS_PER_PAGE));
+  const homeworkTotal = Math.max(
+    1,
+    Math.ceil(filteredHomework.length / ROWS_PER_PAGE)
+  );
   useEffect(() => {
     if (assignmentsPage > assignmentsTotal)
       setAssignmentsPage(assignmentsTotal);
@@ -102,11 +128,11 @@ const TeacherAssignments = () => {
   useEffect(() => {
     if (homeworkPage > homeworkTotal) setHomeworkPage(homeworkTotal);
   }, [homeworkPage, homeworkTotal]);
-  const pagedAssignments = assignments.slice(
+  const pagedAssignments = filteredAssignments.slice(
     (assignmentsPage - 1) * ROWS_PER_PAGE,
     assignmentsPage * ROWS_PER_PAGE
   );
-  const pagedHomework = homework.slice(
+  const pagedHomework = filteredHomework.slice(
     (homeworkPage - 1) * ROWS_PER_PAGE,
     homeworkPage * ROWS_PER_PAGE
   );
@@ -223,6 +249,16 @@ const TeacherAssignments = () => {
         </TabsList>
 
         <TabsContent value="assignments" className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Search assignments by title, subject, or class"
+              value={assignmentsQuery}
+              onChange={(e) => {
+                setAssignmentsQuery(e.target.value);
+                setAssignmentsPage(1);
+              }}
+            />
+          </div>
           <SkeletonWrapper
             isLoading={false}
             skeleton={<SkeletonGrid columns={2} count={6} />}
@@ -269,6 +305,16 @@ const TeacherAssignments = () => {
         </TabsContent>
 
         <TabsContent value="homework" className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Search homework by title, subject, or class"
+              value={homeworkQuery}
+              onChange={(e) => {
+                setHomeworkQuery(e.target.value);
+                setHomeworkPage(1);
+              }}
+            />
+          </div>
           <SkeletonWrapper
             isLoading={false}
             skeleton={<SkeletonGrid columns={2} count={6} />}

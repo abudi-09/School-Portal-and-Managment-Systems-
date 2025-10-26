@@ -16,13 +16,39 @@ export const getAnnouncements = async (req: Request, res: Response) => {
     const skip = (pageNum - 1) * limit;
 
     const filter: Record<string, unknown> = { archived: { $ne: true } };
-    if (type) filter.type = type;
+    // If caller requests the "teacher" stream and the requester is a teacher,
+    // include both teacher and school announcements that are visible to teachers.
+    // If caller asked for a specific stream type, apply it.
+    // Special-case: when a logged-in teacher requests the "teacher" stream,
+    // include both 'teacher' and 'school' announcement types so Head/School-level
+    // announcements (type: 'school') are visible to teachers as well.
+    // If the request is unauthenticated and includes type=teacher, ignore the
+    // type filter so unauthenticated users still only see audience.scope='all'.
+    if (type) {
+      if (type === "teacher") {
+        if (req.user && req.user.role === "teacher") {
+          filter.type = { $in: ["teacher", "school"] };
+        } else if (!req.user) {
+          // Ignore type=teacher for unauthenticated callers to avoid
+          // returning an empty set (they should only see audience.scope='all').
+        } else {
+          // Authenticated non-teachers (head/admin) requested teacher stream;
+          // honor the explicit request and filter to teacher-type only.
+          filter.type = "teacher";
+        }
+      } else {
+        filter.type = type;
+      }
+    }
 
     // Apply simple role-based visibility using audience
     if (req.user) {
       const role = req.user.role;
       if (role === "student") {
-        const studentClass = (req.user.academicInfo as any)?.class;
+        const ai = req.user.academicInfo as any;
+        const studentClass =
+          ai?.class ||
+          (ai?.grade && ai?.section ? `${ai.grade}-${ai.section}` : undefined);
         filter.$or = [
           { "audience.scope": "all" },
           { "audience.scope": "students" },
@@ -31,10 +57,21 @@ export const getAnnouncements = async (req: Request, res: Response) => {
             : []),
         ];
       } else if (role === "teacher") {
-        // Teachers see all-school posts to teachers or all, plus their own teacher posts
+        // Teachers see: ALL, TEACHERS, CLASS where they teach, and their own posts
+        const teacherClassIds: string[] =
+          (req.user as any).assignedClassIds || [];
+        const classClause = teacherClassIds.length
+          ? [
+              {
+                "audience.scope": "class",
+                "audience.classId": { $in: teacherClassIds },
+              },
+            ]
+          : [];
         filter.$or = [
           { "audience.scope": "all" },
           { "audience.scope": "teachers" },
+          ...classClause,
           { "postedBy.user": req.user._id },
         ];
       } else {
@@ -171,7 +208,10 @@ export const getUnreadCount = async (req: Request, res: Response) => {
     const baseFilter: Record<string, any> = { archived: { $ne: true } };
     const role = req.user.role;
     if (role === "student") {
-      const studentClass = (req.user.academicInfo as any)?.class;
+      const ai = req.user.academicInfo as any;
+      const studentClass =
+        ai?.class ||
+        (ai?.grade && ai?.section ? `${ai.grade}-${ai.section}` : undefined);
       baseFilter.$or = [
         { "audience.scope": "all" },
         { "audience.scope": "students" },
@@ -180,9 +220,20 @@ export const getUnreadCount = async (req: Request, res: Response) => {
           : []),
       ];
     } else if (role === "teacher") {
+      const teacherClassIds: string[] =
+        (req.user as any).assignedClassIds || [];
+      const classClause = teacherClassIds.length
+        ? [
+            {
+              "audience.scope": "class",
+              "audience.classId": { $in: teacherClassIds },
+            },
+          ]
+        : [];
       baseFilter.$or = [
         { "audience.scope": "all" },
         { "audience.scope": "teachers" },
+        ...classClause,
         { "postedBy.user": req.user._id },
       ];
     }
@@ -232,22 +283,18 @@ export const createAnnouncement = async (req: Request, res: Response) => {
     };
 
     if (!title || !message || !type) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "title, message and type are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "title, message and type are required",
+      });
     }
 
     // Teachers can only create 'teacher' announcements
     if (req.user.role === "teacher" && type !== "teacher") {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Teachers can only post teacher announcements",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Teachers can only post teacher announcements",
+      });
     }
 
     const aud = {
@@ -255,12 +302,10 @@ export const createAnnouncement = async (req: Request, res: Response) => {
       classId: audience?.classId,
     } as any;
     if (aud.scope === "class" && !aud.classId) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "classId is required when scope=class",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "classId is required when scope=class",
+      });
     }
 
     const doc = await Announcement.create({
@@ -321,12 +366,10 @@ export const updateAnnouncement = async (req: Request, res: Response) => {
     }
 
     if (audience?.scope === "class" && !audience.classId) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "classId is required when scope=class",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "classId is required when scope=class",
+      });
     }
 
     if (title !== undefined) doc.title = title;

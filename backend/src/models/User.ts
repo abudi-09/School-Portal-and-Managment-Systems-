@@ -34,6 +34,8 @@ export interface IUser extends Document {
     grade?: string;
     subjects?: string[];
   };
+  // For teachers: list of class ids (canonical strings like "10-A") they are assigned to
+  assignedClassIds?: string[];
   employmentInfo?: {
     employeeId?: string;
     department?: string;
@@ -122,6 +124,8 @@ const userSchema = new Schema<IUser>(
       grade: String,
       subjects: [String],
     },
+    // For teachers: list of class ids (canonical strings like "10-A") they are assigned to
+    assignedClassIds: [String],
     employmentInfo: {
       employeeId: String,
       department: String,
@@ -218,6 +222,7 @@ userSchema.index({ role: 1 });
 userSchema.index({ status: 1 });
 userSchema.index({ "academicInfo.studentId": 1 });
 userSchema.index({ "employmentInfo.employeeId": 1 });
+userSchema.index({ assignedClassIds: 1 });
 
 // Pre-save middleware to hash password
 userSchema.pre("save", async function (next) {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { SkeletonGrid, SkeletonWrapper } from "@/components/skeleton";
 import {
   getAnnouncements,
@@ -42,6 +42,8 @@ interface Announcement {
   id: string;
   title: string;
   author: string;
+  authorId?: string;
+  authorRole?: string;
   audience: string;
   date: string;
   category: string;
@@ -49,9 +51,13 @@ interface Announcement {
   hasAttachment: boolean;
 }
 
+import { AuthContext } from "@/contexts/AuthContext";
+
 const TeacherAnnouncements = () => {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("all");
+  const auth = useContext(AuthContext);
+  const currentUser = auth?.user;
   const [isEditing, setIsEditing] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] =
     useState<Announcement | null>(null);
@@ -148,6 +154,8 @@ const TeacherAnnouncements = () => {
         id: i._id,
         title: i.title,
         author: i.postedBy?.name || "Unknown",
+        authorId: i.postedBy?.user || undefined,
+        authorRole: i.postedBy?.role || undefined,
         audience: "All Teachers",
         date: new Date(i.date).toISOString().split("T")[0],
         category: (i as unknown as { category?: string }).category || "general",
@@ -181,9 +189,16 @@ const TeacherAnnouncements = () => {
   const filteredAnnouncements =
     filter === "all"
       ? announcements
-      : filter === "sent"
-      ? announcements.filter((a) => a.author === "You")
-      : announcements.filter((a) => a.author !== "You");
+      : filter === "head"
+      ? announcements.filter((a) => a.authorRole === "head")
+      : filter === "admin"
+      ? announcements.filter((a) => a.authorRole === "admin")
+      : filter === "others"
+      ? announcements.filter(
+          (a) => a.authorRole === "teacher" && a.authorId !== currentUser?.id
+        )
+      : // sent / my posts
+        announcements.filter((a) => a.authorId === currentUser?.id);
 
   // pagination constants (PAGE_SIZE used for server requests)
   useEffect(() => setPage(1), [filter, setPage]);
@@ -205,6 +220,8 @@ const TeacherAnnouncements = () => {
           id: i._id,
           title: i.title,
           author: i.postedBy?.name || "Unknown",
+          authorId: i.postedBy?.user || undefined,
+          authorRole: i.postedBy?.role || undefined,
           audience: "All Teachers",
           date: new Date(i.date).toISOString().split("T")[0],
           category:
@@ -235,7 +252,7 @@ const TeacherAnnouncements = () => {
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages, setPage]);
-  const pagedAnnouncements = announcements;
+  const pagedAnnouncements = filteredAnnouncements;
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -356,19 +373,46 @@ const TeacherAnnouncements = () => {
         </Dialog>
       </div>
 
-      {/* Filter */}
-      <div className="flex items-center gap-2">
+      {/* Filter / Tabs by poster */}
+      <div className="flex items-center gap-4">
         <Filter className="h-4 w-4 text-muted-foreground" />
-        <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Announcements</SelectItem>
-            <SelectItem value="sent">Sent by Me</SelectItem>
-            <SelectItem value="received">Received</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant={filter === "all" ? "default" : "ghost"}
+            onClick={() => setFilter("all")}
+          >
+            All
+          </Button>
+          <Button
+            size="sm"
+            variant={filter === "head" ? "default" : "ghost"}
+            onClick={() => setFilter("head")}
+          >
+            Head
+          </Button>
+          <Button
+            size="sm"
+            variant={filter === "admin" ? "default" : "ghost"}
+            onClick={() => setFilter("admin")}
+          >
+            Admin
+          </Button>
+          <Button
+            size="sm"
+            variant={filter === "others" ? "default" : "ghost"}
+            onClick={() => setFilter("others")}
+          >
+            Other Teachers
+          </Button>
+          <Button
+            size="sm"
+            variant={filter === "sent" ? "default" : "ghost"}
+            onClick={() => setFilter("sent")}
+          >
+            My Posts
+          </Button>
+        </div>
       </div>
 
       {/* Announcements List */}
@@ -388,7 +432,11 @@ const TeacherAnnouncements = () => {
                     </CardTitle>
                   </div>
                   <CardDescription>
-                    Posted by {announcement.author} • {announcement.date}
+                    Posted by{" "}
+                    {announcement.authorId === currentUser?.id
+                      ? "You"
+                      : announcement.author}{" "}
+                    • {announcement.date}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
@@ -408,7 +456,7 @@ const TeacherAnnouncements = () => {
                 <p className="text-foreground">{announcement.content}</p>
                 <div className="flex items-center justify-between pt-2 border-t">
                   <Badge variant="secondary">{announcement.audience}</Badge>
-                  {announcement.author === "You" && (
+                  {announcement.authorId === currentUser?.id && (
                     <Button
                       variant="ghost"
                       size="sm"

@@ -4,6 +4,7 @@ import {
   getAnnouncements,
   type AnnouncementItem,
   deleteAnnouncement as apiDelete,
+  createAnnouncement,
 } from "@/lib/api/announcementsApi";
 import { Plus, Bell, Paperclip, Filter, Eye, TrendingUp } from "lucide-react";
 import {
@@ -53,6 +54,14 @@ const HeadAnnouncements = () => {
   const [selectedAnnouncement, setSelectedAnnouncement] =
     useState<Announcement | null>(null);
   const [filter, setFilter] = useState("all");
+  // Create form state
+  const [createTitle, setCreateTitle] = useState("");
+  const [createMessage, setCreateMessage] = useState("");
+  const [createAudience, setCreateAudience] = useState<
+    "all" | "teachers" | "students" | "class"
+  >("all");
+  const [createGrade, setCreateGrade] = useState<string | null>(null);
+  const [createSection, setCreateSection] = useState<string | null>(null);
   const PAGE_SIZE = 6;
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [page, setPage] = useState(1);
@@ -217,7 +226,10 @@ const HeadAnnouncements = () => {
                 >
                   Target Audience
                 </Label>
-                <Select>
+                <Select
+                  value={createAudience}
+                  onValueChange={(v) => setCreateAudience(v as any)}
+                >
                   <SelectTrigger className="border-gray-300">
                     <SelectValue placeholder="Select audience" />
                   </SelectTrigger>
@@ -231,6 +243,47 @@ const HeadAnnouncements = () => {
                   </SelectContent>
                 </Select>
               </div>
+              {/* Grade/Section when Specific Class is selected */}
+              {createAudience === "class" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-gray-700">
+                      Grade
+                    </Label>
+                    <Select
+                      value={createGrade ?? undefined}
+                      onValueChange={(v) => setCreateGrade(v ?? null)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select grade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="11">11</SelectItem>
+                        <SelectItem value="12">12</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-gray-700">
+                      Section
+                    </Label>
+                    <Select
+                      value={createSection ?? undefined}
+                      onValueChange={(v) => setCreateSection(v ?? null)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select section" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A">A</SelectItem>
+                        <SelectItem value="B">B</SelectItem>
+                        <SelectItem value="C">C</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label
                   htmlFor="category"
@@ -262,6 +315,8 @@ const HeadAnnouncements = () => {
                   id="title"
                   placeholder="Enter announcement title"
                   className="border-gray-300"
+                  value={createTitle}
+                  onChange={(e) => setCreateTitle(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -276,6 +331,8 @@ const HeadAnnouncements = () => {
                   placeholder="Write your announcement message"
                   rows={8}
                   className="border-gray-300"
+                  value={createMessage}
+                  onChange={(e) => setCreateMessage(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -300,7 +357,59 @@ const HeadAnnouncements = () => {
                 Save as Draft
               </Button>
               <Button
-                onClick={() => setOpen(false)}
+                onClick={async () => {
+                  // Basic validation
+                  if (!createTitle || !createMessage) return;
+                  if (
+                    createAudience === "class" &&
+                    (!createGrade || !createSection)
+                  )
+                    return;
+                  try {
+                    const classId =
+                      createAudience === "class"
+                        ? `${createGrade}-${createSection}`
+                        : undefined;
+                    const created = await createAnnouncement({
+                      title: createTitle,
+                      message: createMessage,
+                      type: "school",
+                      audience: { scope: createAudience as any, classId },
+                      attachments: [],
+                    });
+                    // Prepend to list
+                    const item = created as AnnouncementItem;
+                    const mapped = {
+                      id: item._id,
+                      title: item.title,
+                      author: item.postedBy?.name || "You",
+                      audience:
+                        item.audience?.scope === "all"
+                          ? "All Users"
+                          : item.audience?.scope === "teachers"
+                          ? "Teachers"
+                          : item.audience?.scope === "students"
+                          ? "Students"
+                          : `Class ${item.audience?.classId}`,
+                      date: new Date(item.date).toISOString().split("T")[0],
+                      category: (item as any).category || "general",
+                      content: item.message,
+                      views: 0,
+                      hasAttachment: (item.attachments || []).length > 0,
+                    };
+                    setAnnouncements((prev) => [mapped, ...prev]);
+                    setTotal((t) => t + 1);
+                    setOpen(false);
+                    // reset form
+                    setCreateTitle("");
+                    setCreateMessage("");
+                    setCreateAudience("all");
+                    setCreateGrade(null);
+                    setCreateSection(null);
+                  } catch (err) {
+                    console.error("Failed to create announcement", err);
+                  }
+                }}
                 className="bg-gray-600 hover:bg-gray-700 text-white"
               >
                 Post Announcement

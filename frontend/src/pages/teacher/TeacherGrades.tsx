@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Save,
   Send,
@@ -7,6 +7,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Info,
 } from "lucide-react";
 import {
   Card,
@@ -52,177 +53,233 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  addTeacherColumn,
+  deleteTeacherColumn,
+  editTeacherColumn,
+  getTeacherAssignments,
+  getTeacherSheet,
+  submitGradeSheet,
+  updateTeacherScore,
+  type GradeColumn,
+  type TeacherSheetView,
+} from "@/lib/grades/workflowStore";
+
+const TEACHER_ID = "teacher-math";
+
+type AssignmentOption = {
+  key: string;
+  label: string;
+  status: "draft" | "submitted" | "approved";
+};
 
 const TeacherGrades = () => {
-  const [selectedClass, setSelectedClass] = useState("11a");
-  const [status, setStatus] = useState<
-    "draft" | "submitted" | "verified" | "approved"
-  >("draft");
-  // ----- Dynamic Columns and Grades (local state only) -----
-  type Column = { id: string; name: string; maxScore: number };
-  type ScoreValue = number | ""; // empty string when unset for nicer input UX
-  type StudentRow = { id: number; name: string; rollNo: string };
-
-  const initialStudents: StudentRow[] = [
-    { id: 1, name: "John Smith", rollNo: "11A-001" },
-    { id: 2, name: "Emma Wilson", rollNo: "11A-002" },
-    { id: 3, name: "Michael Brown", rollNo: "11A-003" },
-    { id: 4, name: "Sarah Davis", rollNo: "11A-004" },
-  ];
-  // Start with three standard columns
-  const [columns, setColumns] = useState<Column[]>([
-    { id: "col_test", name: "Test", maxScore: 100 },
-    { id: "col_exam", name: "Exam", maxScore: 100 },
-    { id: "col_assignment", name: "Assignment", maxScore: 100 },
-  ]);
-
-  // Grades per student per column
-  const [scores, setScores] = useState<
-    Record<number, Record<string, ScoreValue>>
-  >(() => {
-    const map: Record<number, Record<string, ScoreValue>> = {};
-    for (const s of initialStudents) {
-      map[s.id] = { col_test: 85, col_exam: 92, col_assignment: 88 };
-    }
-    return map;
+  const [assignments, setAssignments] = useState(() =>
+    getTeacherAssignments(TEACHER_ID)
+  );
+  const [selectedKey, setSelectedKey] = useState(() =>
+    assignments.length
+      ? `${assignments[0].classId}|${assignments[0].subjectId}`
+      : ""
+  );
+  const [sheetView, setSheetView] = useState<TeacherSheetView | null>(() => {
+    if (!assignments.length) return null;
+    const first = assignments[0];
+    return getTeacherSheet(TEACHER_ID, first.classId, first.subjectId);
   });
 
-  const students: StudentRow[] = initialStudents;
-
-  // Derived totals and averages per student
-  const colMaxTotal = useMemo(
-    () => columns.reduce((sum, c) => sum + (Number(c.maxScore) || 0), 0),
-    [columns]
-  );
-
-  const getStudentTotal = (studentId: number) => {
-    const row = scores[studentId] || {};
-    return columns.reduce((sum, c) => {
-      const v = row[c.id];
-      return sum + (typeof v === "number" ? v : 0);
-    }, 0);
-  };
-
-  const getStudentAveragePct = (studentId: number) => {
-    const total = getStudentTotal(studentId);
-    const denom = colMaxTotal || 1;
-    return (total / denom) * 100;
-  };
-
-  // Add Column dialog state
   const [addOpen, setAddOpen] = useState(false);
   const [newColName, setNewColName] = useState("");
   const [newColMax, setNewColMax] = useState("100");
 
-  const addColumn = () => {
-    const name = newColName.trim();
-    const max = Number(newColMax);
-    if (!name) return;
-    if (!Number.isFinite(max) || max <= 0) return;
-    const id = `col_${Math.random().toString(36).slice(2, 9)}`;
-    const col: Column = { id, name, maxScore: max };
-    setColumns((prev) => [...prev, col]);
-    setScores((prev) => {
-      const next = { ...prev };
-      for (const s of students) {
-        next[s.id] = { ...(next[s.id] || {}), [id]: "" };
-      }
-      return next;
-    });
-    setAddOpen(false);
-    setNewColName("");
-    setNewColMax("100");
-  };
-
-  // Edit Column dialog state
   const [editOpen, setEditOpen] = useState(false);
-  const [editingCol, setEditingCol] = useState<Column | null>(null);
+  const [editingCol, setEditingCol] = useState<GradeColumn | null>(null);
   const [editName, setEditName] = useState("");
   const [editMax, setEditMax] = useState("100");
 
-  const startEdit = (col: Column) => {
-    setEditingCol(col);
-    setEditName(col.name);
-    setEditMax(String(col.maxScore));
-    setEditOpen(true);
-  };
-
-  const saveEdit = () => {
-    if (!editingCol) return;
-    const name = editName.trim();
-    const max = Number(editMax);
-    if (!name) return;
-    if (!Number.isFinite(max) || max <= 0) return;
-    setColumns((prev) =>
-      prev.map((c) =>
-        c.id === editingCol.id ? { ...c, name, maxScore: max } : c
-      )
-    );
-    setEditOpen(false);
-    setEditingCol(null);
-  };
-
-  // Delete Column confirm state
-  const [deleteCol, setDeleteCol] = useState<Column | null>(null);
-  const confirmDelete = () => {
-    if (!deleteCol) return;
-    const id = deleteCol.id;
-    setColumns((prev) => prev.filter((c) => c.id !== id));
-    setScores((prev) => {
-      const next: typeof prev = {};
-      for (const sId of Object.keys(prev)) {
-        const row = { ...prev[Number(sId)] };
-        delete row[id];
-        next[Number(sId)] = row;
-      }
-      return next;
-    });
-    setDeleteCol(null);
-  };
-
-  // Pagination for grades table
-  const ROWS_PER_PAGE = 6;
+  const [deleteCol, setDeleteCol] = useState<GradeColumn | null>(null);
   const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(students.length / ROWS_PER_PAGE));
+
+  useEffect(() => {
+    if (!selectedKey) {
+      setSheetView(null);
+      return;
+    }
+    const [classId, subjectId] = selectedKey.split("|");
+    if (!classId || !subjectId) return;
+    const next = getTeacherSheet(TEACHER_ID, classId, subjectId);
+    setSheetView(next);
+  }, [selectedKey]);
+
+  const refreshAssignments = () => {
+    setAssignments(getTeacherAssignments(TEACHER_ID));
+  };
+
+  const assignmentOptions: AssignmentOption[] = useMemo(
+    () =>
+      assignments.map((item) => ({
+        key: `${item.classId}|${item.subjectId}`,
+        label: `${item.className} • ${item.subjectName}`,
+        status: item.status,
+      })),
+    [assignments]
+  );
+
+  const students = sheetView?.students ?? [];
+  const columns = sheetView?.columns ?? [];
+  const scores = sheetView?.scores ?? {};
+  const status = sheetView?.status ?? "draft";
+  const isLocked = status !== "draft";
+  const completionPercentage = sheetView?.completion ?? 0;
+  const totalPages = Math.max(1, Math.ceil(students.length / 6));
+
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
-  const pagedStudents = students.slice(
-    (page - 1) * ROWS_PER_PAGE,
-    page * ROWS_PER_PAGE
-  );
 
-  const completionPercentage = 75;
+  const pagedStudents = students.slice((page - 1) * 6, page * 6);
+
+  const statusBadgeVariant =
+    status === "approved"
+      ? "default"
+      : status === "submitted"
+      ? "secondary"
+      : "outline";
+
+  const handleScoreChange = (
+    studentId: string,
+    columnId: string,
+    rawValue: string
+  ) => {
+    if (!sheetView) return;
+    const parsed = rawValue === "" ? "" : Number(rawValue);
+    const updated = updateTeacherScore({
+      sheetId: sheetView.sheetId,
+      studentId,
+      columnId,
+      value: parsed,
+    });
+    if (updated) {
+      setSheetView(updated);
+      refreshAssignments();
+    }
+  };
+
+  const handleAddColumn = () => {
+    if (!sheetView) return;
+    const name = newColName.trim();
+    const maxValue = Number(newColMax);
+    if (!name) return;
+    if (!Number.isFinite(maxValue) || maxValue <= 0) return;
+    const updated = addTeacherColumn({
+      sheetId: sheetView.sheetId,
+      name,
+      maxScore: maxValue,
+    });
+    if (updated) {
+      setSheetView(updated);
+      setAddOpen(false);
+      setNewColName("");
+      setNewColMax("100");
+      refreshAssignments();
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (!sheetView || !editingCol) return;
+    const name = editName.trim();
+    const maxValue = Number(editMax);
+    if (!name) return;
+    if (!Number.isFinite(maxValue) || maxValue <= 0) return;
+    const updated = editTeacherColumn({
+      sheetId: sheetView.sheetId,
+      columnId: editingCol.id,
+      name,
+      maxScore: maxValue,
+    });
+    if (updated) {
+      setSheetView(updated);
+      setEditOpen(false);
+      setEditingCol(null);
+      refreshAssignments();
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (!sheetView || !deleteCol) return;
+    const updated = deleteTeacherColumn({
+      sheetId: sheetView.sheetId,
+      columnId: deleteCol.id,
+    });
+    if (updated) {
+      setSheetView(updated);
+      refreshAssignments();
+    }
+    setDeleteCol(null);
+  };
+
+  const handleSubmit = () => {
+    if (!sheetView) return;
+    const updated = submitGradeSheet(sheetView.sheetId);
+    if (updated) {
+      setSheetView(updated);
+      refreshAssignments();
+    }
+  };
+
+  const handleSaveDraft = () => {
+    if (!selectedKey) return;
+    const [classId, subjectId] = selectedKey.split("|");
+    const refreshed = getTeacherSheet(TEACHER_ID, classId, subjectId);
+    setSheetView(refreshed);
+  };
+
+  const getStudentTotal = (studentId: string) => {
+    if (!sheetView) return 0;
+    return sheetView.totals[studentId] ?? 0;
+  };
+
+  const getStudentAverage = (studentId: string) => {
+    if (!sheetView) return 0;
+    return sheetView.averages[studentId] ?? 0;
+  };
+
+  const lockMessage = sheetView?.lockReason;
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">
             Grade Management
           </h1>
           <p className="text-muted-foreground">
-            Enter and manage student grades for your classes
+            Add evaluation columns, enter scores, and submit your subject grade
+            sheet.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            Export
+          <Button variant="outline" className="gap-2" disabled>
+            <Download className="h-4 w-4" /> Export
           </Button>
-          <Button variant="outline" className="gap-2">
-            <Save className="h-4 w-4" />
-            Save Draft
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleSaveDraft}
+            disabled={!sheetView}
+          >
+            <Save className="h-4 w-4" /> Save Draft
           </Button>
-          <Button className="gap-2">
-            <Send className="h-4 w-4" />
-            Submit for Review
+          <Button
+            className="gap-2"
+            onClick={handleSubmit}
+            disabled={!sheetView || isLocked || completionPercentage < 100}
+          >
+            <Send className="h-4 w-4" /> Submit for Review
           </Button>
         </div>
       </div>
 
-      {/* Stats and Controls */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-6">
@@ -231,16 +288,7 @@ const TeacherGrades = () => {
                 <p className="text-sm text-muted-foreground mb-1">
                   Grading Status
                 </p>
-                <Badge
-                  variant={
-                    status === "approved"
-                      ? "default"
-                      : status === "submitted"
-                      ? "secondary"
-                      : "outline"
-                  }
-                  className="capitalize"
-                >
+                <Badge variant={statusBadgeVariant} className="capitalize">
                   {status}
                 </Badge>
               </div>
@@ -279,39 +327,37 @@ const TeacherGrades = () => {
         </Card>
       </div>
 
-      {/* Grading Workflow Status */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Grading Workflow</CardTitle>
               <CardDescription>
-                Track the approval process for grades
+                Select a class and subject to manage the grade sheet
               </CardDescription>
             </div>
-            <Select value={selectedClass} onValueChange={setSelectedClass}>
+            <Select value={selectedKey} onValueChange={setSelectedKey}>
               <SelectTrigger className="w-64">
-                <SelectValue placeholder="Select class" />
+                <SelectValue placeholder="Select class & subject" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="10a">10A - Mathematics</SelectItem>
-                <SelectItem value="11a">11A - Mathematics</SelectItem>
-                <SelectItem value="11b">11B - Mathematics</SelectItem>
-                <SelectItem value="12a">12A - Mathematics</SelectItem>
+                {assignmentOptions.map((option) => (
+                  <SelectItem key={option.key} value={option.key}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {/* Progress Steps */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div
                   className={`flex items-center justify-center w-10 h-10 rounded-full ${
                     status === "draft" ||
                     status === "submitted" ||
-                    status === "verified" ||
                     status === "approved"
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground"
@@ -329,9 +375,7 @@ const TeacherGrades = () => {
               <div className="flex items-center gap-3">
                 <div
                   className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                    status === "submitted" ||
-                    status === "verified" ||
-                    status === "approved"
+                    status === "submitted" || status === "approved"
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground"
                   }`}
@@ -341,25 +385,8 @@ const TeacherGrades = () => {
                 <div>
                   <p className="font-medium text-sm">Head Class Review</p>
                   <p className="text-xs text-muted-foreground">
-                    Verify & calculate
+                    Verification & ranking
                   </p>
-                </div>
-              </div>
-              <div className="flex-1 h-0.5 bg-border mx-4" />
-
-              <div className="flex items-center gap-3">
-                <div
-                  className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                    status === "verified" || status === "approved"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  3
-                </div>
-                <div>
-                  <p className="font-medium text-sm">Head Approval</p>
-                  <p className="text-xs text-muted-foreground">Final review</p>
                 </div>
               </div>
               <div className="flex-1 h-0.5 bg-border mx-4" />
@@ -383,52 +410,52 @@ const TeacherGrades = () => {
               </div>
             </div>
 
-            {/* Status Message */}
             {status === "draft" && (
               <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
                 <p className="text-sm text-warning">
-                  Complete grade entry and submit for Head Class Teacher review
+                  Complete grade entry and submit for Head Class Teacher review.
                 </p>
               </div>
             )}
             {status === "submitted" && (
               <div className="p-3 rounded-lg bg-secondary border">
                 <p className="text-sm text-muted-foreground">
-                  Grades submitted - waiting for Head Class Teacher verification
-                </p>
-              </div>
-            )}
-            {status === "verified" && (
-              <div className="p-3 rounded-lg bg-accent/10 border border-accent/20">
-                <p className="text-sm text-accent">
-                  Verified by Head Class Teacher - awaiting Head of School
-                  approval
+                  Grade sheet submitted and locked. Awaiting head-of-class
+                  processing.
                 </p>
               </div>
             )}
             {status === "approved" && (
               <div className="p-3 rounded-lg bg-success/10 border border-success/20">
                 <p className="text-sm text-success">
-                  Grades approved and published - now visible to students
+                  Class results are final. Students can view their ranks.
                 </p>
+              </div>
+            )}
+            {lockMessage && (
+              <div className="flex items-center gap-3 rounded-md border border-border p-3 text-sm text-muted-foreground">
+                <Info className="h-4 w-4" />
+                <span>{lockMessage}</span>
               </div>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Grades Table (Dynamic Columns) */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
             <div>
               <CardTitle>Student Grades</CardTitle>
               <CardDescription>
-                Create, rename, and delete evaluation columns. Scores update
-                totals automatically.
+                Manage evaluation columns and student scores for this subject.
               </CardDescription>
             </div>
-            <Button className="gap-2" onClick={() => setAddOpen(true)}>
+            <Button
+              className="gap-2"
+              onClick={() => setAddOpen(true)}
+              disabled={isLocked || !sheetView}
+            >
               <Plus className="h-4 w-4" /> Add Column
             </Button>
           </div>
@@ -454,7 +481,13 @@ const TeacherGrades = () => {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
-                          onClick={() => startEdit(col)}
+                          onClick={() => {
+                            setEditingCol(col);
+                            setEditName(col.name);
+                            setEditMax(String(col.maxScore));
+                            setEditOpen(true);
+                          }}
+                          disabled={isLocked}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -463,20 +496,23 @@ const TeacherGrades = () => {
                           size="icon"
                           className="h-7 w-7 text-destructive"
                           onClick={() => setDeleteCol(col)}
+                          disabled={isLocked}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableHead>
                   ))}
-                  <TableHead className="text-center">Total</TableHead>
+                  <TableHead className="text-center">Subject Score</TableHead>
                   <TableHead className="text-center">Average (%)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pagedStudents.map((student, index) => (
+                {pagedStudents.map((student, idx) => (
                   <TableRow key={student.id}>
-                    <TableCell className="font-medium">{index + 1}</TableCell>
+                    <TableCell className="font-medium">
+                      {idx + 1 + (page - 1) * 6}
+                    </TableCell>
                     <TableCell className="font-medium">
                       {student.rollNo}
                     </TableCell>
@@ -488,22 +524,20 @@ const TeacherGrades = () => {
                           className="w-24 text-center"
                           min={0}
                           max={col.maxScore}
-                          value={scores[student.id]?.[col.id] ?? ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setScores((prev) => {
-                              const cur = { ...(prev[student.id] || {}) };
-                              // store number if numeric else empty string
-                              const n = Number(val);
-                              cur[col.id] =
-                                val === ""
-                                  ? ""
-                                  : Number.isFinite(n)
-                                  ? Math.max(0, Math.min(n, col.maxScore))
-                                  : "";
-                              return { ...prev, [student.id]: cur };
-                            });
-                          }}
+                          value={
+                            scores[student.id]?.[col.id] === null ||
+                            scores[student.id]?.[col.id] === undefined
+                              ? ""
+                              : scores[student.id]?.[col.id]
+                          }
+                          onChange={(event) =>
+                            handleScoreChange(
+                              student.id,
+                              col.id,
+                              event.target.value
+                            )
+                          }
+                          disabled={isLocked}
                         />
                       </TableCell>
                     ))}
@@ -513,12 +547,12 @@ const TeacherGrades = () => {
                     <TableCell className="text-center">
                       <Badge
                         variant={
-                          getStudentAveragePct(student.id) >= 85
+                          getStudentAverage(student.id) >= 85
                             ? "default"
                             : "secondary"
                         }
                       >
-                        {getStudentAveragePct(student.id).toFixed(1)}%
+                        {getStudentAverage(student.id).toFixed(1)}%
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -536,7 +570,6 @@ const TeacherGrades = () => {
         </CardContent>
       </Card>
 
-      {/* Add Column Modal */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader>
@@ -547,8 +580,9 @@ const TeacherGrades = () => {
               <Label>Evaluation Name</Label>
               <Input
                 value={newColName}
-                onChange={(e) => setNewColName(e.target.value)}
+                onChange={(event) => setNewColName(event.target.value)}
                 placeholder="e.g., Quiz, Project, Mid Exam"
+                disabled={isLocked}
               />
             </div>
             <div className="space-y-2">
@@ -557,12 +591,15 @@ const TeacherGrades = () => {
                 type="number"
                 min={1}
                 value={newColMax}
-                onChange={(e) => setNewColMax(e.target.value)}
+                onChange={(event) => setNewColMax(event.target.value)}
+                disabled={isLocked}
               />
             </div>
           </div>
           <div className="flex items-center gap-2 pt-2">
-            <Button onClick={addColumn}>Add</Button>
+            <Button onClick={handleAddColumn} disabled={isLocked}>
+              Add
+            </Button>
             <Button variant="outline" onClick={() => setAddOpen(false)}>
               Cancel
             </Button>
@@ -570,7 +607,6 @@ const TeacherGrades = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Column Modal */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
@@ -581,7 +617,8 @@ const TeacherGrades = () => {
               <Label>Evaluation Name</Label>
               <Input
                 value={editName}
-                onChange={(e) => setEditName(e.target.value)}
+                onChange={(event) => setEditName(event.target.value)}
+                disabled={isLocked}
               />
             </div>
             <div className="space-y-2">
@@ -590,12 +627,13 @@ const TeacherGrades = () => {
                 type="number"
                 min={1}
                 value={editMax}
-                onChange={(e) => setEditMax(e.target.value)}
+                onChange={(event) => setEditMax(event.target.value)}
+                disabled={isLocked}
               />
             </div>
           </div>
           <div className="flex items-center gap-2 pt-2">
-            <Button onClick={saveEdit} disabled={!editingCol}>
+            <Button onClick={handleSaveEdit} disabled={isLocked}>
               Save
             </Button>
             <Button variant="outline" onClick={() => setEditOpen(false)}>
@@ -605,7 +643,6 @@ const TeacherGrades = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Column Confirmation */}
       <AlertDialog
         open={!!deleteCol}
         onOpenChange={(open) => !open && setDeleteCol(null)}
@@ -615,14 +652,15 @@ const TeacherGrades = () => {
             <AlertDialogTitle>Delete this column?</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete the column "{deleteCol?.name}" and
-              all scores under it? This action cannot be undone.
+              remove its scores? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDelete}
+              onClick={handleConfirmDelete}
+              disabled={isLocked}
             >
               Delete
             </AlertDialogAction>

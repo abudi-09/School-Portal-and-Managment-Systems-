@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,381 +23,407 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import {
+  Trophy,
+  Users,
   CheckCircle2,
-  Clock,
-  Send,
-  Download,
-  TrendingUp,
-  AlertCircle,
+  AlertTriangle,
+  FileCheck,
+  CalendarClock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/useAuth";
+import {
+  approveClassResults,
+  getHeadClassSummary,
+  getHeadTeacherClasses,
+  type HeadClassAssignment,
+  type HeadClassSummary,
+} from "@/lib/grades/workflowStore";
 
-interface SubjectScore {
-  subject: string;
-  score: number | null; // Null means the subject teacher has not submitted yet.
-  teacher: string;
-}
-
-interface StudentGrade {
-  id: string;
-  name: string;
-  subjects: SubjectScore[];
-  total: number;
-  average: number;
-  rank: number;
-  status: "incomplete" | "pending" | "verified" | "approved";
-  hasAllScores: boolean;
-}
+const HEAD_TEACHER_ID = "teacher-head-11a";
 
 const HeadClassGradeManagement = () => {
+  const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedClass, setSelectedClass] = useState("10-A");
-  const [selectedTerm, setSelectedTerm] = useState("midterm");
+  const [classes, setClasses] = useState<HeadClassAssignment[]>(() =>
+    getHeadTeacherClasses(HEAD_TEACHER_ID)
+  );
+  const [selectedClassId, setSelectedClassId] = useState(
+    () => classes[0]?.classId ?? ""
+  );
+  const [summary, setSummary] = useState<HeadClassSummary | null>(() =>
+    classes[0] ? getHeadClassSummary(classes[0].classId) : null
+  );
 
-  // Aggregate subject submissions into overall student performance.
-  const students: StudentGrade[] = useMemo(() => {
-    const rawStudents: Array<
-      Omit<
-        StudentGrade,
-        "total" | "average" | "rank" | "status" | "hasAllScores"
-      > & {
-        subjects: SubjectScore[];
-      }
-    > = [
-      {
-        id: "1",
-        name: "Alice Johnson",
-        subjects: [
-          { subject: "Mathematics", score: 85, teacher: "Mr. Smith" },
-          { subject: "English", score: 90, teacher: "Ms. Davis" },
-          { subject: "Science", score: 88, teacher: "Dr. Wilson" },
-          { subject: "History", score: 92, teacher: "Mrs. Brown" },
-        ],
-      },
-      {
-        id: "2",
-        name: "Bob Smith",
-        subjects: [
-          { subject: "Mathematics", score: 78, teacher: "Mr. Smith" },
-          { subject: "English", score: 82, teacher: "Ms. Davis" },
-          { subject: "Science", score: 85, teacher: "Dr. Wilson" },
-          { subject: "History", score: 80, teacher: "Mrs. Brown" },
-        ],
-      },
-      {
-        id: "3",
-        name: "Carol White",
-        subjects: [
-          { subject: "Mathematics", score: 92, teacher: "Mr. Smith" },
-          { subject: "English", score: 88, teacher: "Ms. Davis" },
-          { subject: "Science", score: 90, teacher: "Dr. Wilson" },
-          { subject: "History", score: 85, teacher: "Mrs. Brown" },
-        ],
-      },
-      {
-        id: "4",
-        name: "David Brown",
-        subjects: [
-          { subject: "Mathematics", score: 70, teacher: "Mr. Smith" },
-          { subject: "English", score: 75, teacher: "Ms. Davis" },
-          { subject: "Science", score: 72, teacher: "Dr. Wilson" },
-          { subject: "History", score: 78, teacher: "Mrs. Brown" },
-        ],
-      },
-      {
-        id: "5",
-        name: "Emma Davis",
-        subjects: [
-          { subject: "Mathematics", score: 95, teacher: "Mr. Smith" },
-          { subject: "English", score: 87, teacher: "Ms. Davis" },
-          { subject: "Science", score: null, teacher: "Dr. Wilson" },
-          { subject: "History", score: 89, teacher: "Mrs. Brown" },
-        ],
-      },
-    ];
-
-    const mappedStudents: StudentGrade[] = rawStudents.map((student) => {
-      const validScores = student.subjects.filter((s) => s.score !== null);
-      const total = validScores.reduce(
-        (sum, subject) => sum + (subject.score ?? 0),
-        0
-      );
-      const average = validScores.length > 0 ? total / validScores.length : 0;
-      const hasAllScores = student.subjects.every((s) => s.score !== null);
-
-      return {
-        id: student.id,
-        name: student.name,
-        subjects: student.subjects,
-        total,
-        average,
-        rank: 0,
-        status: hasAllScores ? "pending" : "incomplete",
-        hasAllScores,
-      };
-    });
-
-    mappedStudents.sort((a, b) => b.total - a.total);
-    mappedStudents.forEach((student, index) => {
-      student.rank = index + 1;
-    });
-
-    return mappedStudents;
-  }, []);
-
-  const completedStudents = students.filter((student) => student.hasAllScores);
-  const classAverage =
-    completedStudents.reduce((sum, student) => sum + student.average, 0) /
-    (completedStudents.length || 1);
-  const pendingCount = students.filter(
-    (student) => student.status === "pending"
-  ).length;
-  const incompleteCount = students.filter(
-    (student) => student.status === "incomplete"
-  ).length;
-  const highestScore =
-    completedStudents.length > 0
-      ? Math.max(...completedStudents.map((student) => student.average))
-      : 0;
-
-  const handleSubmitToHead = () => {
-    toast({
-      title: "Grades Submitted",
-      description:
-        "Final grades have been submitted to Head of School for approval.",
-    });
-  };
-
-  const handleExport = () => {
-    toast({
-      title: "Exporting Report",
-      description: "Class performance report is being generated...",
-    });
-  };
-
-  const getStatusColor = (status: StudentGrade["status"]) => {
-    switch (status) {
-      case "approved":
-        return "bg-green-500";
-      case "verified":
-        return "bg-blue-500";
-      case "incomplete":
-        return "bg-red-500";
-      default:
-        return "bg-yellow-500";
+  useEffect(() => {
+    if (!classes.length) {
+      setSelectedClassId("");
+      return;
     }
+    if (
+      !selectedClassId ||
+      !classes.some((cls) => cls.classId === selectedClassId)
+    ) {
+      setSelectedClassId(classes[0].classId);
+    }
+  }, [classes, selectedClassId]);
+
+  useEffect(() => {
+    if (!selectedClassId) {
+      setSummary(null);
+      return;
+    }
+    setSummary(getHeadClassSummary(selectedClassId));
+  }, [selectedClassId]);
+
+  const refreshClasses = () => {
+    setClasses(getHeadTeacherClasses(HEAD_TEACHER_ID));
   };
+
+  const handleApprove = () => {
+    if (!summary || summary.approved || !summary.canApprove) return;
+    const updated = approveClassResults(summary.classId, HEAD_TEACHER_ID);
+    if (!updated) {
+      toast({
+        title: "Unable to finalize",
+        description: "Please refresh and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSummary(updated);
+    refreshClasses();
+    toast({
+      title: "Results published",
+      description: `${updated.className} rankings are now visible to students.`,
+    });
+  };
+
+  const subjectHeaders = useMemo(() => summary?.subjects ?? [], [summary]);
+  const rankings = useMemo(() => summary?.rows ?? [], [summary]);
+
+  const submittedSubjects = useMemo(() => {
+    return subjectHeaders.filter(
+      (subject) =>
+        subject.status === "submitted" || subject.status === "approved"
+    ).length;
+  }, [subjectHeaders]);
+
+  const totalSubjects = subjectHeaders.length;
+  const submissionProgress = totalSubjects
+    ? Math.round((submittedSubjects / totalSubjects) * 100)
+    : 0;
+  const averageScore = useMemo(() => {
+    if (!rankings.length) return 0;
+    const total = rankings.reduce((acc, row) => acc + row.average, 0);
+    return total / rankings.length;
+  }, [rankings]);
+  const topRank = rankings[0];
+  const missingSubjects = summary?.missingSubjects ?? [];
+  const isApproved = summary?.approved ?? false;
+  const approvalReady = summary?.canApprove && !isApproved;
+  const lastUpdatedAt = useMemo(() => {
+    if (!summary) return null;
+    if (summary.approved && summary.approvedAt) return summary.approvedAt;
+    let latest: string | null = null;
+    subjectHeaders.forEach((subject) => {
+      if (!subject.submittedAt) return;
+      if (!latest || subject.submittedAt > latest) {
+        latest = subject.submittedAt;
+      }
+    });
+    return latest;
+  }, [summary, subjectHeaders]);
+
+  if (!user || user.role !== "teacher" || !user.isHeadClassTeacher) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Restricted Access</CardTitle>
+            <CardDescription>
+              Only teachers assigned as head of class can view consolidated
+              grades.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!classes.length) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>No Head Class Assignment</CardTitle>
+            <CardDescription>
+              You are not assigned to any class as head teacher yet. Please
+              contact the administrator for access.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="pt-2 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Additional Role
+    <div className="p-4 md:p-8 space-y-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">
+            Head of Class Grades
+          </h1>
+          <p className="text-muted-foreground">
+            Review subject submissions, consolidate scores, and publish final
+            rankings.
+          </p>
         </div>
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              Grade Management
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Head Class Teacher - Final Grade Review
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="mr-2 h-4 w-4" />
-              Export Report
-            </Button>
-            <Button onClick={handleSubmitToHead}>
-              <Send className="mr-2 h-4 w-4" />
-              Submit to Head of School
-            </Button>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="flex gap-4">
-          <Select value={selectedClass} onValueChange={setSelectedClass}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
+        <div className="flex flex-col items-start gap-2 md:flex-row md:items-center">
+          <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Select class" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="10-A">Class 10-A</SelectItem>
-              <SelectItem value="10-B">Class 10-B</SelectItem>
-              <SelectItem value="10-C">Class 10-C</SelectItem>
+              {classes.map((cls) => (
+                <SelectItem key={cls.classId} value={cls.classId}>
+                  {cls.className}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-
-          <Select value={selectedTerm} onValueChange={setSelectedTerm}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="midterm">Mid-Term Exam</SelectItem>
-              <SelectItem value="final">Final Exam</SelectItem>
-              <SelectItem value="quarterly">Quarterly Assessment</SelectItem>
-            </SelectContent>
-          </Select>
+          {summary && (
+            <Badge
+              variant={
+                isApproved ? "default" : approvalReady ? "secondary" : "outline"
+              }
+              className="capitalize"
+            >
+              {isApproved
+                ? "approved"
+                : approvalReady
+                ? "ready for approval"
+                : "waiting on subjects"}
+            </Badge>
+          )}
         </div>
+      </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      {summary?.approved && summary.approvedAt && (
+        <Alert>
+          <CheckCircle2 className="h-4 w-4" />
+          <AlertTitle>Results finalized</AlertTitle>
+          <AlertDescription>
+            Published on {new Date(summary.approvedAt).toLocaleString()} —
+            students can now view their standings.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!isApproved && missingSubjects.length > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Waiting for subject submissions</AlertTitle>
+          <AlertDescription>
+            {missingSubjects.join(", ")} still need to submit their final
+            scores.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {summary && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>Class Average</CardDescription>
+              <CardDescription>Total students</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-3xl">
+                <Users className="h-6 w-6 text-primary" />
+                {summary.students.length}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardDescription>Subjects submitted</CardDescription>
               <CardTitle className="text-3xl">
-                {classAverage.toFixed(2)}%
+                {submittedSubjects}/{totalSubjects}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Progress value={classAverage} className="h-2" />
+              <Progress value={submissionProgress} className="h-2" />
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>Total Students</CardDescription>
-              <CardTitle className="text-3xl">{students.length}</CardTitle>
+              <CardDescription>Class average</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-3xl">
+                <FileCheck className="h-6 w-6 text-primary" />
+                {averageScore.toFixed(2)}%
+              </CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardDescription>Top performer</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-3xl">
+                <Trophy className="h-6 w-6 text-primary" />
+                {topRank ? topRank.studentName : "TBD"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                All enrolled students
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Complete Grades</CardDescription>
-              <CardTitle className="text-3xl">{pendingCount}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Ready for review</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Incomplete Grades</CardDescription>
-              <CardTitle className="text-3xl">{incompleteCount}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                <AlertCircle className="h-4 w-4 text-yellow-500" />
-                Awaiting submissions
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Highest Score</CardDescription>
-              <CardTitle className="text-3xl">
-                {highestScore.toFixed(1)}%
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                <TrendingUp className="h-4 w-4 text-green-500" />
-                Top performer
+                {topRank
+                  ? `${topRank.total} pts • rank ${topRank.position}`
+                  : "Pending submissions"}
               </p>
             </CardContent>
           </Card>
         </div>
+      )}
 
-        {/* Workflow Progress */}
+      {summary && (
         <Card>
-          <CardHeader>
-            <CardTitle>Grading Workflow</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-                <span className="text-sm font-medium">
-                  Subject Teachers Submitted
-                </span>
-              </div>
-              <div className="h-px bg-border flex-1 mx-4" />
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-blue-500" />
-                <span className="text-sm font-medium">Head Teacher Review</span>
-              </div>
-              <div className="h-px bg-muted flex-1 mx-4" />
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">
-                  Head of School Approval
-                </span>
-              </div>
-              <div className="h-px bg-muted flex-1 mx-4" />
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">
-                  Published to Students
+          <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle>Approval workflow</CardTitle>
+              <CardDescription>
+                Finalize rankings once every subject teacher has submitted their
+                sheet.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleApprove}
+                disabled={!approvalReady}
+                className="min-w-[12rem]"
+                title={
+                  approvalReady
+                    ? "Publish results"
+                    : isApproved
+                    ? "Already approved"
+                    : "Waiting on subject submissions"
+                }
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                {isApproved ? "Approved" : "Approve & Finalize"}
+              </Button>
+              <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
+                <CalendarClock className="h-4 w-4" />
+                <span>
+                  {lastUpdatedAt
+                    ? `Last updated ${new Date(lastUpdatedAt).toLocaleString()}`
+                    : "Waiting for submissions"}
                 </span>
               </div>
             </div>
-          </CardContent>
+          </CardHeader>
         </Card>
+      )}
 
-        {/* Student Grades Table */}
+      {summary && (
         <Card>
           <CardHeader>
-            <CardTitle>Student Performance - {selectedClass}</CardTitle>
+            <CardTitle>Subject submission tracker</CardTitle>
             <CardDescription>
-              Review and calculate final rankings from subject teacher
-              submissions
+              Monitor who has submitted and who is still pending before
+              publishing results.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {subjectHeaders.map((subject) => (
+                <div
+                  key={subject.id}
+                  className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                >
+                  <div>
+                    <p className="font-medium text-sm">{subject.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {subject.teacherName}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      subject.status === "approved"
+                        ? "default"
+                        : subject.status === "submitted"
+                        ? "secondary"
+                        : "outline"
+                    }
+                    className="capitalize"
+                  >
+                    {subject.status}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {summary && (
+        <Card>
+          <CardHeader>
+            <CardTitle>All subjects score sheet</CardTitle>
+            <CardDescription>
+              Totals, averages, and ranking are updated automatically from
+              submitted subject sheets.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Rank</TableHead>
-                  <TableHead>Student Name</TableHead>
-                  {students[0]?.subjects.map((subject) => (
-                    <TableHead key={subject.subject} className="text-center">
-                      {subject.subject}
+                  <TableHead className="w-16">Rank</TableHead>
+                  <TableHead>Student</TableHead>
+                  {subjectHeaders.map((subject) => (
+                    <TableHead key={subject.id} className="text-center">
+                      {subject.name}
                     </TableHead>
                   ))}
                   <TableHead className="text-center">Total</TableHead>
                   <TableHead className="text-center">Average</TableHead>
-                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {students.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell className="font-medium">
-                      #{student.rank}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {student.name}
-                    </TableCell>
-                    {student.subjects.map((subject) => (
-                      <TableCell key={subject.subject} className="text-center">
-                        {subject.score !== null ? (
-                          <span className="font-medium">{subject.score}</span>
-                        ) : (
-                          <span className="text-muted-foreground italic">
-                            Pending
-                          </span>
-                        )}
-                      </TableCell>
-                    ))}
-                    <TableCell className="text-center font-semibold">
-                      {student.total}
-                    </TableCell>
-                    <TableCell className="text-center font-semibold">
-                      {student.average.toFixed(1)}%
+                {rankings.map((row) => (
+                  <TableRow key={row.studentId}>
+                    <TableCell className="font-semibold">
+                      #{row.position}
                     </TableCell>
                     <TableCell>
-                      <Badge className={getStatusColor(student.status)}>
-                        {student.status}
+                      <div className="flex flex-col">
+                        <span className="font-medium">{row.studentName}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {row.rollNo}
+                        </span>
+                      </div>
+                    </TableCell>
+                    {subjectHeaders.map((subject) => {
+                      const score = row.subjectScores[subject.id]?.score;
+                      return (
+                        <TableCell key={subject.id} className="text-center">
+                          {typeof score === "number" ? (
+                            <span className="font-medium">{score}</span>
+                          ) : (
+                            <span className="text-muted-foreground italic">
+                              Pending
+                            </span>
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell className="text-center font-semibold">
+                      {row.total}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge
+                        variant={row.average >= 85 ? "default" : "secondary"}
+                      >
+                        {row.average.toFixed(2)}%
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -406,7 +432,7 @@ const HeadClassGradeManagement = () => {
             </Table>
           </CardContent>
         </Card>
-      </div>
+      )}
     </div>
   );
 };

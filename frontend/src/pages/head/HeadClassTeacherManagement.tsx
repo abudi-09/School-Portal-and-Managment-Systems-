@@ -1,5 +1,5 @@
 // Replacing file with a complete, validated implementation.
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowUpRight,
@@ -9,7 +9,9 @@ import {
   CheckCircle2,
   Download,
   FileSpreadsheet,
+  Loader2,
   MessageSquare,
+  RefreshCw,
   ShieldCheck,
   Users,
   XCircle,
@@ -27,6 +29,30 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import type { User } from "@/contexts/auth-types";
+import { useAuth } from "@/contexts/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import {
+  applyHeadAssignments,
+  getAllClasses,
+  setClassHead,
+} from "@/lib/grades/workflowStore";
 
 type GradeStatus = "Pending" | "Verified" | "Needs Revision";
 type AttendanceStatus = "Present" | "Absent" | "Late" | "Excused";
@@ -73,6 +99,57 @@ interface NotificationItem {
   message: string;
 }
 
+type ApiTeacher = User & {
+  _id?: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  employmentInfo?: {
+    responsibilities?: string;
+  } | null;
+};
+
+type ClassRow = {
+  id: string;
+  name: string;
+  grade: string;
+  section: string;
+  headTeacherId?: string;
+  headTeacherName?: string;
+};
+
+const normalizeTeacherId = (teacher: ApiTeacher): string => {
+  if (typeof teacher.id === "string" && teacher.id) return teacher.id;
+  if (typeof teacher._id === "string" && teacher._id) return teacher._id;
+  const rawId = teacher._id as unknown;
+  if (rawId && typeof rawId === "object" && "toString" in rawId) {
+    return (rawId as { toString(): string }).toString();
+  }
+  return "";
+};
+
+const formatTeacherName = (teacher?: ApiTeacher | null): string => {
+  if (!teacher) return "";
+  if (teacher.fullName?.trim()) return teacher.fullName.trim();
+  if (teacher.name?.trim()) return teacher.name.trim();
+  const parts = [teacher.firstName, teacher.lastName]
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter(Boolean);
+  if (parts.length) return parts.join(" ");
+  if (teacher.email?.trim()) return teacher.email.trim();
+  return "Unnamed Teacher";
+};
+
+const parseClassId = (classId: string): { grade: string; section: string } => {
+  if (!classId) return { grade: "", section: "" };
+  const match = classId.match(/^(.*?)([A-Za-z])$/);
+  if (!match) return { grade: classId.toUpperCase(), section: "" };
+  return {
+    grade: match[1].toUpperCase(),
+    section: match[2].toUpperCase(),
+  };
+};
+
 const gradeStatusTone: Record<GradeStatus, string> = {
   Pending: "bg-amber-100 text-amber-700",
   Verified: "bg-emerald-100 text-emerald-700",
@@ -99,99 +176,20 @@ export default function HeadClassTeacherManagement() {
   // }
 
   // Grades
-  const [gradeSubmissions, setGradeSubmissions] = useState<GradeSubmission[]>([
-    {
-      id: 1,
-      subject: "Mathematics",
-      teacher: "Mr. Johnson",
-      submittedOn: "Oct 12, 2025",
-      averageScore: 87,
-      status: "Pending",
-    },
-    {
-      id: 2,
-      subject: "Physics",
-      teacher: "Ms. Davis",
-      submittedOn: "Oct 11, 2025",
-      averageScore: 91,
-      status: "Verified",
-    },
-    {
-      id: 3,
-      subject: "English Literature",
-      teacher: "Mrs. Wilson",
-      submittedOn: "Oct 10, 2025",
-      averageScore: 83,
-      status: "Needs Revision",
-    },
-    {
-      id: 4,
-      subject: "Chemistry",
-      teacher: "Dr. Brown",
-      submittedOn: "Oct 9, 2025",
-      averageScore: 89,
-      status: "Pending",
-    },
-  ]);
+  // Remove mock grade submissions — rely on real data sources when available
+  const [gradeSubmissions, setGradeSubmissions] = useState<GradeSubmission[]>(
+    []
+  );
 
   // Attendance
   const [attendanceRecords, setAttendanceRecords] = useState<
     AttendanceRecord[]
-  >([
-    { id: 1, student: "Aisha Khan", status: "Present" },
-    { id: 2, student: "Daniel Smith", status: "Present" },
-    { id: 3, student: "Maria Rodriguez", status: "Late" },
-    { id: 4, student: "Liam Chen", status: "Absent" },
-    { id: 5, student: "Sofia Martins", status: "Excused" },
-  ]);
+  >([]);
 
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([
-    {
-      id: 1,
-      student: "Isabella Gomez",
-      reason: "Medical appointment",
-      date: "Oct 16, 2025",
-      status: "Pending",
-    },
-    {
-      id: 2,
-      student: "Noah Patel",
-      reason: "Family travel",
-      date: "Oct 18, 2025",
-      status: "Approved",
-    },
-  ]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
 
   // Messages
-  const [messages, setMessages] = useState<MessageItem[]>([
-    {
-      id: 1,
-      sender: "Mr. Johnson",
-      role: "Subject Teacher",
-      subject: "Mathematics grade update",
-      timestamp: "Today, 09:45 AM",
-      unread: true,
-      body: "Revised score sheet uploaded. Please review before the final submission deadline.",
-    },
-    {
-      id: 2,
-      sender: "Head of Academics",
-      role: "Head",
-      subject: "Final results deadline",
-      timestamp: "Yesterday, 05:12 PM",
-      unread: false,
-      body: "Reminder that all verified results must be submitted before Friday 4 PM.",
-    },
-    {
-      id: 3,
-      sender: "Student Council",
-      role: "Student",
-      subject: "Attendance clarification",
-      timestamp: "Oct 13, 2025",
-      unread: false,
-      body: "Could we confirm excused absences for the debate team participants?",
-    },
-  ]);
+  const [messages, setMessages] = useState<MessageItem[]>([]);
 
   const [messageFilter, setMessageFilter] = useState<"All" | MessageRole>(
     "All"
@@ -201,35 +199,10 @@ export default function HeadClassTeacherManagement() {
   const [composeBody, setComposeBody] = useState("");
   const [composeTag, setComposeTag] = useState("Grade Update");
 
-  const notifications: NotificationItem[] = [
-    {
-      id: 1,
-      title: "Admin review scheduled",
-      category: "Academic",
-      time: "15 minutes ago",
-      message:
-        "Head of Academics will review verified results tomorrow at 10:00 AM.",
-    },
-    {
-      id: 2,
-      title: "Disciplinary notice",
-      category: "Disciplinary",
-      time: "1 hour ago",
-      message:
-        "Report submitted for late attendance on Oct 13. Awaiting your confirmation.",
-    },
-    {
-      id: 3,
-      title: "Attendance summary ready",
-      category: "Academic",
-      time: "Yesterday",
-      message:
-        "Monthly attendance analytics for Class 11A is available for download.",
-    },
-  ];
+  const notifications: NotificationItem[] = [];
 
   // Derived
-  const totalStudents = 32;
+  const totalStudents = 0;
   const verifiedCount = gradeSubmissions.filter(
     (s) => s.status === "Verified"
   ).length;
@@ -239,11 +212,17 @@ export default function HeadClassTeacherManagement() {
   const revisionCount = gradeSubmissions.filter(
     (s) => s.status === "Needs Revision"
   ).length;
-  const averageScore = Math.round(
-    gradeSubmissions.reduce((sum, s) => sum + s.averageScore, 0) /
-      gradeSubmissions.length
+  const averageScore =
+    gradeSubmissions.length === 0
+      ? 0
+      : Math.round(
+          gradeSubmissions.reduce((sum, s) => sum + s.averageScore, 0) /
+            gradeSubmissions.length
+        );
+  const pendingSubmissions = Math.max(
+    0,
+    gradeSubmissions.length - verifiedCount
   );
-  const pendingSubmissions = gradeSubmissions.length - verifiedCount;
 
   const attendanceSummary = useMemo(() => {
     const totals = attendanceRecords.reduce(
@@ -325,6 +304,430 @@ export default function HeadClassTeacherManagement() {
   const canSubmitFinalResults = gradeSubmissions.every(
     (s) => s.status === "Verified"
   );
+
+  // --- Head Class Teacher Assignment ---
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const isAuthorizedForAssignment =
+    user?.role === "head" || user?.role === "admin";
+  // Class list now loads from backend; we keep a fallback to the local store in case of network issues
+  const [serverClasses, setServerClasses] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [classSnapshot, setClassSnapshot] = useState(() => getAllClasses());
+  const [assignmentMap, setAssignmentMap] = useState<
+    Record<string, { headTeacherId: string; headTeacherName: string }>
+  >({});
+  const classRows = useMemo<ClassRow[]>(() => {
+    const base = serverClasses.map((cls) => {
+      const { grade, section } = parseClassId(cls.id);
+      const override = assignmentMap[cls.id];
+      return {
+        id: cls.id,
+        name: cls.name,
+        grade,
+        section,
+        headTeacherId: override?.headTeacherId,
+        headTeacherName: override?.headTeacherName,
+      } satisfies ClassRow;
+    });
+    return base.sort((a, b) => {
+      if (a.grade === b.grade) return a.section.localeCompare(b.section);
+      return a.grade.localeCompare(b.grade, undefined, { numeric: true });
+    });
+  }, [assignmentMap, serverClasses]);
+  const grades = useMemo(
+    () =>
+      Array.from(new Set(classRows.map((cls) => cls.grade))).sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true })
+      ),
+    [classRows]
+  );
+  const [selectedGrade, setSelectedGrade] = useState<string>("");
+  useEffect(() => {
+    if (!selectedGrade && grades.length > 0) {
+      setSelectedGrade(grades[0]);
+      return;
+    }
+    if (selectedGrade && !grades.includes(selectedGrade)) {
+      setSelectedGrade(grades[0] ?? "");
+    }
+  }, [grades, selectedGrade]);
+  const sections = useMemo(() => {
+    if (!selectedGrade) return [] as string[];
+    return classRows
+      .filter((cls) => cls.grade === selectedGrade)
+      .map((cls) => cls.section)
+      .filter(Boolean)
+      .sort();
+  }, [classRows, selectedGrade]);
+  const [selectedSection, setSelectedSection] = useState<string>("");
+  useEffect(() => {
+    if (!sections.length) {
+      setSelectedSection("");
+      return;
+    }
+    setSelectedSection((prev) =>
+      prev && sections.includes(prev) ? prev : sections[0]
+    );
+  }, [sections]);
+  const activeClass = useMemo(
+    () =>
+      classRows.find(
+        (cls) => cls.grade === selectedGrade && cls.section === selectedSection
+      ) ?? null,
+    [classRows, selectedGrade, selectedSection]
+  );
+
+  const [teachers, setTeachers] = useState<ApiTeacher[]>([]);
+  const [teachersLoading, setTeachersLoading] = useState(false);
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>("");
+  const [assigning, setAssigning] = useState(false);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+
+  const teacherOptions = useMemo(
+    () =>
+      teachers
+        .map((teacher) => ({
+          id: normalizeTeacherId(teacher),
+          name: formatTeacherName(teacher),
+        }))
+        .filter((entry) => entry.id),
+    [teachers]
+  );
+  const selectedTeacher = useMemo(
+    () =>
+      teachers.find(
+        (teacher) => normalizeTeacherId(teacher) === selectedTeacherId
+      ) ?? null,
+    [selectedTeacherId, teachers]
+  );
+  const currentHeadId = activeClass?.headTeacherId ?? "";
+  const currentHeadName = activeClass?.headTeacherName ?? "Unassigned";
+  const assignButtonDisabled =
+    !isAuthorizedForAssignment ||
+    !activeClass ||
+    !selectedTeacherId ||
+    selectedTeacherId === currentHeadId ||
+    assigning;
+
+  const apiBaseUrl =
+    import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+
+  const refreshClassesFromStore = () => {
+    setClassSnapshot(getAllClasses());
+  };
+
+  const fetchClasses = useCallback(
+    async (showToast = false) => {
+      if (!isAuthorizedForAssignment) return;
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("Authentication required");
+        const res = await fetch(`${apiBaseUrl}/api/classes`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const payload = (await res.json()) as {
+          success: boolean;
+          message?: string;
+          data?: {
+            classes?: Array<{
+              classId: string;
+              grade: string;
+              section: string;
+              name: string;
+            }>;
+          };
+        };
+        if (!res.ok || !payload.success) {
+          throw new Error(payload.message || "Failed to fetch classes");
+        }
+        const classes = (payload.data?.classes ?? []).map((c) => ({
+          id: c.classId,
+          name: c.name,
+        }));
+        setServerClasses(classes);
+        if (showToast) {
+          toast({
+            title: "Classes refreshed",
+            description: `Loaded ${classes.length} classes from server.`,
+          });
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to fetch classes";
+        console.error("Class list fetch error", error);
+        // Keep fallback to local store; surface a toast for visibility
+        toast({
+          title: "Unable to load classes",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    },
+    [apiBaseUrl, isAuthorizedForAssignment, toast]
+  );
+
+  const fetchTeachers = useCallback(async () => {
+    if (!isAuthorizedForAssignment) return;
+    setTeachersLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Authentication required");
+      // Request only approved teachers so the Head assigns from verified staff
+      const url = `${apiBaseUrl}/api/head/teachers?limit=1000&isApproved=true`;
+      const res = await fetch(url, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const payload = (await res.json()) as {
+        success: boolean;
+        message?: string;
+        data?: { teachers?: ApiTeacher[]; pagination?: unknown };
+      };
+      if (!res.ok || !payload.success) {
+        throw new Error(payload.message || "Failed to fetch teachers");
+      }
+      const teachersList = (payload.data?.teachers ?? []).map((teacher) => {
+        const normalized: ApiTeacher = {
+          ...teacher,
+          id: normalizeTeacherId(teacher),
+          name: formatTeacherName(teacher),
+        };
+        return normalized;
+      });
+      teachersList.sort((a, b) =>
+        formatTeacherName(a).localeCompare(formatTeacherName(b))
+      );
+      setTeachers(teachersList);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load teachers";
+      console.error("Teacher fetch error", error);
+      toast({
+        title: "Unable to load teachers",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setTeachersLoading(false);
+    }
+  }, [apiBaseUrl, isAuthorizedForAssignment, toast]);
+
+  useEffect(() => {
+    if (!isAuthorizedForAssignment) return;
+    void fetchTeachers();
+  }, [fetchTeachers, isAuthorizedForAssignment]);
+
+  type AssignmentApiEntry = {
+    classId: string;
+    grade: string;
+    section: string;
+    headTeacherId?: string;
+    headTeacherName?: string;
+  };
+
+  const fetchAssignments = useCallback(
+    async (showToast = false) => {
+      if (!isAuthorizedForAssignment) return;
+      setAssignmentsLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("Authentication required");
+        const res = await fetch(`${apiBaseUrl}/api/head/class-assignments`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const payload = (await res.json()) as {
+          success: boolean;
+          message?: string;
+          data?: { assignments?: AssignmentApiEntry[] };
+        };
+        if (!res.ok || !payload.success) {
+          throw new Error(payload.message || "Failed to fetch assignments");
+        }
+        const assignments = payload.data?.assignments ?? [];
+        const map: Record<
+          string,
+          { headTeacherId: string; headTeacherName: string }
+        > = {};
+        assignments.forEach((entry) => {
+          if (entry.classId && entry.headTeacherId && entry.headTeacherName) {
+            map[entry.classId] = {
+              headTeacherId: entry.headTeacherId,
+              headTeacherName: entry.headTeacherName,
+            };
+          }
+        });
+        setAssignmentMap(map);
+        applyHeadAssignments(
+          assignments
+            .filter(
+              (entry) =>
+                entry.classId && entry.headTeacherId && entry.headTeacherName
+            )
+            .map((entry) => ({
+              classId: entry.classId,
+              headTeacherId: entry.headTeacherId ?? "",
+              headTeacherName: entry.headTeacherName ?? "",
+            }))
+        );
+        refreshClassesFromStore();
+        if (showToast) {
+          toast({
+            title: "Assignments refreshed",
+            description: "Latest head teacher assignments loaded.",
+          });
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch assignments";
+        console.error("Class assignment fetch error", error);
+        toast({
+          title: "Unable to load assignments",
+          description: message,
+          variant: "destructive",
+        });
+      } finally {
+        setAssignmentsLoading(false);
+      }
+    },
+    [apiBaseUrl, isAuthorizedForAssignment, toast]
+  );
+
+  useEffect(() => {
+    refreshClassesFromStore();
+    if (isAuthorizedForAssignment) {
+      void fetchClasses(false);
+      void fetchAssignments(false);
+    }
+  }, [fetchAssignments, fetchClasses, isAuthorizedForAssignment]);
+
+  useEffect(() => {
+    if (!activeClass) {
+      setSelectedTeacherId("");
+      return;
+    }
+    if (selectedTeacherId && selectedTeacherId === activeClass.headTeacherId) {
+      return;
+    }
+    setSelectedTeacherId(activeClass.headTeacherId ?? "");
+  }, [activeClass, selectedTeacherId]);
+
+  const handleAssignHeadTeacher = async () => {
+    if (!isAuthorizedForAssignment) {
+      toast({
+        title: "Not authorized",
+        description: "Only head or admin users can assign class teachers.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!activeClass) {
+      toast({
+        title: "Select a class",
+        description: "Choose a grade and section before assigning.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!selectedTeacherId) {
+      toast({
+        title: "Select a teacher",
+        description: "Choose a teacher from the list to assign as head.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (selectedTeacherId === currentHeadId) {
+      toast({
+        title: "No change",
+        description: "The selected teacher is already assigned to this class.",
+      });
+      return;
+    }
+
+    setAssigning(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Authentication required");
+      const res = await fetch(
+        `${apiBaseUrl}/api/head/class-assignments/${activeClass.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ teacherId: selectedTeacherId }),
+        }
+      );
+      const payload = (await res.json()) as {
+        success: boolean;
+        message?: string;
+        data?: { assignment?: AssignmentApiEntry };
+      };
+      if (!res.ok || !payload.success) {
+        throw new Error(payload.message || "Failed to assign head teacher");
+      }
+      const assignment = payload.data?.assignment;
+      if (
+        assignment?.classId &&
+        assignment.headTeacherId &&
+        assignment.headTeacherName
+      ) {
+        setAssignmentMap((prev) => ({
+          ...prev,
+          [assignment.classId]: {
+            headTeacherId: assignment.headTeacherId as string,
+            headTeacherName: assignment.headTeacherName as string,
+          },
+        }));
+        setClassHead(
+          assignment.classId,
+          assignment.headTeacherId,
+          assignment.headTeacherName
+        );
+        refreshClassesFromStore();
+      }
+      toast({
+        title: "Head teacher assigned",
+        description: `${formatTeacherName(
+          selectedTeacher
+        )} is now responsible for Grade ${selectedGrade}${selectedSection}.`,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to assign head teacher";
+      console.error("Assignment error", error);
+      toast({
+        title: "Assignment failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleSelectForRow = (row: ClassRow) => {
+    setSelectedGrade(row.grade);
+    setSelectedSection(row.section);
+    if (row.headTeacherId) {
+      setSelectedTeacherId(row.headTeacherId);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20">
@@ -417,6 +820,253 @@ export default function HeadClassTeacherManagement() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="border-0 shadow-xl">
+          <CardHeader className="space-y-3">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-2xl font-bold text-foreground">
+                  Class Head Assignment
+                </CardTitle>
+                <CardDescription className="text-sm text-muted-foreground">
+                  Assign or replace the head class teacher for each grade and
+                  section.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => void fetchAssignments(true)}
+                  disabled={assignmentsLoading}
+                >
+                  {assignmentsLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUpRight className="h-4 w-4" />
+                  )}
+                  Refresh assignments
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {!isAuthorizedForAssignment ? (
+              <div className="flex items-center gap-3 rounded-xl border border-dashed border-amber-500/60 bg-amber-500/10 p-4 text-sm text-amber-700">
+                <AlertCircle className="h-5 w-5" />
+                Only head or admin accounts can manage class teacher
+                assignments.
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="grade-select">Grade</Label>
+                    <Select
+                      value={selectedGrade}
+                      onValueChange={setSelectedGrade}
+                    >
+                      <SelectTrigger id="grade-select">
+                        <SelectValue placeholder="Select grade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {grades.length === 0 ? (
+                          <div className="px-2 py-1 text-sm text-muted-foreground">
+                            No classes available
+                          </div>
+                        ) : (
+                          grades.map((grade) => (
+                            <SelectItem key={grade} value={grade}>
+                              Grade {grade}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="section-select">Section</Label>
+                    <Select
+                      value={selectedSection}
+                      onValueChange={setSelectedSection}
+                      disabled={!sections.length}
+                    >
+                      <SelectTrigger id="section-select">
+                        <SelectValue placeholder="Select section" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sections.length === 0 ? (
+                          <div className="px-2 py-1 text-sm text-muted-foreground">
+                            No sections available
+                          </div>
+                        ) : (
+                          sections.map((section) => (
+                            <SelectItem key={section} value={section}>
+                              Section {section}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 md:col-span-2 xl:col-span-1">
+                    <Label htmlFor="teacher-select">Teacher</Label>
+                    <Select
+                      value={selectedTeacherId}
+                      onValueChange={setSelectedTeacherId}
+                      disabled={teachersLoading || teacherOptions.length === 0}
+                    >
+                      <SelectTrigger id="teacher-select">
+                        <SelectValue
+                          placeholder={
+                            teachersLoading
+                              ? "Loading teachers..."
+                              : "Select teacher"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {teacherOptions.length === 0 ? (
+                          <div className="px-2 py-1 text-sm text-muted-foreground">
+                            {teachersLoading
+                              ? "Fetching teachers"
+                              : "No teachers available"}
+                          </div>
+                        ) : (
+                          teacherOptions.map((teacher) => (
+                            <SelectItem key={teacher.id} value={teacher.id}>
+                              {teacher.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {teachersLoading
+                        ? "Fetching approved teachers..."
+                        : `${teacherOptions.length} approved teachers available`}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Current head teacher</Label>
+                    <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm font-medium text-foreground">
+                      {activeClass ? currentHeadName : "Select a class"}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {activeClass
+                        ? `Class ID: ${activeClass.id}`
+                        : "Choose grade and section to manage the assignment"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    onClick={handleAssignHeadTeacher}
+                    disabled={assignButtonDisabled}
+                    className="gap-2"
+                  >
+                    {assigning ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : currentHeadId ? (
+                      <ArrowUpRight className="h-4 w-4" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" />
+                    )}
+                    {currentHeadId
+                      ? "Reassign head teacher"
+                      : "Assign head teacher"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => {
+                      refreshClassesFromStore();
+                      if (isAuthorizedForAssignment)
+                        void fetchAssignments(true);
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Sync with server
+                  </Button>
+                </div>
+
+                <div className="overflow-hidden rounded-xl border">
+                  <Table>
+                    <TableHeader className="bg-muted/50 text-muted-foreground">
+                      <TableRow>
+                        <TableHead className="w-[120px]">Grade</TableHead>
+                        <TableHead className="w-[120px]">Section</TableHead>
+                        <TableHead>Class name</TableHead>
+                        <TableHead>Head teacher</TableHead>
+                        <TableHead className="w-[140px] text-right">
+                          Action
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {classRows.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={5}
+                            className="text-center text-sm text-muted-foreground"
+                          >
+                            No classes available. Please add classes in the
+                            system or try syncing again.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        classRows.map((row) => {
+                          const isActive =
+                            row.grade === selectedGrade &&
+                            row.section === selectedSection;
+                          return (
+                            <TableRow
+                              key={row.id}
+                              className={isActive ? "bg-primary/5" : undefined}
+                            >
+                              <TableCell className="font-medium text-foreground">
+                                {row.grade}
+                              </TableCell>
+                              <TableCell>{row.section}</TableCell>
+                              <TableCell>{row.name}</TableCell>
+                              <TableCell>
+                                {row.headTeacherName ? (
+                                  <Badge variant="secondary">
+                                    {row.headTeacherName}
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-muted-foreground"
+                                  >
+                                    Unassigned
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleSelectForRow(row)}
+                                  className="gap-2"
+                                >
+                                  <ArrowUpRight className="h-4 w-4" />
+                                  {row.headTeacherId ? "Reassign" : "Assign"}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           {/* Left column: Grade, Attendance, Communication */}

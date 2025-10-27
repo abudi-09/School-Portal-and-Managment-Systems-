@@ -11,6 +11,7 @@ import headRoutes from "./routes/head";
 import profileRoutes from "./routes/profile";
 import evaluationRoutes from "./routes/evaluations";
 import classScheduleRoutes from "./routes/classSchedules";
+import classesRoutes from "./routes/classes";
 import examScheduleRoutes from "./routes/examSchedules";
 import roomRoutes from "./routes/rooms";
 import announcementRoutes from "./routes/announcements";
@@ -66,6 +67,7 @@ app.use("/api/schedules/class", classScheduleRoutes);
 app.use("/api/schedules/exam", examScheduleRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/announcements", announcementRoutes);
+app.use("/api/classes", classesRoutes);
 
 // 404 handler
 app.use((req, res) => {

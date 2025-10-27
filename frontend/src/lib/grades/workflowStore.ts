@@ -16,7 +16,7 @@ export type GradeSheetStatus = "draft" | "submitted" | "approved";
 
 type ScoreMap = Record<string, number | null>;
 
-type StudentRecord = {
+export type StudentRecord = {
   id: string;
   name: string;
   rollNo: string;
@@ -29,7 +29,7 @@ type SubjectDefinition = {
   teacherName: string;
 };
 
-type ClassDefinition = {
+export type ClassDefinition = {
   id: string;
   name: string;
   headTeacherId: string;
@@ -88,150 +88,9 @@ function deepCopy<T>(value: T): T {
 }
 
 function createSeedStore(): GradeWorkflowStore {
-  const students11A: StudentRecord[] = [
-    { id: "stu-11a-001", name: "John Smith", rollNo: "11A-001" },
-    { id: "stu-11a-002", name: "Emma Wilson", rollNo: "11A-002" },
-    { id: "stu-11a-003", name: "Michael Brown", rollNo: "11A-003" },
-    { id: "stu-11a-004", name: "Sarah Davis", rollNo: "11A-004" },
-    { id: "stu-11a-005", name: "Olivia Johnson", rollNo: "11A-005" },
-  ];
-
-  const students11B: StudentRecord[] = [
-    { id: "stu-11b-001", name: "Daniel Chen", rollNo: "11B-001" },
-    { id: "stu-11b-002", name: "Sophia Patel", rollNo: "11B-002" },
-    { id: "stu-11b-003", name: "Liam Martinez", rollNo: "11B-003" },
-    { id: "stu-11b-004", name: "Ava Thompson", rollNo: "11B-004" },
-  ];
-
-  const classes: ClassDefinition[] = [
-    {
-      id: "11a",
-      name: "Grade 11 - Section A",
-      headTeacherId: "teacher-head-11a",
-      headTeacherName: "Mrs. Carter",
-      students: students11A,
-      subjects: [
-        {
-          id: "math",
-          name: "Mathematics",
-          teacherId: "teacher-math",
-          teacherName: "Mr. Anderson",
-        },
-        {
-          id: "eng",
-          name: "English",
-          teacherId: "teacher-english",
-          teacherName: "Ms. Lee",
-        },
-        {
-          id: "sci",
-          name: "Science",
-          teacherId: "teacher-science",
-          teacherName: "Mr. Patel",
-        },
-      ],
-    },
-    {
-      id: "11b",
-      name: "Grade 11 - Section B",
-      headTeacherId: "teacher-head-11b",
-      headTeacherName: "Ms. Robinson",
-      students: students11B,
-      subjects: [
-        {
-          id: "math",
-          name: "Mathematics",
-          teacherId: "teacher-math",
-          teacherName: "Mr. Anderson",
-        },
-        {
-          id: "eng",
-          name: "English",
-          teacherId: "teacher-english",
-          teacherName: "Ms. Lee",
-        },
-        {
-          id: "hist",
-          name: "History",
-          teacherId: "teacher-history",
-          teacherName: "Mrs. Nguyen",
-        },
-      ],
-    },
-  ];
-
-  const defaultColumns: GradeColumn[] = [
-    { id: "col_quiz", name: "Quiz", maxScore: 100 },
-    { id: "col_assignment", name: "Assignment", maxScore: 100 },
-    { id: "col_exam", name: "Exam", maxScore: 100 },
-  ];
-
-  const createScores = (students: StudentRecord[], base: number) => {
-    const scores: Record<string, ScoreMap> = {};
-    students.forEach((s, idx) => {
-      scores[s.id] = {
-        col_quiz: clampScore(base + idx * 5),
-        col_assignment: clampScore(base + idx * 5 + 3),
-        col_exam: clampScore(base + idx * 5 + 6),
-      };
-    });
-    return scores;
-  };
-
-  const gradeSheets: GradeSheetRecord[] = [
-    {
-      id: "sheet-11a-math",
-      classId: "11a",
-      subjectId: "math",
-      subjectName: "Mathematics",
-      teacherId: "teacher-math",
-      teacherName: "Mr. Anderson",
-      status: "draft",
-      columns: deepCopy(defaultColumns),
-      scores: createScores(students11A, 70),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: "sheet-11a-eng",
-      classId: "11a",
-      subjectId: "eng",
-      subjectName: "English",
-      teacherId: "teacher-english",
-      teacherName: "Ms. Lee",
-      status: "submitted",
-      columns: deepCopy(defaultColumns),
-      scores: createScores(students11A, 75),
-      submittedAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: "sheet-11a-sci",
-      classId: "11a",
-      subjectId: "sci",
-      subjectName: "Science",
-      teacherId: "teacher-science",
-      teacherName: "Mr. Patel",
-      status: "submitted",
-      columns: deepCopy(defaultColumns),
-      scores: createScores(students11A, 80),
-      submittedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: "sheet-11b-math",
-      classId: "11b",
-      subjectId: "math",
-      subjectName: "Mathematics",
-      teacherId: "teacher-math",
-      teacherName: "Mr. Anderson",
-      status: "draft",
-      columns: deepCopy(defaultColumns),
-      scores: createScores(students11B, 68),
-      updatedAt: new Date().toISOString(),
-    },
-  ];
-
-  return { classes, gradeSheets, finalResults: {} };
+  // Intentionally return empty arrays so the UI relies on server data for classes,
+  // and does not expose any mocked teachers, students or grade sheets.
+  return { classes: [], gradeSheets: [], finalResults: {} };
 }
 
 function clampScore(value: number): number {
@@ -587,6 +446,54 @@ export function getHeadTeacherClasses(
         approvedAt: final?.approvedAt,
       };
     });
+}
+
+export function getAllClasses(): ClassDefinition[] {
+  const store = getStore();
+  return deepCopy(store.classes);
+}
+
+export function setClassHead(
+  classId: string,
+  teacherId: string,
+  teacherName: string
+): ClassDefinition | null {
+  const store = cloneStore();
+  const cls = store.classes.find((c) => c.id === classId);
+  if (!cls) return null;
+  cls.headTeacherId = teacherId;
+  cls.headTeacherName = teacherName;
+  persist(store);
+  return deepCopy(cls);
+}
+
+export function applyHeadAssignments(
+  entries: Array<{
+    classId: string;
+    headTeacherId: string;
+    headTeacherName: string;
+  }>
+): void {
+  if (!entries.length) return;
+  const store = cloneStore();
+  let updated = false;
+  entries.forEach((entry) => {
+    const cls = store.classes.find((c) => c.id === entry.classId);
+    if (!cls) return;
+    if (
+      cls.headTeacherId !== entry.headTeacherId ||
+      cls.headTeacherName !== entry.headTeacherName
+    ) {
+      cls.headTeacherId = entry.headTeacherId;
+      cls.headTeacherName = entry.headTeacherName;
+      updated = true;
+    }
+  });
+  if (updated) {
+    persist(store);
+  } else {
+    memoryStore = store;
+  }
 }
 
 export function getHeadClassSummary(classId: string): HeadClassSummary | null {

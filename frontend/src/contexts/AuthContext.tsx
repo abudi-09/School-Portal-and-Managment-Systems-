@@ -344,7 +344,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return "/teacher";
       case "student":
       default:
-        return "/";
+        return "/dashboard";
     }
   };
 

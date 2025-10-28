@@ -16,7 +16,7 @@ import { useAuth } from "@/contexts/useAuth";
 import { Navbar } from "./Navbar";
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "My Score", href: "/scores", icon: Award },
   { name: "Assignments", href: "/assignments", icon: ClipboardList },
   { name: "Timetable", href: "/timetable", icon: Calendar },
@@ -61,7 +61,7 @@ const Layout = () => {
               <NavLink
                 key={item.name}
                 to={item.href}
-                end={item.href === "/"}
+                end={item.href === "/dashboard"}
                 onClick={() => setMobileMenuOpen(false)}
                 className={({ isActive }) =>
                   cn(

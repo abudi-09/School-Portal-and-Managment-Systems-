@@ -30,7 +30,7 @@ export const Navbar = ({ title = "Pathways" }: NavbarProps) => {
         return "/teacher";
       case "student":
       default:
-        return "/";
+        return "/dashboard";
     }
   };
 

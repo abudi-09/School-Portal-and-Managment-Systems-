@@ -48,6 +48,9 @@ import PendingApproval from "./pages/PendingApproval";
 import AssignmentDetail from "./pages/AssignmentDetail";
 import TimetableMatrix from "./pages/TimetableMatrix";
 import AttendanceTracking from "./pages/AttendanceTracking";
+import Home from "./pages/Home";
+import About from "./pages/About";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +61,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/pending-approval" element={<PendingApproval />} />
@@ -70,7 +76,6 @@ const App = () => (
               </PrivateRoute>
             }
           >
-            <Route path="/" element={<Dashboard />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/scores" element={<Scores />} />
             <Route path="/assignments" element={<Assignments />} />

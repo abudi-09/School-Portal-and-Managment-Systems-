@@ -58,6 +58,6 @@ const getRoleBasedRedirect = (role: UserRole): string => {
       return "/teacher";
     case "student":
     default:
-      return "/";
+      return "/dashboard";
   }
 };

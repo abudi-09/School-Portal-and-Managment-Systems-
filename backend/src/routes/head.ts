@@ -7,6 +7,8 @@ import { authMiddleware, authorizeRoles } from "../middleware/auth";
 import { ApprovalService } from "../services/approval.service";
 import Course from "../models/Course";
 import { env } from "../config/env";
+import mongoose from "mongoose";
+import AuditLog from "../models/AuditLog";
 
 const router = express.Router();
 
@@ -279,7 +281,11 @@ router.get(
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
 
-      const filter: Record<string, unknown> = { role: "teacher" };
+      const filter: Record<string, unknown> = {
+        role: "teacher",
+        status: "approved",
+        isActive: true,
+      };
 
       if (req.query.status) {
         filter.status = req.query.status;
@@ -425,25 +431,28 @@ router.put(
     param("classId").notEmpty().withMessage("Class ID is required"),
     body("subject").notEmpty().withMessage("Subject is required"),
     body("teacherId").isMongoId().withMessage("Teacher ID must be valid"),
+    body("confirmReassign").optional().isBoolean(),
+    body("expectedCurrentTeacherId").optional().isString(),
   ],
   async (req: express.Request, res: express.Response) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Validation failed",
-            errors: errors.array(),
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
       }
 
       const rawClassId = req.params.classId;
-      const { subject, teacherId } = req.body as {
-        subject: string;
-        teacherId: string;
-      };
+      const { subject, teacherId, confirmReassign, expectedCurrentTeacherId } =
+        req.body as {
+          subject: string;
+          teacherId: string;
+          confirmReassign?: boolean;
+          expectedCurrentTeacherId?: string | null;
+        };
       const { classId, grade, section } = parseClassIdentifier(rawClassId);
 
       const teacher = await User.findOne({
@@ -460,12 +469,10 @@ router.put(
       // Validate subject is configured for this grade (from admin courses)
       const gradeNum = parseInt(grade, 10);
       if (!Number.isFinite(gradeNum)) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Invalid class grade parsed from classId",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid class grade parsed from classId",
+        });
       }
       const gradeCourses = await Course.find({ grade: gradeNum }).select(
         "name"
@@ -474,12 +481,10 @@ router.put(
         (gradeCourses as any[]).map((c: any) => c.name as string)
       );
       if (!allowed.has(subject)) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: `Subject '${subject}' is not configured for grade ${gradeNum}`,
-          });
+        return res.status(400).json({
+          success: false,
+          message: `Subject '${subject}' is not configured for grade ${gradeNum}`,
+        });
       }
 
       // Enforce optional subject/section policies for teacher
@@ -519,72 +524,175 @@ router.put(
         classId,
         subject,
       });
-      const previousTeacherId = previous?.teacher?.toString();
+      const previousTeacherId = previous?.teacher?.toString() ?? null;
 
-      // Update teacher assignedClassIds and responsibilities
-      teacher.employmentInfo = teacher.employmentInfo || {};
-      teacher.employmentInfo.responsibilities = addSubjectResponsibility(
-        teacher.employmentInfo.responsibilities,
-        classId,
-        subject
-      );
-      teacher.assignedClassIds = normalizeAssignedClassIds(
-        teacher.assignedClassIds,
-        classId,
-        "add"
-      );
-      teacher.markModified("employmentInfo");
-      await teacher.save();
-
-      if (previousTeacherId && previousTeacherId !== teacherId) {
-        const prevTeacher = await User.findById(previousTeacherId);
-        if (prevTeacher) {
-          prevTeacher.employmentInfo = prevTeacher.employmentInfo || {};
-          prevTeacher.employmentInfo.responsibilities =
-            removeSubjectResponsibility(
-              prevTeacher.employmentInfo.responsibilities,
-              classId,
-              subject
-            );
-          prevTeacher.assignedClassIds = normalizeAssignedClassIds(
-            prevTeacher.assignedClassIds,
-            classId,
-            "remove"
-          );
-          prevTeacher.markModified("employmentInfo");
-          await prevTeacher.save();
-        }
+      // CAS check (compare-and-swap): if client provided expectation and it doesn't match → conflict
+      if (
+        typeof expectedCurrentTeacherId !== "undefined" &&
+        (expectedCurrentTeacherId || null) !== (previousTeacherId || null)
+      ) {
+        return res.status(409).json({
+          success: false,
+          code: "STALE_ASSIGNMENT",
+          message:
+            "Assignment conflict: mapping changed by another user. Please reload.",
+          currentTeacherId: previousTeacherId,
+        });
       }
 
-      const assignment = await (ClassSubjectAssignment as any).findOneAndUpdate(
-        { classId, subject },
-        {
-          classId,
-          grade,
-          section,
-          subject,
-          teacher: teacher._id,
-          teacherName: buildTeacherDisplayName(teacher),
-          teacherEmail: teacher.email,
-          updatedBy: req.user?._id,
-        },
-        { new: true, upsert: true, setDefaultsOnInsert: true }
-      );
-
-      res.json({
-        success: true,
-        message: `Assigned ${assignment.teacherName} to ${subject} for class ${grade}${section}`,
-        data: {
-          assignment: {
-            classId: assignment.classId,
-            grade: assignment.grade,
-            section: assignment.section,
-            subject: assignment.subject,
-            teacherId: assignment.teacher?.toString(),
-            teacherName: assignment.teacherName,
+      // If assigning same teacher → no-op
+      if (previousTeacherId && previousTeacherId === teacherId) {
+        return res.status(200).json({
+          success: true,
+          message:
+            "No change: teacher already assigned for this subject and class.",
+          data: {
+            assignment: {
+              classId,
+              grade,
+              section,
+              subject,
+              teacherId: previousTeacherId,
+            },
           },
-        },
+        });
+      }
+
+      // If replacing an existing teacher, require confirmReassign
+      if (
+        previousTeacherId &&
+        previousTeacherId !== teacherId &&
+        !confirmReassign
+      ) {
+        const prevTeacher = await User.findById(previousTeacherId);
+        return res.status(409).json({
+          success: false,
+          code: "CONFIRM_REASSIGN",
+          needsConfirmation: true,
+          message: `Class ${grade}${section} currently has ${
+            prevTeacher ? buildTeacherDisplayName(prevTeacher) : "a teacher"
+          } for ${subject}. Confirmation required to reassign.`,
+          currentTeacher: prevTeacher
+            ? {
+                _id: prevTeacher._id.toString(),
+                fullName: buildTeacherDisplayName(prevTeacher),
+                email: prevTeacher.email,
+              }
+            : { _id: previousTeacherId },
+        });
+      }
+
+      const session = await mongoose.startSession();
+      let responsePayload: any;
+      await session.withTransaction(async () => {
+        // Update new teacher responsibilities
+        const freshNew = await User.findById(teacher._id).session(session);
+        if (!freshNew)
+          throw new Error("Teacher disappeared during transaction");
+        freshNew.employmentInfo = freshNew.employmentInfo || {};
+        freshNew.employmentInfo.responsibilities = addSubjectResponsibility(
+          freshNew.employmentInfo.responsibilities,
+          classId,
+          subject
+        );
+        freshNew.assignedClassIds = normalizeAssignedClassIds(
+          freshNew.assignedClassIds,
+          classId,
+          "add"
+        );
+        freshNew.markModified("employmentInfo");
+        await freshNew.save({ session });
+
+        // Update previous teacher if any and different
+        if (previousTeacherId && previousTeacherId !== teacher._id.toString()) {
+          const prevTeacherDoc = await User.findById(previousTeacherId).session(
+            session
+          );
+          if (prevTeacherDoc) {
+            prevTeacherDoc.employmentInfo = prevTeacherDoc.employmentInfo || {};
+            prevTeacherDoc.employmentInfo.responsibilities =
+              removeSubjectResponsibility(
+                prevTeacherDoc.employmentInfo.responsibilities,
+                classId,
+                subject
+              );
+            prevTeacherDoc.assignedClassIds = normalizeAssignedClassIds(
+              prevTeacherDoc.assignedClassIds,
+              classId,
+              "remove"
+            );
+            prevTeacherDoc.markModified("employmentInfo");
+            await prevTeacherDoc.save({ session });
+          }
+        }
+
+        // Upsert mapping
+        const assignment = await (
+          ClassSubjectAssignment as any
+        ).findOneAndUpdate(
+          { classId, subject },
+          {
+            classId,
+            grade,
+            section,
+            subject,
+            teacher: teacher._id,
+            teacherName: buildTeacherDisplayName(teacher),
+            teacherEmail: teacher.email,
+            updatedBy: req.user?._id,
+          },
+          { new: true, upsert: true, setDefaultsOnInsert: true, session }
+        );
+
+        // Audit log
+        await AuditLog.create(
+          [
+            {
+              timestamp: new Date(),
+              actorId: req.user?._id as any,
+              actorName:
+                (req.user as any)?.fullName || (req.user as any)?.email,
+              classId,
+              grade,
+              section,
+              subject,
+              change:
+                previousTeacherId && previousTeacherId !== teacherId
+                  ? "reassign"
+                  : "assign",
+              fromTeacherId: previousTeacherId as any,
+              fromTeacherName: previous?.teacherName,
+              toTeacherId: teacher._id,
+              toTeacherName: buildTeacherDisplayName(teacher),
+            },
+          ],
+          { session }
+        );
+
+        responsePayload = {
+          success: true,
+          message:
+            previousTeacherId && previousTeacherId !== teacherId
+              ? `Reassigned ${subject} (${grade}${section}) to ${buildTeacherDisplayName(
+                  teacher
+                )}.`
+              : `Assigned ${buildTeacherDisplayName(
+                  teacher
+                )} to ${subject} — ${grade}${section}.`,
+          data: {
+            assignment: {
+              classId: assignment.classId,
+              grade: assignment.grade,
+              section: assignment.section,
+              subject: assignment.subject,
+              teacherId: assignment.teacher?.toString(),
+              teacherName: assignment.teacherName,
+            },
+          },
+        };
       });
+      await session.endSession();
+      return res.json(responsePayload);
     } catch (error: any) {
       console.error("Assign subject teacher error:", error);
       res.status(500).json({
@@ -609,6 +717,7 @@ router.put(
     body("teacherId")
       .isMongoId()
       .withMessage("Teacher ID must be a valid identifier"),
+    body("confirmReassign").optional().isBoolean(),
   ],
   async (req: express.Request, res: express.Response) => {
     try {
@@ -622,7 +731,10 @@ router.put(
       }
 
       const { classId: rawClassId } = req.params;
-      const { teacherId } = req.body as { teacherId: string };
+      const { teacherId, confirmReassign } = req.body as {
+        teacherId: string;
+        confirmReassign?: boolean;
+      };
       const { classId, grade, section } = parseClassIdentifier(rawClassId);
 
       const teacher = await User.findOne({
@@ -674,67 +786,138 @@ router.put(
         });
       }
 
-      const teacherDisplayName = buildTeacherDisplayName(teacher);
-      teacher.employmentInfo = teacher.employmentInfo || {};
-      teacher.employmentInfo.responsibilities = addHeadResponsibility(
-        teacher.employmentInfo.responsibilities,
-        classId
-      );
-      teacher.assignedClassIds = normalizeAssignedClassIds(
-        teacher.assignedClassIds,
-        classId,
-        "add"
-      );
-      teacher.markModified("employmentInfo");
-      await teacher.save();
-
-      if (previousTeacherId && previousTeacherId !== teacherId) {
-        const previousTeacher = await User.findById(previousTeacherId);
-        if (previousTeacher) {
-          previousTeacher.employmentInfo = previousTeacher.employmentInfo || {};
-          previousTeacher.employmentInfo.responsibilities =
-            removeHeadResponsibility(
-              previousTeacher.employmentInfo.responsibilities,
-              classId
-            );
-          previousTeacher.assignedClassIds = normalizeAssignedClassIds(
-            previousTeacher.assignedClassIds,
-            classId,
-            "remove"
-          );
-          previousTeacher.markModified("employmentInfo");
-          await previousTeacher.save();
-        }
+      // If a different head exists, require confirmation before reassignment
+      if (
+        previousTeacherId &&
+        previousTeacherId !== teacherId &&
+        !confirmReassign
+      ) {
+        // Return a 409 with the current head details to trigger client confirmation
+        const currentHeadUser = await User.findById(previousTeacherId);
+        return res.status(409).json({
+          success: false,
+          code: "CONFIRM_REASSIGN",
+          needsConfirmation: true,
+          message: `Class ${grade}${section} already has a head teacher. Confirmation required to reassign.`,
+          currentHead: currentHeadUser
+            ? {
+                _id: currentHeadUser._id.toString(),
+                fullName: buildTeacherDisplayName(currentHeadUser),
+                email: currentHeadUser.email,
+              }
+            : {
+                _id: previousTeacherId,
+                fullName: previousAssignment?.headTeacherName,
+                email: previousAssignment?.headTeacherEmail,
+              },
+        });
       }
 
-      const assignment = await ClassHeadAssignment.findOneAndUpdate(
-        { classId },
-        {
-          classId,
-          grade,
-          section,
-          headTeacher: teacher._id,
-          headTeacherName: teacherDisplayName,
-          headTeacherEmail: teacher.email,
-          updatedBy: req.user?._id,
-        },
-        { new: true, upsert: true, setDefaultsOnInsert: true }
-      );
+      const session = await mongoose.startSession();
+      let resultPayload: any;
+      await session.withTransaction(async () => {
+        const teacherDisplayName = buildTeacherDisplayName(teacher);
 
-      res.json({
-        success: true,
-        message: `Assigned ${teacherDisplayName} to class ${grade}${section}`,
-        data: {
-          assignment: {
-            classId: assignment.classId,
-            grade: assignment.grade,
-            section: assignment.section,
-            headTeacherId: teacher._id.toString(),
-            headTeacherName: assignment.headTeacherName,
-            headTeacherEmail: assignment.headTeacherEmail,
+        // Update new head teacher responsibilities
+        const freshNewHead = await User.findById(teacher._id).session(session);
+        if (!freshNewHead)
+          throw new Error("Teacher disappeared during transaction");
+        freshNewHead.employmentInfo = freshNewHead.employmentInfo || {};
+        freshNewHead.employmentInfo.responsibilities = addHeadResponsibility(
+          freshNewHead.employmentInfo.responsibilities,
+          classId
+        );
+        freshNewHead.assignedClassIds = normalizeAssignedClassIds(
+          freshNewHead.assignedClassIds,
+          classId,
+          "add"
+        );
+        freshNewHead.markModified("employmentInfo");
+        await freshNewHead.save({ session });
+
+        // Update previous head if exists
+        if (previousTeacherId && previousTeacherId !== teacherId) {
+          const previousTeacher = await User.findById(
+            previousTeacherId
+          ).session(session);
+          if (previousTeacher) {
+            previousTeacher.employmentInfo =
+              previousTeacher.employmentInfo || {};
+            previousTeacher.employmentInfo.responsibilities =
+              removeHeadResponsibility(
+                previousTeacher.employmentInfo.responsibilities,
+                classId
+              );
+            previousTeacher.assignedClassIds = normalizeAssignedClassIds(
+              previousTeacher.assignedClassIds,
+              classId,
+              "remove"
+            );
+            previousTeacher.markModified("employmentInfo");
+            await previousTeacher.save({ session });
+          }
+        }
+
+        // Upsert assignment snapshot
+        const assignment = await ClassHeadAssignment.findOneAndUpdate(
+          { classId },
+          {
+            classId,
+            grade,
+            section,
+            headTeacher: teacher._id,
+            headTeacherName: teacherDisplayName,
+            headTeacherEmail: teacher.email,
+            updatedBy: req.user?._id,
           },
-        },
+          { new: true, upsert: true, setDefaultsOnInsert: true, session }
+        );
+
+        // Write audit log
+        await AuditLog.create(
+          [
+            {
+              timestamp: new Date(),
+              actorId: req.user?._id as any,
+              actorName:
+                (req.user as any)?.fullName || (req.user as any)?.email,
+              classId,
+              grade,
+              section,
+              change:
+                previousTeacherId && previousTeacherId !== teacherId
+                  ? "reassign"
+                  : "assign",
+              fromTeacherId: previousTeacherId as any,
+              fromTeacherName: previousAssignment?.headTeacherName,
+              toTeacherId: teacher._id,
+              toTeacherName: teacherDisplayName,
+              note: undefined,
+            },
+          ],
+          { session }
+        );
+
+        resultPayload = {
+          success: true,
+          message:
+            previousTeacherId && previousTeacherId !== teacherId
+              ? `Reassigned: ${teacherDisplayName} is now Head — ${grade}${section}`
+              : `Assigned ${teacherDisplayName} to class ${grade}${section}`,
+          data: {
+            assignment: {
+              classId: assignment.classId,
+              grade: assignment.grade,
+              section: assignment.section,
+              headTeacherId: teacher._id.toString(),
+              headTeacherName: assignment.headTeacherName,
+              headTeacherEmail: assignment.headTeacherEmail,
+            },
+          },
+        };
       });
+      await session.endSession();
+      return res.json(resultPayload);
     } catch (error: any) {
       console.error("Assign head teacher error:", error);
       res.status(500).json({

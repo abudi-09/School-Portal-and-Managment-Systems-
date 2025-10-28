@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   MessageCircle,
+  BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/useAuth";
@@ -29,6 +30,11 @@ const AdminLayout = () => {
       name: "Head Management",
       href: "/admin/head-management",
       icon: GraduationCap,
+    },
+    {
+      name: "Course & Sections",
+      href: "/admin/course-sections",
+      icon: BookOpen,
     },
     { name: "User Management", href: "/admin/users", icon: UserCog },
     { name: "Messages", href: "/admin/messages", icon: MessageCircle },

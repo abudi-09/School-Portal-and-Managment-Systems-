@@ -30,10 +30,9 @@ vi.mock("@/lib/api/announcementsApi", async () => {
         }
         return { items: [], total: 0, unreadCount: 0 };
       }
-    ),n 
+    ),
     getUnreadCount: vi.fn(async () => 1),
     markRead: vi.fn(async () => {}),
-
   };
 });
 
@@ -65,4 +64,3 @@ describe("Announcements page", () => {
     });
   });
 });
-// 

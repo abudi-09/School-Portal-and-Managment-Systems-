@@ -1,6 +1,8 @@
 import express from "express";
 import { body, param, validationResult } from "express-validator";
 import User from "../models/User";
+import Course from "../models/Course";
+import Section from "../models/Section";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
 import { ApprovalService } from "../services/approval.service";
 
@@ -76,6 +78,220 @@ router.get(
         error:
           process.env.NODE_ENV === "development" ? error.message : undefined,
       });
+    }
+  }
+);
+
+// -------- Courses --------
+// GET /api/admin/courses?grade=9
+router.get(
+  "/courses",
+  authMiddleware,
+  authorizeRoles("admin"),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const gradeNum = Number(req.query.grade);
+      if (![9, 10, 11, 12].includes(gradeNum)) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Invalid or missing grade. Expected 9,10,11,12.",
+          });
+      }
+
+      const courses = await Course.find({ grade: gradeNum }).sort({
+        createdAt: -1,
+      });
+      return res.json({ success: true, data: { courses } });
+    } catch (error: any) {
+      console.error("List courses error:", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Server error retrieving courses" });
+    }
+  }
+);
+
+// POST /api/admin/courses
+router.post(
+  "/courses",
+  authMiddleware,
+  authorizeRoles("admin"),
+  [
+    body("grade").isInt({ min: 9, max: 12 }).withMessage("Grade must be 9-12"),
+    body("name")
+      .isString()
+      .trim()
+      .isLength({ min: 1 })
+      .withMessage("Course name is required"),
+    body("isMandatory")
+      .optional()
+      .isBoolean()
+      .withMessage("isMandatory must be boolean"),
+  ],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+    }
+
+    try {
+      const { grade, name, isMandatory } = req.body as {
+        grade: number;
+        name: string;
+        isMandatory?: boolean;
+      };
+      const doc = new Course({ grade, name, isMandatory: !!isMandatory });
+      await doc.save();
+      return res.status(201).json({ success: true, data: { course: doc } });
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        return res
+          .status(409)
+          .json({
+            success: false,
+            message: "Course already exists for this grade",
+          });
+      }
+      console.error("Create course error:", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Server error creating course" });
+    }
+  }
+);
+
+// -------- Sections --------
+// GET /api/admin/sections?grade=9
+router.get(
+  "/sections",
+  authMiddleware,
+  authorizeRoles("admin"),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const gradeNum = Number(req.query.grade);
+      if (![9, 10, 11, 12].includes(gradeNum)) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Invalid or missing grade. Expected 9,10,11,12.",
+          });
+      }
+
+      const sections = await Section.find({ grade: gradeNum }).sort({
+        createdAt: -1,
+      });
+      return res.json({ success: true, data: { sections } });
+    } catch (error: any) {
+      console.error("List sections error:", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Server error retrieving sections" });
+    }
+  }
+);
+
+// POST /api/admin/sections
+router.post(
+  "/sections",
+  authMiddleware,
+  authorizeRoles("admin"),
+  [
+    body("grade").isInt({ min: 9, max: 12 }).withMessage("Grade must be 9-12"),
+    body("label")
+      .isString()
+      .trim()
+      .isLength({ min: 1 })
+      .withMessage("Section label is required"),
+    body("capacity")
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage("Capacity must be a positive integer"),
+  ],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+    }
+
+    try {
+      const { grade, label, capacity } = req.body as {
+        grade: number;
+        label: string;
+        capacity?: number;
+      };
+      const doc = new Section({ grade, label, capacity });
+      await doc.save();
+      return res.status(201).json({ success: true, data: { section: doc } });
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        return res
+          .status(409)
+          .json({
+            success: false,
+            message: "Section already exists for this grade",
+          });
+      }
+      console.error("Create section error:", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Server error creating section" });
+    }
+  }
+);
+
+// DELETE /api/admin/courses/:id
+router.delete(
+  "/courses/:id",
+  authMiddleware,
+  authorizeRoles("admin"),
+  userIdValidation,
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const id = req.params.id;
+      const course = await Course.findByIdAndDelete(id);
+      if (!course) {
+        return res.status(404).json({ success: false, message: "Course not found" });
+      }
+      return res.json({ success: true, data: { course } });
+    } catch (error: any) {
+      console.error("Delete course error:", error);
+      return res.status(500).json({ success: false, message: "Server error deleting course" });
+    }
+  }
+);
+
+// DELETE /api/admin/sections/:id
+router.delete(
+  "/sections/:id",
+  authMiddleware,
+  authorizeRoles("admin"),
+  userIdValidation,
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const id = req.params.id;
+      const section = await Section.findByIdAndDelete(id);
+      if (!section) {
+        return res.status(404).json({ success: false, message: "Section not found" });
+      }
+      return res.json({ success: true, data: { section } });
+    } catch (error: any) {
+      console.error("Delete section error:", error);
+      return res.status(500).json({ success: false, message: "Server error deleting section" });
     }
   }
 );

@@ -4,6 +4,7 @@ import {
   GraduationCap,
   Eye,
   EyeOff,
+  ArrowLeft,
   Mail,
   Lock,
   User,
@@ -175,13 +176,28 @@ const Login = () => {
       {/* Right Panel - Login Form */}
       <div className="flex items-center justify-center p-8 bg-background">
         <Card className="w-full max-w-md shadow-2xl animate-in slide-in-from-right-4 duration-500">
-          <CardHeader className="space-y-1">
-            <div className="flex items-center gap-2 mb-2 lg:hidden">
-              <GraduationCap className="h-6 w-6 text-primary" />
-              <span className="font-bold text-xl">Student Portal</span>
+          <CardHeader className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2 lg:hidden">
+                <GraduationCap className="h-6 w-6 text-primary" />
+                <span className="font-bold text-xl">Student Portal</span>
+              </div>
+              <CardTitle className="text-2xl">Welcome back</CardTitle>
+              <CardDescription>Sign in to access your portal</CardDescription>
             </div>
-            <CardTitle className="text-2xl">Welcome back</CardTitle>
-            <CardDescription>Sign in to access your portal</CardDescription>
+            <div className="shrink-0">
+              <Button
+                type="button"
+                className="px-3 py-1 text-sm h-8 bg-white text-primary hover:bg-gray-50 shadow-sm border border-gray-100"
+                onClick={() => navigate("/")}
+                aria-label="Go to home"
+              >
+                <span className="flex items-center gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Home</span>
+                </span>
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <Tabs

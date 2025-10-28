@@ -134,7 +134,7 @@ const About = () => {
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-blue-50 to-white">
+    <div className="flex min-h-screen flex-col bg-background">
       <Navbar />
 
       <main className="flex-1">
@@ -149,12 +149,10 @@ const About = () => {
                 <InfoCard
                   title="Our Mission"
                   content="Enhance transparency, reduce manual work, and connect students, teachers, and administrators through efficient digital tools."
-                  className="bg-white"
                 />
                 <InfoCard
                   title="Our Vision"
                   content="Create a future-ready digital school system that makes education management seamless and data-informed."
-                  className="bg-white"
                 />
               </div>
             </SectionTitle>
@@ -172,7 +170,7 @@ const About = () => {
                     key={feature.title}
                     title={feature.title}
                     content={feature.content}
-                    className="h-full border-blue-100 bg-blue-50/40"
+                    className="h-full"
                   />
                 ))}
               </div>
@@ -191,7 +189,7 @@ const About = () => {
                     key={impact.title}
                     title={impact.title}
                     content={impact.content}
-                    className="h-full border-blue-100 bg-blue-50/40"
+                    className="h-full"
                   />
                 ))}
               </div>

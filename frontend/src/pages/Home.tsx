@@ -117,19 +117,19 @@ const Home = () => {
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-background">
       <Navbar />
       <main className="flex-1">
-        <section className="bg-white">
+        <section className="border-b border-border/60 bg-card">
           <div className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-4 pb-20 pt-16 sm:px-6 lg:grid-cols-2 lg:items-center lg:px-8">
             <div className="space-y-6">
               <span className="inline-flex rounded-full border border-[#0059ff]/30 bg-[#0059ff]/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[#0059ff]">
                 School Management Reinvented
               </span>
-              <h1 className="text-4xl font-bold text-gray-900 sm:text-5xl">
+              <h1 className="text-4xl font-bold text-foreground sm:text-5xl">
                 Welcome to the School Portal
               </h1>
-              <p className="text-lg leading-relaxed text-gray-600">
+              <p className="text-lg leading-relaxed text-muted-foreground">
                 Manage students, teachers, and classes with a professional,
                 centralized system built for modern schools.
               </p>
@@ -148,11 +148,11 @@ const Home = () => {
                 </Link>
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
-              <h2 className="text-xl font-semibold text-gray-900">
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-lg">
+              <h2 className="text-xl font-semibold text-card-foreground">
                 Portal snapshot
               </h2>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 Key metrics updated in real time.
               </p>
               <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -169,8 +169,8 @@ const Home = () => {
                   className="shadow-none border-slate-100"
                 />
               </div>
-              <div className="mt-6 rounded-2xl border border-dashed border-slate-200 bg-gray-50 p-4">
-                <p className="text-sm leading-relaxed text-gray-600">
+              <div className="mt-6 rounded-2xl border border-dashed border-border bg-muted/40 p-4">
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   Automate attendance, approval flows, and performance insights
                   to keep leadership and staff aligned.
                 </p>
@@ -198,7 +198,7 @@ const Home = () => {
           </div>
         </section>
 
-        <section className="bg-white py-20">
+        <section className="bg-card py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <SectionTitle
               eyebrow="Workflow"
@@ -262,7 +262,7 @@ const Home = () => {
           </div>
         </section>
 
-        <section className="bg-white py-20">
+        <section className="bg-card py-20">
           <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
             <SectionTitle
               eyebrow="Support"
@@ -274,12 +274,12 @@ const Home = () => {
                 <AccordionItem
                   key={faq.question}
                   value={faq.question}
-                  className="rounded-2xl border border-slate-200 bg-gray-50 px-4"
+                  className="rounded-2xl border border-border bg-muted/40 px-4"
                 >
-                  <AccordionTrigger className="text-left text-base font-semibold text-gray-900">
+                  <AccordionTrigger className="text-left text-base font-semibold text-foreground">
                     {faq.question}
                   </AccordionTrigger>
-                  <AccordionContent className="text-base leading-relaxed text-gray-700">
+                  <AccordionContent className="text-base leading-relaxed text-muted-foreground">
                     {faq.answer}
                   </AccordionContent>
                 </AccordionItem>

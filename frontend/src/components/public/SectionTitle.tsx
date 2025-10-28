@@ -27,13 +27,17 @@ const SectionTitle = ({
       )}
     >
       {eyebrow && (
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#0059ff]">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
           {eyebrow}
         </p>
       )}
-      <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">{title}</h2>
+      <h2 className="text-2xl font-bold text-foreground sm:text-3xl">
+        {title}
+      </h2>
       {description && (
-        <p className="text-base text-slate-600 sm:text-lg">{description}</p>
+        <p className="text-base text-muted-foreground sm:text-lg">
+          {description}
+        </p>
       )}
       {children}
     </div>

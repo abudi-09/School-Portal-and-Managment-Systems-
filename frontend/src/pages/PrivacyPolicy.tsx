@@ -60,7 +60,7 @@ const PrivacyPolicy = () => {
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-blue-50 to-white">
+    <div className="flex min-h-screen flex-col bg-background">
       <Navbar />
 
       <main className="flex-1">
@@ -69,24 +69,21 @@ const PrivacyPolicy = () => {
             title="Privacy & Policy"
             description="We protect every learner’s data while supporting operational excellence for schools and administrators."
           >
-            <p className="text-sm font-medium uppercase tracking-wide text-[#0059ff]">
+            <p className="text-sm font-medium uppercase tracking-wide text-primary">
               Last Updated: October 2025
             </p>
           </SectionTitle>
 
           <div className="mt-12 space-y-8">
             {corePolicies.map((section) => (
-              <Card
-                key={section.title}
-                className="border-blue-100 bg-white shadow-sm"
-              >
+              <Card key={section.title} className="border-border shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-xl text-[#0059ff]">
+                  <CardTitle className="text-xl text-primary">
                     {section.title}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-slate-600 sm:text-base">
+                  <p className="text-sm text-muted-foreground sm:text-base">
                     {section.content}
                   </p>
                 </CardContent>
@@ -104,17 +101,16 @@ const PrivacyPolicy = () => {
 
           <div className="mt-12 grid gap-6 lg:grid-cols-2">
             {extendedPolicies.map((policy) => (
-              <Card
-                key={policy.title}
-                className="border-blue-100 bg-blue-50/40 shadow-sm"
-              >
+              <Card key={policy.title} className="border-border shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg font-semibold text-slate-900">
+                  <CardTitle className="text-lg font-semibold text-foreground">
                     {policy.title}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-slate-600">{policy.content}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {policy.content}
+                  </p>
                 </CardContent>
               </Card>
             ))}
@@ -128,24 +124,24 @@ const PrivacyPolicy = () => {
             align="left"
           />
 
-          <Card className="mt-12 border-blue-100 bg-white shadow-sm">
+          <Card className="mt-12 border-border shadow-sm">
             <CardContent className="space-y-4 p-6 sm:p-8">
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 Email us at
                 <a
                   href="mailto:privacy@schoolportal.com"
-                  className="ml-2 font-medium text-[#0059ff] hover:underline"
+                  className="ml-2 font-medium text-primary hover:underline"
                 >
                   privacy@schoolportal.com
                 </a>
                 for privacy concerns, data access requests, or clarifications
                 about this policy.
               </p>
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 Prefer a form? Submit details through our
                 <Link
                   to="/contact"
-                  className="ml-1 font-medium text-[#0059ff] hover:underline"
+                  className="ml-1 font-medium text-primary hover:underline"
                 >
                   contact page
                 </Link>
@@ -157,13 +153,13 @@ const PrivacyPolicy = () => {
           <div className="mt-16 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Link
               to="/"
-              className="inline-flex items-center justify-center rounded-full border border-[#0059ff] px-6 py-3 text-sm font-semibold text-[#0059ff] transition hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0059ff]"
+              className="inline-flex items-center justify-center rounded-full border border-primary/60 px-6 py-3 text-sm font-semibold text-primary transition hover:bg-primary/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               Back to Home
             </Link>
             <Link
               to="/about"
-              className="inline-flex items-center justify-center rounded-full border border-[#0059ff] px-6 py-3 text-sm font-semibold text-[#0059ff] transition hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0059ff]"
+              className="inline-flex items-center justify-center rounded-full border border-primary/60 px-6 py-3 text-sm font-semibold text-primary transition hover:bg-primary/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               Learn About the Portal
             </Link>

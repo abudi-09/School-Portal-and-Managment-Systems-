@@ -453,6 +453,52 @@ export function getAllClasses(): ClassDefinition[] {
   return deepCopy(store.classes);
 }
 
+/**
+ * Merge server-provided canonical classes into the local workflow store.
+ * This ensures the head UI shows the same classes/sections the admin manages.
+ *
+ * Entries should be objects with { id: string, name?: string }
+ * where `id` is the canonical classId (e.g. "11A").
+ */
+export function applyServerClasses(
+  entries: Array<{ id: string; name?: string }>
+): void {
+  if (!entries || !entries.length) return;
+  const store = cloneStore();
+  const byId = new Map(
+    store.classes.map((c) => [c.id, c] as [string, ClassDefinition])
+  );
+  const updated: ClassDefinition[] = [];
+
+  entries.forEach((entry) => {
+    const existing = byId.get(entry.id);
+    if (existing) {
+      // Preserve students, subjects and head assignment but update name
+      existing.name = entry.name ?? existing.name;
+      updated.push(existing);
+      byId.delete(entry.id);
+    } else {
+      // New class — create minimal shell so the UI can display it
+      updated.push({
+        id: entry.id,
+        name: entry.name ?? entry.id,
+        headTeacherId: "",
+        headTeacherName: "",
+        students: [],
+        subjects: [],
+      });
+    }
+  });
+
+  // Optionally keep any local-only classes that weren't returned by the server
+  // (avoids accidental deletion of in-memory artifacts). Append them after.
+  Array.from(byId.values()).forEach((left) => updated.push(left));
+
+  // Persist merged list
+  store.classes = updated;
+  persist(store);
+}
+
 export function setClassHead(
   classId: string,
   teacherId: string,

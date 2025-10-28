@@ -9,6 +9,9 @@ export interface User {
   subject?: string;
   position?: string;
   isHeadClassTeacher?: boolean;
+  // New: granular capability context
+  responsibilities?: string[]; // e.g., ["HeadClass:9a", "SubjectTeacher:10b:Math"]
+  assignedClassIds?: string[]; // canonical class ids like "9a", "10b"
 }
 
 export interface SignupData {

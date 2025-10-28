@@ -760,7 +760,7 @@ const ScheduleManagement = () => {
                     Add Class Period
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-h-[85vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add Class Period</DialogTitle>
                     <DialogDescription>
@@ -1223,7 +1223,7 @@ const ScheduleManagement = () => {
                     Schedule Exam
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-h-[85vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Schedule Exam</DialogTitle>
                     <DialogDescription>
@@ -1329,14 +1329,15 @@ const ScheduleManagement = () => {
                         <SelectTrigger>
                           <SelectValue placeholder="Select invigilator" />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Ms. Smith">Ms. Smith</SelectItem>
-                          <SelectItem value="Mr. Johnson">
-                            Mr. Johnson
-                          </SelectItem>
-                          <SelectItem value="Dr. Williams">
-                            Dr. Williams
-                          </SelectItem>
+                        <SelectContent className="max-h-64 overflow-y-auto">
+                          {teachers.map((t) => {
+                            const name = `${t.firstName} ${t.lastName}`.trim();
+                            return (
+                              <SelectItem key={t._id} value={name}>
+                                {name}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1483,7 +1484,7 @@ const ScheduleManagement = () => {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               Edit {isEditingExam ? "Exam" : "Class"} Schedule
@@ -1557,10 +1558,15 @@ const ScheduleManagement = () => {
                     <SelectTrigger>
                       <SelectValue placeholder="Select invigilator" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Ms. Smith">Ms. Smith</SelectItem>
-                      <SelectItem value="Mr. Johnson">Mr. Johnson</SelectItem>
-                      <SelectItem value="Dr. Williams">Dr. Williams</SelectItem>
+                    <SelectContent className="max-h-64 overflow-y-auto">
+                      {teachers.map((t) => {
+                        const name = `${t.firstName} ${t.lastName}`.trim();
+                        return (
+                          <SelectItem key={t._id} value={name}>
+                            {name}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>

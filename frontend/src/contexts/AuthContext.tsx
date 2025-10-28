@@ -109,29 +109,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("API response:", response.status, data);
 
       if (response.ok && data.success) {
-        const userData = data.data.user;
-        const fullName = `${userData.firstName ?? ""} ${
-          userData.lastName ?? ""
-        }`
+        // Store token first, then fetch full profile for responsibilities
+        localStorage.setItem("token", data.data.token);
+
+        const apiUser = data.data.user;
+        const fullName = `${apiUser.firstName ?? ""} ${apiUser.lastName ?? ""}`
           .trim()
           .replace(/\s+/g, " ");
 
+        // Fetch full profile to retrieve employmentInfo and assignedClassIds
+        let responsibilitiesArr: string[] = [];
+        let assignedClassIds: string[] | undefined;
+        try {
+          const meRes = await fetch(`${apiBaseUrl}/api/profile/me`, {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          });
+          const me = await meRes.json();
+          if (meRes.ok && me?.success) {
+            const rawResp: string | undefined =
+              me.data?.user?.employmentInfo?.responsibilities;
+            if (typeof rawResp === "string" && rawResp.trim().length) {
+              responsibilitiesArr = rawResp
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean);
+            }
+            assignedClassIds = (
+              me.data?.user?.assignedClassIds as string[] | undefined
+            )?.map((x) => x.toLowerCase());
+          }
+        } catch {
+          // ignore; we will proceed with minimal context
+        }
+
+        const isHeadByResp = responsibilitiesArr.some((r) =>
+          r.startsWith("HeadClass:")
+        );
+
         const user: User = {
-          id: userData.id,
-          name: fullName || userData.email || userData.studentId || "User",
-          email: userData.email,
-          studentId: userData.studentId,
-          role: userData.role,
-          subject: userData.academicInfo?.subjects?.[0],
-          position: userData.employmentInfo?.position,
+          id: apiUser.id,
+          name: fullName || apiUser.email || apiUser.studentId || "User",
+          email: apiUser.email,
+          studentId: apiUser.studentId,
+          role: apiUser.role,
+          subject: apiUser.academicInfo?.subjects?.[0],
+          position: apiUser.employmentInfo?.position,
           isHeadClassTeacher:
-            userData.role === "teacher" &&
-            Boolean(userData.employmentInfo?.position?.includes("Head")),
+            apiUser.role === "teacher" &&
+            (isHeadByResp ||
+              Boolean(apiUser.employmentInfo?.position?.includes("Head"))),
+          responsibilities: responsibilitiesArr,
+          assignedClassIds,
         };
 
         setUser(user);
         localStorage.setItem("currentUser", JSON.stringify(user));
-        localStorage.setItem("token", data.data.token);
 
         return { success: true, user };
       }

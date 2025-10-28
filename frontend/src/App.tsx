@@ -20,6 +20,7 @@ import TeacherClasses from "./pages/teacher/TeacherClasses";
 import TeacherAnnouncements from "./pages/teacher/TeacherAnnouncements";
 import TeacherProfile from "./pages/teacher/TeacherProfile";
 import TeacherAttendance from "./pages/teacher/TeacherAttendance";
+import HeadAllSubjects from "./pages/teacher/HeadAllSubjects";
 import HeadClassGradeManagement from "./pages/teacher/HeadClassGradeManagement";
 import HeadClassAttendance from "./pages/teacher/HeadClassAttendance";
 import TeacherMessages from "./pages/teacher/TeacherMessages";
@@ -96,6 +97,7 @@ const App = () => (
             <Route path="announcements" element={<TeacherAnnouncements />} />
             <Route path="messages" element={<TeacherMessages />} />
             <Route path="attendance" element={<TeacherAttendance />} />
+            <Route path="head-all-subjects" element={<HeadAllSubjects />} />
             <Route path="head-grades" element={<HeadClassGradeManagement />} />
             <Route
               path="head-grade-management"

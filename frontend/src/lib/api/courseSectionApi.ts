@@ -70,6 +70,21 @@ export async function listSectionsByGrade(grade: GradeLevel) {
   }>(`/api/admin/sections?grade=${grade}`);
 }
 
+export async function listClasses() {
+  return authorizedFetch<{
+    success: boolean;
+    data: {
+      classes: Array<{
+        classId: string;
+        grade: number;
+        section: string;
+        name?: string;
+        updatedAt?: string;
+      }>;
+    };
+  }>(`/api/classes`);
+}
+
 export async function createSection(payload: SectionPayload) {
   return authorizedFetch<{
     success: boolean;
@@ -95,6 +110,32 @@ export async function deleteSection(id: string) {
     data: { section: SectionResponse };
   }>(`/api/admin/sections/${id}`, {
     method: "DELETE",
+  });
+}
+
+export async function updateCourse(
+  id: string,
+  payload: { name?: string; isMandatory?: boolean }
+) {
+  return authorizedFetch<{
+    success: boolean;
+    data: { course: CourseResponse };
+  }>(`/api/admin/courses/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateSection(
+  id: string,
+  payload: { label?: string; capacity?: number }
+) {
+  return authorizedFetch<{
+    success: boolean;
+    data: { section: SectionResponse };
+  }>(`/api/admin/sections/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }
 

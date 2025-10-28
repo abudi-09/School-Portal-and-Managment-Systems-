@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 import {
   ClipboardList,
   Users,
@@ -40,7 +41,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Local types
 type Teacher = {
-  id: number;
+  id: string; // MongoDB _id
   name: string;
   department: string;
   assignedClasses: number;
@@ -53,150 +54,130 @@ type Teacher = {
 };
 
 const AssignmentManagement = () => {
-  // Classes
-  const [classes, setClasses] = useState([
+  // Classes and teachers are loaded from the server for head assignment management
+  const [classes, setClasses] = useState<
     {
-      id: "10a",
-      name: "10A",
-      students: 28,
-      classTeacher: "Ms. Johnson",
-      subjects: 8,
-    },
-    {
-      id: "10b",
-      name: "10B",
-      students: 30,
-      classTeacher: "Unassigned",
-      subjects: 7,
-    },
-    {
-      id: "11a",
-      name: "11A",
-      students: 30,
-      classTeacher: "Ms. Smith",
-      subjects: 9,
-    },
-    {
-      id: "11b",
-      name: "11B",
-      students: 32,
-      classTeacher: "Mr. Davis",
-      subjects: 8,
-    },
-    {
-      id: "12a",
-      name: "12A",
-      students: 25,
-      classTeacher: "Dr. Williams",
-      subjects: 10,
-    },
-  ] as { id: string; name: string; students: number; classTeacher: string; subjects: number }[]);
+      id: string;
+      name: string;
+      grade?: string;
+      section?: string;
+      students?: number;
+      classTeacher?: string;
+      subjects?: number;
+    }[]
+  >([]);
 
-  const [teachers, setTeachers] = useState<Teacher[]>([
-    {
-      id: 1,
-      name: "Ms. Smith",
-      department: "Mathematics",
-      assignedClasses: 3,
-      email: "smith.mathematics@school.edu",
-      phone: "+1 (555) 123-4567",
-      qualifications: ["M.Sc. Mathematics", "B.Ed.", "Teaching License"],
-      experience: "8 years",
-      classTeacherAssignments: ["11A"],
-      subjectAssignments: [
-        { class: "11A", subject: "Mathematics" },
-        { class: "10A", subject: "Mathematics" },
-        { class: "12A", subject: "Mathematics" },
-      ],
-    },
-    {
-      id: 2,
-      name: "Mr. Johnson",
-      department: "Science",
-      assignedClasses: 2,
-      email: "johnson.science@school.edu",
-      phone: "+1 (555) 234-5678",
-      qualifications: [
-        "M.Sc. Physics",
-        "B.Sc. Chemistry",
-        "Teaching Certificate",
-      ],
-      experience: "12 years",
-      classTeacherAssignments: [],
-      subjectAssignments: [
-        { class: "11A", subject: "Physics" },
-        { class: "12A", subject: "Physics" },
-      ],
-    },
-    {
-      id: 3,
-      name: "Dr. Williams",
-      department: "English",
-      assignedClasses: 4,
-      email: "williams.english@school.edu",
-      phone: "+1 (555) 345-6789",
-      qualifications: [
-        "Ph.D. English Literature",
-        "M.A. English",
-        "TESOL Certificate",
-      ],
-      experience: "15 years",
-      classTeacherAssignments: ["12A"],
-      subjectAssignments: [
-        { class: "11A", subject: "English" },
-        { class: "10A", subject: "English" },
-        { class: "12A", subject: "English" },
-        { class: "11B", subject: "English" },
-      ],
-    },
-    {
-      id: 4,
-      name: "Ms. Johnson",
-      department: "History",
-      assignedClasses: 2,
-      email: "johnson.history@school.edu",
-      phone: "+1 (555) 456-7890",
-      qualifications: [
-        "M.A. History",
-        "B.A. Social Studies",
-        "Teaching License",
-      ],
-      experience: "6 years",
-      classTeacherAssignments: ["10A"],
-      subjectAssignments: [
-        { class: "10A", subject: "History" },
-        { class: "11B", subject: "History" },
-      ],
-    },
-    {
-      id: 5,
-      name: "Mr. Davis",
-      department: "Physical Education",
-      assignedClasses: 3,
-      email: "davis.pe@school.edu",
-      phone: "+1 (555) 567-8901",
-      qualifications: [
-        "B.Sc. Physical Education",
-        "Sports Coaching Certificate",
-        "First Aid Certified",
-      ],
-      experience: "10 years",
-      classTeacherAssignments: ["11B"],
-      subjectAssignments: [
-        { class: "10A", subject: "Physical Education" },
-        { class: "11A", subject: "Physical Education" },
-        { class: "12A", subject: "Physical Education" },
-      ],
-    },
-  ]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
 
-  const [subjectAssignments, setSubjectAssignments] = useState([
-    { class: "11A", subject: "Mathematics", teacher: "Ms. Smith" },
-    { class: "11A", subject: "Physics", teacher: "Mr. Johnson" },
-    { class: "11A", subject: "English", teacher: "Dr. Williams" },
-    { class: "10A", subject: "Mathematics", teacher: "Ms. Smith" },
-    { class: "10A", subject: "History", teacher: "Unassigned" },
-  ] as { class: string; subject: string; teacher: string }[]);
+  const [subjectAssignments, setSubjectAssignments] = useState<
+    { class: string; subject: string; teacher: string }[]
+  >([]);
+
+  const apiBaseUrl =
+    import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+  const { toast } = useToast();
+
+  // Fetch approved teachers and classes from the server
+  type ApiTeacher = {
+    _id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    department?: string;
+    assignedClassIds?: string[];
+    phone?: string;
+    qualifications?: string[];
+    experience?: string;
+    classTeacherAssignments?: string[];
+    subjectAssignments?: { class: string; subject: string }[];
+  };
+
+  const fetchServerData = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      // Fetch classes
+      const classesRes = await fetch(`${apiBaseUrl}/api/classes`, { headers });
+      const classesPayload = (await classesRes.json().catch(() => ({}))) as {
+        success?: boolean;
+        message?: string;
+        data?: {
+          classes?: Array<{
+            classId: string;
+            grade?: string;
+            section?: string;
+            name?: string;
+          }>;
+        };
+      };
+      if (classesRes.ok && classesPayload?.success) {
+        const svc = (classesPayload.data?.classes ?? []).map((c) => ({
+          id: c.classId,
+          name: c.name,
+          grade: c.grade,
+          section: c.section,
+        }));
+        setClasses(svc);
+      } else {
+        console.warn(
+          "Failed to load classes from server",
+          classesPayload?.message
+        );
+      }
+
+      // Fetch approved teachers
+      const teachersRes = await fetch(
+        `${apiBaseUrl}/api/head/teachers?limit=1000&isApproved=true`,
+        { headers }
+      );
+      const teachersPayload = (await teachersRes.json().catch(() => ({}))) as {
+        success?: boolean;
+        message?: string;
+        data?: { teachers?: ApiTeacher[] };
+      };
+      if (teachersRes.ok && teachersPayload?.success) {
+        const list = (teachersPayload.data?.teachers ?? []).map(
+          (t) =>
+            ({
+              id: t._id,
+              name:
+                [t.firstName, t.lastName].filter(Boolean).join(" ") ||
+                t.email ||
+                "Unnamed",
+              department: t.department ?? "",
+              assignedClasses: (t.assignedClassIds ?? []).length,
+              email: t.email,
+              phone: t.phone,
+              qualifications: t.qualifications ?? [],
+              experience: t.experience ?? "",
+              classTeacherAssignments: t.classTeacherAssignments ?? [],
+              subjectAssignments: t.subjectAssignments ?? [],
+            } as Teacher)
+        );
+        setTeachers(list);
+      } else {
+        console.warn(
+          "Failed to load teachers from server",
+          teachersPayload?.message
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Error fetching server data for AssignmentManagement",
+        error
+      );
+    }
+  };
+
+  // Load server data on mount
+  useEffect(() => {
+    void fetchServerData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Search state
   const [teacherSearch, setTeacherSearch] = useState("");
@@ -213,8 +194,80 @@ const AssignmentManagement = () => {
     null
   );
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const [subjectOptions, setSubjectOptions] = useState<string[]>([]);
+  const [subjectAssignmentsServer, setSubjectAssignmentsServer] = useState<
+    { class: string; subject: string; teacher: string }[]
+  >([]);
   const [teacherDetailsOpen, setTeacherDetailsOpen] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
+
+  // When selectedClass changes, fetch course subjects for its grade and existing assignments
+  useEffect(() => {
+    const loadForClass = async () => {
+      if (!selectedClass) return;
+      try {
+        const token = localStorage.getItem("token");
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const cls = classes.find((c) => c.id === selectedClass);
+        if (!cls || !cls.grade) return;
+
+        // fetch courses for grade
+        const coursesRes = await fetch(
+          `${apiBaseUrl}/api/admin/courses?grade=${cls.grade}`,
+          { headers }
+        );
+        const coursesPayload = await coursesRes.json().catch(() => ({}));
+        if (coursesRes.ok && coursesPayload?.success) {
+          type ApiCourse = { name: string };
+          const opts = (coursesPayload.data?.courses ?? []).map(
+            (c: ApiCourse) => c.name
+          );
+          setSubjectOptions(opts);
+        } else {
+          setSubjectOptions([]);
+        }
+
+        // fetch existing subject assignments for class
+        const saRes = await fetch(
+          `${apiBaseUrl}/api/head/subject-assignments?classId=${selectedClass}`,
+          { headers }
+        );
+        const saPayload = await saRes.json().catch(() => ({}));
+        if (saRes.ok && saPayload?.success) {
+          type ApiAssignment = {
+            classId: string;
+            subject: string;
+            teacherName?: string;
+          };
+          const list = (saPayload.data?.assignments ?? []).map(
+            (a: ApiAssignment) => ({
+              class: a.classId,
+              subject: a.subject,
+              teacher: a.teacherName ?? "Unassigned",
+            })
+          );
+          setSubjectAssignmentsServer(list);
+          if (subjectAssignments.length === 0) {
+            setSubjectAssignments(
+              list.map((s) => ({
+                class: classes.find((c) => c.id === s.class)?.name ?? s.class,
+                subject: s.subject,
+                teacher: s.teacher,
+              }))
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error loading subjects/assignments for class", error);
+      }
+    };
+    void loadForClass();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClass, classes]);
 
   const unassignedCount =
     classes.filter((c) => c.classTeacher === "Unassigned").length +
@@ -236,8 +289,7 @@ const AssignmentManagement = () => {
       setDialogOpen(false);
       return;
     }
-    const teacherIdNum = parseInt(selectedTeacherId, 10);
-    const teacher = teachers.find((t) => t.id === teacherIdNum);
+    const teacher = teachers.find((t) => t.id === selectedTeacherId);
     if (!teacher) {
       setDialogOpen(false);
       return;
@@ -249,62 +301,167 @@ const AssignmentManagement = () => {
         setDialogOpen(false);
         return;
       }
-      const prevTeacherName = cls.classTeacher;
-
-      // update class assignment
-      setClasses((prev) =>
-        prev.map((c) =>
-          c.id === selectedClass ? { ...c, classTeacher: teacher.name } : c
-        )
-      );
-
-      // remove previous teacher assignment if applicable
-      if (prevTeacherName && prevTeacherName !== "Unassigned") {
-        setTeachers((prev) =>
-          prev.map((t) =>
-            t.name === prevTeacherName
-              ? {
-                  ...t,
-                  assignedClasses: Math.max(0, (t.assignedClasses || 1) - 1),
-                  classTeacherAssignments: (
-                    t.classTeacherAssignments || []
-                  ).filter((x) => x !== cls.name),
-                }
-              : t
-          )
-        );
-      }
-
-      // add to new teacher
-      setTeachers((prev) =>
-        prev.map((t) =>
-          t.id === teacher.id
-            ? {
-                ...t,
-                assignedClasses: (t.assignedClasses || 0) + 1,
-                classTeacherAssignments: [
-                  ...(t.classTeacherAssignments || []),
-                  cls.name,
-                ],
-              }
-            : t
-        )
-      );
+      // Persist class head assignment to server
+      (async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+          };
+          if (token) headers.Authorization = `Bearer ${token}`;
+          const res = await fetch(
+            `${apiBaseUrl}/api/head/class-assignments/${cls.id}`,
+            {
+              method: "PUT",
+              headers,
+              body: JSON.stringify({ teacherId: teacher.id }),
+            }
+          );
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok || !payload.success) {
+            throw new Error(payload.message || "Failed to assign class head");
+          }
+          toast({
+            title: "Head assigned",
+            description: `${teacher.name} assigned to ${cls.name}`,
+          });
+          // Optimistically update UI
+          const prevTeacherName = cls.classTeacher;
+          setClasses((prev) =>
+            prev.map((c) =>
+              c.id === selectedClass ? { ...c, classTeacher: teacher.name } : c
+            )
+          );
+          if (prevTeacherName && prevTeacherName !== "Unassigned") {
+            setTeachers((prev) =>
+              prev.map((t) =>
+                t.name === prevTeacherName
+                  ? {
+                      ...t,
+                      assignedClasses: Math.max(
+                        0,
+                        (t.assignedClasses || 1) - 1
+                      ),
+                      classTeacherAssignments: (
+                        t.classTeacherAssignments || []
+                      ).filter((x) => x !== cls.name),
+                    }
+                  : t
+              )
+            );
+          }
+          setTeachers((prev) =>
+            prev.map((t) =>
+              t.id === teacher.id
+                ? {
+                    ...t,
+                    assignedClasses: (t.assignedClasses || 0) + 1,
+                    classTeacherAssignments: [
+                      ...(t.classTeacherAssignments || []),
+                      cls.name,
+                    ],
+                  }
+                : t
+            )
+          );
+        } catch (error: unknown) {
+          console.error("Failed to save head class assignment", error);
+          const msg = error instanceof Error ? error.message : String(error);
+          toast({
+            title: "Assignment failed",
+            description: msg,
+            variant: "destructive",
+          });
+        }
+      })();
     }
 
     if (assignmentType === "subject") {
-      const clsName = classes.find((c) => c.id === selectedClass)?.name;
-      if (!clsName || !selectedSubject) {
+      const cls = classes.find((c) => c.id === selectedClass);
+      if (!cls || !selectedSubject) {
         setDialogOpen(false);
         return;
       }
-      setSubjectAssignments((prev) =>
-        prev.map((sa) =>
-          sa.class === clsName && sa.subject === selectedSubject
-            ? { ...sa, teacher: teacher.name }
-            : sa
-        )
-      );
+      // Persist subject assignment to server
+      (async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+          };
+          if (token) headers.Authorization = `Bearer ${token}`;
+
+          const res = await fetch(
+            `${apiBaseUrl}/api/head/subject-assignments/${cls.id}`,
+            {
+              method: "PUT",
+              headers,
+              body: JSON.stringify({
+                subject: selectedSubject,
+                teacherId: teacher.id,
+              }),
+            }
+          );
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok || !payload.success) {
+            throw new Error(
+              payload.message || "Failed to assign subject teacher"
+            );
+          }
+          toast({
+            title: "Subject assigned",
+            description: `${teacher.name} → ${selectedSubject} (${cls.name})`,
+          });
+
+          // Update local subject assignments state
+          setSubjectAssignments((prev) => {
+            const className = cls.name;
+            const updated = prev.filter(
+              (s) => !(s.class === className && s.subject === selectedSubject)
+            );
+            updated.push({
+              class: className,
+              subject: selectedSubject,
+              teacher: teacher.name,
+            });
+            return updated;
+          });
+
+          // update server-backed assignments snapshot
+          setSubjectAssignmentsServer((prev) => {
+            const without = prev.filter(
+              (s) => !(s.class === cls.id && s.subject === selectedSubject)
+            );
+            without.push({
+              class: cls.id,
+              subject: selectedSubject,
+              teacher: teacher.name,
+            });
+            return without;
+          });
+        } catch (error: unknown) {
+          console.error("Failed to save subject assignment", error);
+          const msg = error instanceof Error ? error.message : String(error);
+          toast({
+            title: "Assignment failed",
+            description: msg,
+            variant: "destructive",
+          });
+          // fallback to local update so UI remains responsive
+          const clsName = cls.name;
+          setSubjectAssignments((prev) => {
+            const updated = prev.filter(
+              (s) => !(s.class === clsName && s.subject === selectedSubject)
+            );
+            updated.push({
+              class: clsName,
+              subject: selectedSubject,
+              teacher: teacher.name,
+            });
+            return updated;
+          });
+        }
+      })();
     }
 
     setDialogOpen(false);
@@ -537,48 +694,58 @@ const AssignmentManagement = () => {
 
             {selectedClass && (
               <div className="space-y-3 pt-4">
-                {subjectAssignments
-                  .filter(
-                    (s) =>
-                      s.class ===
-                      classes.find((c) => c.id === selectedClass)?.name
-                  )
-                  .map((assignment, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-4 rounded-lg bg-secondary"
-                    >
-                      <div>
-                        <p className="font-medium text-foreground mb-1">
-                          {assignment.subject}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Teacher:{" "}
-                          <span
-                            className={
-                              assignment.teacher === "Unassigned"
-                                ? "text-warning font-medium"
-                                : "text-foreground"
-                            }
-                          >
-                            {assignment.teacher}
-                          </span>
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedSubject(assignment.subject);
-                          openAssignmentDialog("subject");
-                        }}
+                {(() => {
+                  const cls = classes.find((c) => c.id === selectedClass);
+                  const nameMap = new Map(
+                    subjectAssignmentsServer.map((a) => [a.subject, a.teacher])
+                  );
+                  const list = subjectOptions.map((subj) => ({
+                    subject: subj,
+                    teacher: nameMap.get(subj) ?? "Unassigned",
+                  }));
+                  return list
+                    .filter((row) =>
+                      subjectSearch
+                        ? row.subject
+                            .toLowerCase()
+                            .includes(subjectSearch.toLowerCase())
+                        : true
+                    )
+                    .map((row, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-4 rounded-lg bg-secondary"
                       >
-                        {assignment.teacher === "Unassigned"
-                          ? "Assign"
-                          : "Change"}
-                      </Button>
-                    </div>
-                  ))}
+                        <div>
+                          <p className="font-medium text-foreground mb-1">
+                            {row.subject}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Teacher:{" "}
+                            <span
+                              className={
+                                row.teacher === "Unassigned"
+                                  ? "text-warning font-medium"
+                                  : "text-foreground"
+                              }
+                            >
+                              {row.teacher}
+                            </span>
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedSubject(row.subject);
+                            openAssignmentDialog("subject");
+                          }}
+                        >
+                          {row.teacher === "Unassigned" ? "Assign" : "Change"}
+                        </Button>
+                      </div>
+                    ));
+                })()}
               </div>
             )}
           </CardContent>
@@ -640,6 +807,38 @@ const AssignmentManagement = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {assignmentType === "subject" && (
+              <div className="space-y-2">
+                <Label>Select Subject</Label>
+                <Select
+                  value={selectedSubject ?? undefined}
+                  onValueChange={(v) => setSelectedSubject(v ?? null)}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        subjectOptions.length
+                          ? "Choose subject"
+                          : "No subjects available"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjectOptions.length === 0 ? (
+                      <div className="px-2 py-1 text-sm text-muted-foreground">
+                        No subjects available for this class
+                      </div>
+                    ) : (
+                      subjectOptions.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Select Teacher</Label>
               <Input

@@ -20,6 +20,14 @@ export const env = {
   mongoUri: getEnv("MONGODB_URI", "mongodb://localhost:27017/pathways_db"),
   jwtSecret: getEnv("JWT_SECRET", "change-me"),
   jwtExpiresIn: getEnv("JWT_EXPIRES_IN", "7d"),
+  policy: {
+    allowMultiClassHead:
+      getEnv("ALLOW_MULTI_CLASS_HEAD", "true").toLowerCase() === "true",
+    allowTeacherMultiSubjects:
+      getEnv("ALLOW_TEACHER_MULTI_SUBJECTS", "true").toLowerCase() === "true",
+    allowTeacherMultiSections:
+      getEnv("ALLOW_TEACHER_MULTI_SECTIONS", "true").toLowerCase() === "true",
+  },
   cloudinary: {
     cloudName: getEnv("CLOUDINARY_CLOUD_NAME", ""),
     apiKey: getEnv("CLOUDINARY_API_KEY", ""),

@@ -92,12 +92,10 @@ router.get(
     try {
       const gradeNum = Number(req.query.grade);
       if (![9, 10, 11, 12].includes(gradeNum)) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Invalid or missing grade. Expected 9,10,11,12.",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or missing grade. Expected 9,10,11,12.",
+        });
       }
 
       const courses = await Course.find({ grade: gradeNum }).sort({
@@ -133,13 +131,11 @@ router.post(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Validation failed",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
     }
 
     try {
@@ -153,17 +149,75 @@ router.post(
       return res.status(201).json({ success: true, data: { course: doc } });
     } catch (error: any) {
       if (error?.code === 11000) {
-        return res
-          .status(409)
-          .json({
-            success: false,
-            message: "Course already exists for this grade",
-          });
+        return res.status(409).json({
+          success: false,
+          message: "Course already exists for this grade",
+        });
       }
       console.error("Create course error:", error);
       return res
         .status(500)
         .json({ success: false, message: "Server error creating course" });
+    }
+  }
+);
+
+// PATCH /api/admin/courses/:id
+router.patch(
+  "/courses/:id",
+  authMiddleware,
+  authorizeRoles("admin"),
+  userIdValidation,
+  [
+    body("name")
+      .optional()
+      .isString()
+      .trim()
+      .isLength({ min: 1 })
+      .withMessage("Course name is required"),
+    body("isMandatory")
+      .optional()
+      .isBoolean()
+      .withMessage("isMandatory must be boolean"),
+  ],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
+    }
+
+    try {
+      const id = req.params.id;
+      const update: any = {};
+      if (req.body.name !== undefined) update.name = req.body.name;
+      if (req.body.isMandatory !== undefined)
+        update.isMandatory = !!req.body.isMandatory;
+
+      const course = await Course.findById(id);
+      if (!course)
+        return res
+          .status(404)
+          .json({ success: false, message: "Course not found" });
+
+      Object.assign(course, update);
+      await course.save();
+
+      return res.json({ success: true, data: { course } });
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: "Course already exists for this grade",
+        });
+      }
+      console.error("Update course error:", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Server error updating course" });
     }
   }
 );
@@ -178,12 +232,10 @@ router.get(
     try {
       const gradeNum = Number(req.query.grade);
       if (![9, 10, 11, 12].includes(gradeNum)) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Invalid or missing grade. Expected 9,10,11,12.",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or missing grade. Expected 9,10,11,12.",
+        });
       }
 
       const sections = await Section.find({ grade: gradeNum }).sort({
@@ -219,13 +271,11 @@ router.post(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Validation failed",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
     }
 
     try {
@@ -239,17 +289,74 @@ router.post(
       return res.status(201).json({ success: true, data: { section: doc } });
     } catch (error: any) {
       if (error?.code === 11000) {
-        return res
-          .status(409)
-          .json({
-            success: false,
-            message: "Section already exists for this grade",
-          });
+        return res.status(409).json({
+          success: false,
+          message: "Section already exists for this grade",
+        });
       }
       console.error("Create section error:", error);
       return res
         .status(500)
         .json({ success: false, message: "Server error creating section" });
+    }
+  }
+);
+
+// PATCH /api/admin/sections/:id
+router.patch(
+  "/sections/:id",
+  authMiddleware,
+  authorizeRoles("admin"),
+  userIdValidation,
+  [
+    body("label")
+      .optional()
+      .isString()
+      .trim()
+      .isLength({ min: 1 })
+      .withMessage("Section label is required"),
+    body("capacity")
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage("Capacity must be a positive integer"),
+  ],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
+    }
+
+    try {
+      const id = req.params.id;
+      const update: any = {};
+      if (req.body.label !== undefined) update.label = req.body.label;
+      if (req.body.capacity !== undefined) update.capacity = req.body.capacity;
+
+      const section = await Section.findById(id);
+      if (!section)
+        return res
+          .status(404)
+          .json({ success: false, message: "Section not found" });
+
+      Object.assign(section, update);
+      await section.save();
+
+      return res.json({ success: true, data: { section } });
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: "Section already exists for this grade",
+        });
+      }
+      console.error("Update section error:", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Server error updating section" });
     }
   }
 );
@@ -265,12 +372,16 @@ router.delete(
       const id = req.params.id;
       const course = await Course.findByIdAndDelete(id);
       if (!course) {
-        return res.status(404).json({ success: false, message: "Course not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Course not found" });
       }
       return res.json({ success: true, data: { course } });
     } catch (error: any) {
       console.error("Delete course error:", error);
-      return res.status(500).json({ success: false, message: "Server error deleting course" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Server error deleting course" });
     }
   }
 );
@@ -286,12 +397,16 @@ router.delete(
       const id = req.params.id;
       const section = await Section.findByIdAndDelete(id);
       if (!section) {
-        return res.status(404).json({ success: false, message: "Section not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Section not found" });
       }
       return res.json({ success: true, data: { section } });
     } catch (error: any) {
       console.error("Delete section error:", error);
-      return res.status(500).json({ success: false, message: "Server error deleting section" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Server error deleting section" });
     }
   }
 );

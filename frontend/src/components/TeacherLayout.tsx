@@ -25,7 +25,7 @@ const TeacherLayout = () => {
 
   // Check if teacher is also a Head Class Teacher
   const isHeadClassTeacher =
-    user?.role === "teacher" && user.isHeadClassTeacher;
+    user?.role === "teacher" && Boolean(user?.isHeadClassTeacher);
 
   // Build navigation based on role
   const baseNavigation = [
@@ -49,6 +49,11 @@ const TeacherLayout = () => {
       href: "/teacher/attendance",
       icon: CalendarCheck,
       headOnly: true,
+    },
+    {
+      name: "All Subjects",
+      href: "/teacher/head-all-subjects",
+      icon: BookOpen,
     },
     {
       name: "Attendance Management",

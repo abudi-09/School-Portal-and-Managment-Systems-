@@ -52,6 +52,7 @@ import {
   applyHeadAssignments,
   getAllClasses,
   setClassHead,
+  applyServerClasses,
 } from "@/lib/grades/workflowStore";
 
 type GradeStatus = "Pending" | "Verified" | "Needs Revision";
@@ -449,6 +450,9 @@ export default function HeadClassTeacherManagement() {
           id: c.classId,
           name: c.name,
         }));
+        // Persist/merge classes into local workflow store so the Head UI
+        // reflects the admin-managed canonical classes and sections.
+        applyServerClasses(classes);
         setServerClasses(classes);
         if (showToast) {
           toast({

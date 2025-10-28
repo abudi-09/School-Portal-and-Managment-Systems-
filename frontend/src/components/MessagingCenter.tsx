@@ -160,7 +160,7 @@ const MessagingCenter = ({
                         type="button"
                         onClick={() => handleSelectContact(contact.id)}
                         className={cn(
-                          "w-full rounded-2xl border border-transparent bg-card p-4 text-left transition-colors hover:border-border hover:bg-accent/40",
+                          "w-full rounded-2xl border border-transparent bg-card p-4 text-left transition-colors hover:border-border hover:bg-primary/5",
                           selectedId === contact.id
                             ? "border-primary bg-primary/5"
                             : undefined

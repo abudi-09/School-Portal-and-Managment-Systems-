@@ -123,7 +123,7 @@ const Home = () => {
         <section className="border-b border-border/60 bg-card">
           <div className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-4 pb-20 pt-16 sm:px-6 lg:grid-cols-2 lg:items-center lg:px-8">
             <div className="space-y-6">
-              <span className="inline-flex rounded-full border border-[#0059ff]/30 bg-[#0059ff]/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[#0059ff]">
+              <span className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-primary">
                 School Management Reinvented
               </span>
               <h1 className="text-4xl font-bold text-foreground sm:text-5xl">
@@ -136,13 +136,13 @@ const Home = () => {
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Link
                   to="/login"
-                  className="rounded-lg bg-[#0059ff] px-6 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-[#0044cc]"
+                  className="rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-lg transition-colors hover:bg-primary/90"
                 >
                   Login
                 </Link>
                 <Link
                   to="/about"
-                  className="rounded-lg border border-[#0059ff] px-6 py-3 text-sm font-semibold text-[#0059ff] transition-colors hover:bg-blue-50"
+                  className="rounded-lg border border-primary px-6 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
                 >
                   Learn More
                 </Link>
@@ -160,13 +160,13 @@ const Home = () => {
                   title="1,248 Students"
                   subtitle="Active enrollment"
                   content="Track attendance, assignments, and progression for every learner."
-                  className="shadow-none border-slate-100"
+                  className="shadow-none border-border/60"
                 />
                 <InfoCard
                   title="112 Teachers"
                   subtitle="Assigned to classes"
                   content="Monitor workload distribution and head teacher responsibilities."
-                  className="shadow-none border-slate-100"
+                  className="shadow-none border-border/60"
                 />
               </div>
               <div className="mt-6 rounded-2xl border border-dashed border-border bg-muted/40 p-4">
@@ -236,25 +236,25 @@ const Home = () => {
           </div>
         </section>
 
-        <section className="bg-[#0059ff] py-20 text-white">
+        <section className="bg-primary py-20 text-primary-foreground">
           <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
             <h2 className="text-3xl font-bold leading-tight">
               Ready to simplify your school management?
             </h2>
-            <p className="mt-4 text-base leading-relaxed text-white/80">
+            <p className="mt-4 text-base leading-relaxed text-primary-foreground/80">
               Start using the Student Portal to centralize data, empower
               teachers, and deliver consistent academic experiences.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link
                 to="/login"
-                className="rounded-lg bg-white px-6 py-3 text-sm font-semibold text-[#0059ff] shadow-lg transition-colors hover:bg-gray-100"
+                className="rounded-lg bg-primary-foreground px-6 py-3 text-sm font-semibold text-primary shadow-lg transition-colors hover:bg-primary-foreground/90"
               >
                 Get Started Now
               </Link>
               <Link
                 to="/contact"
-                className="rounded-lg border border-white px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                className="rounded-lg border border-primary-foreground px-6 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/10"
               >
                 Contact Us
               </Link>

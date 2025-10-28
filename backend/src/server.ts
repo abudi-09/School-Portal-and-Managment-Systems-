@@ -15,6 +15,7 @@ import classesRoutes from "./routes/classes";
 import examScheduleRoutes from "./routes/examSchedules";
 import roomRoutes from "./routes/rooms";
 import announcementRoutes from "./routes/announcements";
+import contactRoutes from "./routes/contact";
 import { errorHandler } from "./middleware/errorHandler";
 import { env } from "./config/env";
 import { seedSuperAdmin } from "./utils/seedSuperAdmin";
@@ -68,6 +69,7 @@ app.use("/api/schedules/exam", examScheduleRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/classes", classesRoutes);
+app.use("/api/contact", contactRoutes);
 
 // 404 handler
 app.use((req, res) => {

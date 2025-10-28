@@ -8,6 +8,13 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
+    /*
+      Design tokens (HSL) — primary is used for main CTAs and should be
+      consistent between light and dark modes. We set --primary to the
+      green value (previously --accent) so buttons/CTAs remain green
+      across themes. The previous primary (blue/black) is moved to --accent
+      for use as an alternate color when needed.
+    */
     --background: 0 0% 98%;
     --foreground: 218 47% 21%;
 
@@ -17,7 +24,7 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 218 47% 21%;
 
-    --primary: 218 47% 21%;
+    --primary: 171 100% 37%; /* green */
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 15% 95%;
@@ -26,7 +33,7 @@ All colors MUST be HSL.
     --muted: 220 15% 95%;
     --muted-foreground: 218 20% 50%;
 
-    --accent: 171 100% 37%;
+    --accent: 218 47% 21%; /* blue/black (previous primary) */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
@@ -61,6 +68,7 @@ All colors MUST be HSL.
     --popover: 218 40% 15%;
     --popover-foreground: 0 0% 98%;
 
+    /* Keep primary green in dark mode as well for consistency */
     --primary: 171 100% 37%;
     --primary-foreground: 0 0% 100%;
 
@@ -70,7 +78,8 @@ All colors MUST be HSL.
     --muted: 218 30% 20%;
     --muted-foreground: 218 20% 65%;
 
-    --accent: 171 100% 37%;
+    /* Accent is the alternate (blue/black) in dark mode too */
+    --accent: 218 47% 21%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62% 45%;

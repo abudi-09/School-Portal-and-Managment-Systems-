@@ -102,20 +102,9 @@ const AssignmentManagement = () => {
 
       // Fetch classes
       const classesRes = await fetch(`${apiBaseUrl}/api/classes`, { headers });
-      const classesPayload = (await classesRes.json().catch(() => ({}))) as {
-        success?: boolean;
-        message?: string;
-        data?: {
-          classes?: Array<{
-            classId: string;
-            grade?: string;
-            section?: string;
-            name?: string;
-          }>;
-        };
-      };
+      const classesPayload = await classesRes.json().catch(() => ({}));
       if (classesRes.ok && classesPayload?.success) {
-        const svc = (classesPayload.data?.classes ?? []).map((c) => ({
+        const svc = (classesPayload.data?.classes ?? []).map((c: any) => ({
           id: c.classId,
           name: c.name,
           grade: c.grade,
@@ -128,52 +117,73 @@ const AssignmentManagement = () => {
           classesPayload?.message
         );
       }
+      // Fetch teachers for head view
+      try {
+        const teachersRes = await fetch(
+          `${apiBaseUrl}/api/head/teachers?limit=200`,
+          { headers }
+        );
+        const teachersPayload = await teachersRes.json().catch(() => ({}));
+        if (teachersRes.ok && teachersPayload?.success) {
+          const tv = (teachersPayload.data?.teachers ?? []).map((t: any) => ({
+            id: t._id ?? String(t.id ?? ""),
+            name:
+              `${t.firstName ?? ""} ${t.lastName ?? ""}`.trim() ||
+              t.name ||
+              "Unknown",
+            department: t.department ?? t.profile?.department ?? "",
+            assignedClasses: Array.isArray(t.assignedClassIds)
+              ? t.assignedClassIds.length
+              : t.assignedClasses ?? 0,
+            email: t.email,
+            phone: t.profile?.phone ?? t.phone,
+            qualifications: t.qualifications ?? [],
+            experience: t.experience ?? "",
+            classTeacherAssignments: t.classTeacherAssignments ?? [],
+            subjectAssignments: t.subjectAssignments ?? [],
+          }));
+          setTeachers(tv);
+        } else {
+          console.warn(
+            "Failed to load teachers from server",
+            teachersPayload?.message
+          );
+        }
+      } catch (err) {
+        console.warn("Teachers fetch error", err);
+      }
 
-      // Fetch approved teachers
-      const teachersRes = await fetch(
-        `${apiBaseUrl}/api/head/teachers?limit=1000&isApproved=true`,
-        { headers }
-      );
-      const teachersPayload = (await teachersRes.json().catch(() => ({}))) as {
-        success?: boolean;
-        message?: string;
-        data?: { teachers?: ApiTeacher[] };
-      };
-      if (teachersRes.ok && teachersPayload?.success) {
-        const list = (teachersPayload.data?.teachers ?? []).map(
-          (t) =>
-            ({
-              id: t._id,
-              name:
-                [t.firstName, t.lastName].filter(Boolean).join(" ") ||
-                t.email ||
-                "Unnamed",
-              department: t.department ?? "",
-              assignedClasses: (t.assignedClassIds ?? []).length,
-              email: t.email,
-              phone: t.phone,
-              qualifications: t.qualifications ?? [],
-              experience: t.experience ?? "",
-              classTeacherAssignments: t.classTeacherAssignments ?? [],
-              subjectAssignments: t.subjectAssignments ?? [],
-            } as Teacher)
+      // Fetch subject assignments snapshot (used for selected class)
+      try {
+        const saRes = await fetch(
+          `${apiBaseUrl}/api/head/subject-assignments`,
+          { headers }
         );
-        setTeachers(list);
-      } else {
-        console.warn(
-          "Failed to load teachers from server",
-          teachersPayload?.message
-        );
+        const saPayload = await saRes.json().catch(() => ({}));
+        if (saRes.ok && saPayload?.success) {
+          const list = (saPayload.data?.assignments ?? []).map((a: any) => ({
+            class: a.classId,
+            subject: a.subject,
+            teacher: a.teacherName ?? "Unassigned",
+          }));
+          setSubjectAssignmentsServer(list);
+          setSubjectAssignments(
+            list.map((s) => ({
+              class: classes.find((c) => c.id === s.class)?.name ?? s.class,
+              subject: s.subject,
+              teacher: s.teacher,
+            }))
+          );
+        }
+      } catch (err) {
+        console.warn("Failed to load subject assignments", err);
       }
     } catch (error) {
-      console.error(
-        "Error fetching server data for AssignmentManagement",
-        error
-      );
+      console.error("Error fetching server data", error);
     }
   };
 
-  // Load server data on mount
+  // Load data on mount
   useEffect(() => {
     void fetchServerData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -472,11 +482,11 @@ const AssignmentManagement = () => {
   return (
     <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
-      <div className="border-b border-gray-200 pb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+      <div className="border-b border-border pb-6">
+        <h1 className="text-3xl font-bold text-foreground mb-2">
           Assignment Management
         </h1>
-        <p className="text-gray-600">
+        <p className="text-muted-foreground">
           Assign class teachers and subject teachers to classes
         </p>
       </div>
@@ -488,8 +498,8 @@ const AssignmentManagement = () => {
             <div className="flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-amber-600" />
               <div>
-                <p className="font-medium text-gray-900">Action Required</p>
-                <p className="text-sm text-gray-600">
+                <p className="font-medium text-foreground">Action Required</p>
+                <p className="text-sm text-muted-foreground">
                   {unassignedCount} unassigned positions this term
                 </p>
               </div>
@@ -500,48 +510,52 @@ const AssignmentManagement = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
+        <Card className="bg-card rounded-2xl shadow-sm border border-border">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Classes</p>
-                <p className="text-3xl font-bold text-gray-900">
+                <p className="text-sm text-muted-foreground mb-1">
+                  Total Classes
+                </p>
+                <p className="text-3xl font-bold text-foreground">
                   {classes.length}
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-100 text-gray-700">
+              <div className="p-3 rounded-lg bg-muted text-muted-foreground">
                 <BookOpen className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
+        <Card className="bg-card rounded-2xl shadow-sm border border-border">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Teachers</p>
-                <p className="text-3xl font-bold text-gray-900">
+                <p className="text-sm text-muted-foreground mb-1">
+                  Total Teachers
+                </p>
+                <p className="text-3xl font-bold text-foreground">
                   {teachers.length}
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-100 text-gray-700">
+              <div className="p-3 rounded-lg bg-muted text-muted-foreground">
                 <Users className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
+        <Card className="bg-card rounded-2xl shadow-sm border border-border">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Unassigned</p>
-                <p className="text-3xl font-bold text-gray-900">
+                <p className="text-sm text-muted-foreground mb-1">Unassigned</p>
+                <p className="text-3xl font-bold text-foreground">
                   {unassignedCount}
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-100 text-gray-700">
+              <div className="p-3 rounded-lg bg-muted text-muted-foreground">
                 <AlertCircle className="h-6 w-6" />
               </div>
             </div>
@@ -550,38 +564,38 @@ const AssignmentManagement = () => {
       </div>
 
       {/* Quick Actions */}
-      <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
+      <Card className="bg-card rounded-2xl shadow-sm border border-border">
         <CardHeader className="pb-6">
-          <CardTitle className="text-xl font-semibold text-gray-900">
+          <CardTitle className="text-xl font-semibold text-foreground">
             Quick Actions
           </CardTitle>
-          <CardDescription className="text-gray-600">
+          <CardDescription className="text-muted-foreground">
             Frequently used assignment management tasks
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group">
-              <Users className="h-8 w-8 text-gray-400 group-hover:text-blue-500 mb-3" />
-              <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">
+            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group">
+              <Users className="h-8 w-8 text-muted-foreground group-hover:text-primary mb-3" />
+              <span className="text-sm font-medium text-foreground group-hover:text-primary">
                 Assign Class Teacher
               </span>
             </button>
-            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all group">
-              <ClipboardList className="h-8 w-8 text-gray-400 group-hover:text-green-500 mb-3" />
-              <span className="text-sm font-medium text-gray-700 group-hover:text-green-700">
+            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group">
+              <ClipboardList className="h-8 w-8 text-muted-foreground group-hover:text-primary mb-3" />
+              <span className="text-sm font-medium text-foreground group-hover:text-primary">
                 Assign Subject Teacher
               </span>
             </button>
-            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-all group">
-              <Eye className="h-8 w-8 text-gray-400 group-hover:text-purple-500 mb-3" />
-              <span className="text-sm font-medium text-gray-700 group-hover:text-purple-700">
+            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group">
+              <Eye className="h-8 w-8 text-muted-foreground group-hover:text-primary mb-3" />
+              <span className="text-sm font-medium text-foreground group-hover:text-primary">
                 View Teacher Details
               </span>
             </button>
-            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-all group">
-              <BookOpen className="h-8 w-8 text-gray-400 group-hover:text-orange-500 mb-3" />
-              <span className="text-sm font-medium text-gray-700 group-hover:text-orange-700">
+            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group">
+              <BookOpen className="h-8 w-8 text-muted-foreground group-hover:text-primary mb-3" />
+              <span className="text-sm font-medium text-foreground group-hover:text-primary">
                 Assignment Report
               </span>
             </button>
@@ -781,7 +795,7 @@ const AssignmentManagement = () => {
                     variant="default"
                     size="sm"
                     onClick={() => openTeacherDetails(teacher)}
-                    className="bg-gray-600 hover:bg-gray-700 text-white gap-2 px-4 py-2 rounded-full flex items-center"
+                    className="gap-2 px-4 py-2 rounded-full flex items-center"
                   >
                     <Eye className="h-4 w-4 mr-2" />
                     View Details
@@ -891,19 +905,19 @@ const AssignmentManagement = () => {
         <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
-              <div className="p-3 rounded-full bg-gray-100 text-gray-600">
+              <div className="p-3 rounded-full bg-muted text-muted-foreground">
                 <Users className="h-6 w-6" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-gray-900">
+                <div className="text-2xl font-bold text-foreground">
                   {selectedTeacher?.name}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-muted-foreground">
                   {selectedTeacher?.department} Department
                 </div>
               </div>
             </DialogTitle>
-            <DialogDescription className="text-gray-700">
+            <DialogDescription className="text-muted-foreground">
               Comprehensive overview of teacher assignments, qualifications, and
               responsibilities
             </DialogDescription>
@@ -913,11 +927,11 @@ const AssignmentManagement = () => {
             <ScrollArea className="max-h-[70vh] pr-4">
               <div className="space-y-6">
                 {/* Basic Information */}
-                <Card className="border-gray-200">
-                  <CardHeader className="bg-gray-50 border-b border-gray-200">
-                    <CardTitle className="text-lg flex items-center gap-2 text-gray-900">
-                      <div className="p-1.5 rounded-full bg-gray-100">
-                        <Users className="h-4 w-4 text-gray-600" />
+                <Card className="border-border">
+                  <CardHeader className="bg-muted border-b border-border">
+                    <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+                      <div className="p-1.5 rounded-full bg-muted text-muted-foreground">
+                        <Users className="h-4 w-4" />
                       </div>
                       Basic Information
                     </CardTitle>
@@ -926,27 +940,27 @@ const AssignmentManagement = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-4">
                         <div>
-                          <Label className="text-sm font-semibold text-gray-700 mb-2 block">
+                          <Label className="text-sm font-semibold text-muted-foreground mb-2 block">
                             Email Address
                           </Label>
-                          <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
-                            <div className="p-2 rounded-full bg-gray-100">
-                              <Mail className="h-4 w-4 text-gray-600" />
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
+                            <div className="p-2 rounded-full bg-muted text-muted-foreground">
+                              <Mail className="h-4 w-4" />
                             </div>
-                            <span className="text-sm font-medium text-gray-900">
+                            <span className="text-sm font-medium text-foreground">
                               {selectedTeacher.email}
                             </span>
                           </div>
                         </div>
                         <div>
-                          <Label className="text-sm font-semibold text-gray-700 mb-2 block">
+                          <Label className="text-sm font-semibold text-muted-foreground mb-2 block">
                             Phone Number
                           </Label>
-                          <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
-                            <div className="p-2 rounded-full bg-gray-100">
-                              <Phone className="h-4 w-4 text-gray-600" />
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
+                            <div className="p-2 rounded-full bg-muted text-muted-foreground">
+                              <Phone className="h-4 w-4" />
                             </div>
-                            <span className="text-sm font-medium text-gray-900">
+                            <span className="text-sm font-medium text-foreground">
                               {selectedTeacher.phone}
                             </span>
                           </div>
@@ -954,27 +968,27 @@ const AssignmentManagement = () => {
                       </div>
                       <div className="space-y-4">
                         <div>
-                          <Label className="text-sm font-semibold text-gray-700 mb-2 block">
+                          <Label className="text-sm font-semibold text-muted-foreground mb-2 block">
                             Teaching Experience
                           </Label>
-                          <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
-                            <div className="p-2 rounded-full bg-gray-100">
-                              <Calendar className="h-4 w-4 text-gray-600" />
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
+                            <div className="p-2 rounded-full bg-muted text-muted-foreground">
+                              <Calendar className="h-4 w-4" />
                             </div>
-                            <span className="text-sm font-medium text-gray-900">
+                            <span className="text-sm font-medium text-foreground">
                               {selectedTeacher.experience}
                             </span>
                           </div>
                         </div>
                         <div>
-                          <Label className="text-sm font-semibold text-gray-700 mb-2 block">
+                          <Label className="text-sm font-semibold text-muted-foreground mb-2 block">
                             Total Class Assignments
                           </Label>
-                          <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
-                            <div className="p-2 rounded-full bg-gray-100">
-                              <BookOpen className="h-4 w-4 text-gray-600" />
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
+                            <div className="p-2 rounded-full bg-muted text-muted-foreground">
+                              <BookOpen className="h-4 w-4" />
                             </div>
-                            <span className="text-sm font-medium text-gray-900">
+                            <span className="text-sm font-medium text-foreground">
                               {selectedTeacher.assignedClasses} classes assigned
                             </span>
                           </div>
@@ -985,15 +999,15 @@ const AssignmentManagement = () => {
                 </Card>
 
                 {/* Qualifications */}
-                <Card className="border-gray-200">
-                  <CardHeader className="bg-gray-50 border-b border-gray-200">
-                    <CardTitle className="text-lg flex items-center gap-2 text-gray-900">
-                      <div className="p-1.5 rounded-full bg-gray-100">
-                        <GraduationCap className="h-4 w-4 text-gray-600" />
+                <Card className="border-border">
+                  <CardHeader className="bg-muted border-b border-border">
+                    <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+                      <div className="p-1.5 rounded-full bg-muted text-muted-foreground">
+                        <GraduationCap className="h-4 w-4" />
                       </div>
                       Academic Qualifications
                     </CardTitle>
-                    <CardDescription className="text-gray-700">
+                    <CardDescription className="text-muted-foreground">
                       Professional certifications and educational background
                     </CardDescription>
                   </CardHeader>
@@ -1004,7 +1018,7 @@ const AssignmentManagement = () => {
                           <Badge
                             key={index}
                             variant="secondary"
-                            className="px-4 py-2 text-sm font-medium bg-gray-100 text-gray-800 border border-gray-300"
+                            className="px-4 py-2 text-sm font-medium bg-muted text-foreground border border-border"
                           >
                             <GraduationCap className="h-3 w-3 mr-2" />
                             {qual}
@@ -1014,7 +1028,7 @@ const AssignmentManagement = () => {
                     </div>
                     {(!selectedTeacher.qualifications ||
                       selectedTeacher.qualifications.length === 0) && (
-                      <div className="text-center py-8 text-gray-500">
+                      <div className="text-center py-8 text-muted-foreground">
                         <GraduationCap className="h-8 w-8 mx-auto mb-2 opacity-50" />
                         <p>No qualifications recorded</p>
                       </div>
@@ -1044,25 +1058,25 @@ const AssignmentManagement = () => {
                             (className: string, index: number) => (
                               <div
                                 key={index}
-                                className="rounded-xl bg-gray-50 border border-gray-200 p-4"
+                                className="rounded-xl bg-card border border-border p-4"
                               >
                                 <div className="flex items-center gap-3 mb-3">
-                                  <div className="p-2 rounded-full bg-gray-200 text-gray-700">
+                                  <div className="p-2 rounded-full bg-muted text-muted-foreground">
                                     <Users className="h-4 w-4" />
                                   </div>
                                   <div>
-                                    <p className="font-bold text-gray-900 text-lg">
+                                    <p className="font-bold text-foreground text-lg">
                                       Class {className}
                                     </p>
                                     <Badge
                                       variant="secondary"
-                                      className="bg-gray-100 text-gray-700 border-gray-300 text-xs"
+                                      className="bg-muted text-foreground border-border text-xs"
                                     >
                                       Primary Teacher
                                     </Badge>
                                   </div>
                                 </div>
-                                <p className="text-sm text-gray-700 font-medium">
+                                <p className="text-sm text-muted-foreground font-medium">
                                   Head Class Coordinator
                                 </p>
                               </div>
@@ -1097,27 +1111,27 @@ const AssignmentManagement = () => {
                             ) => (
                               <div
                                 key={index}
-                                className="rounded-xl bg-gray-50 border border-gray-200 p-4"
+                                className="rounded-xl bg-card border border-border p-4"
                               >
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-4">
-                                    <div className="p-3 rounded-full bg-gray-200 text-gray-700">
+                                    <div className="p-3 rounded-full bg-muted text-muted-foreground">
                                       <BookOpen className="h-5 w-5" />
                                     </div>
                                     <div>
-                                      <p className="font-bold text-gray-900 text-lg">
+                                      <p className="font-bold text-foreground text-lg">
                                         {assignment.subject}
                                       </p>
                                       <div className="flex items-center gap-2 mt-1">
                                         <Badge
                                           variant="outline"
-                                          className="bg-gray-100 text-gray-700 border-gray-300 text-xs"
+                                          className="bg-muted text-foreground border-border text-xs"
                                         >
                                           Class {assignment.class}
                                         </Badge>
                                         <Badge
                                           variant="secondary"
-                                          className="bg-gray-100 text-gray-800 border-gray-300 text-xs"
+                                          className="bg-muted text-foreground border-border text-xs"
                                         >
                                           Subject Teacher
                                         </Badge>
@@ -1125,7 +1139,7 @@ const AssignmentManagement = () => {
                                     </div>
                                   </div>
                                   <div className="text-right">
-                                    <div className="text-sm text-gray-700 font-medium">
+                                    <div className="text-sm text-muted-foreground font-medium">
                                       Assigned
                                     </div>
                                   </div>

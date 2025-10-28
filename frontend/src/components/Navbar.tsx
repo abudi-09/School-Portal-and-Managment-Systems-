@@ -96,7 +96,7 @@ export const Navbar = ({ title = "Pathways" }: NavbarProps) => {
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="relative h-10 w-auto rounded-full pl-2 pr-3 hover:bg-accent/40 transition-colors"
+                className="relative h-10 w-auto rounded-full pl-2 pr-3 hover:bg-primary/40 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Avatar className="h-8 w-8">
@@ -139,14 +139,14 @@ export const Navbar = ({ title = "Pathways" }: NavbarProps) => {
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="my-2" />
               <DropdownMenuItem
-                className="px-3 py-2.5 cursor-pointer hover:bg-accent/50 transition-colors rounded-md"
+                className="px-3 py-2.5 cursor-pointer hover:bg-primary/50 transition-colors rounded-md"
                 onClick={() => navigate(getProfileRoute())}
               >
                 <User className="mr-3 h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Profile</span>
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="px-3 py-2.5 cursor-pointer hover:bg-accent/50 transition-colors rounded-md"
+                className="px-3 py-2.5 cursor-pointer hover:bg-primary/50 transition-colors rounded-md"
                 onClick={() => navigate(getDashboardRoute())}
               >
                 <Settings className="mr-3 h-4 w-4 text-muted-foreground" />

@@ -6,7 +6,7 @@ const Footer = () => {
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 text-sm sm:px-6 md:grid-cols-3 lg:px-8">
         <div className="space-y-2">
           <h3 className="text-base font-semibold text-foreground">
-            Smart Education Portal
+            Student Portal &amp; School Management System
           </h3>
           <p className="text-sm leading-relaxed">
             Empowering schools with centralized student, teacher, and class
@@ -26,13 +26,13 @@ const Footer = () => {
               to="/privacy-policy"
               className="transition-colors hover:text-primary"
             >
-              Privacy & Policy
+              Privacy Policy
             </Link>
             <Link
               to="/contact"
               className="transition-colors hover:text-primary"
             >
-              Contact
+              Help
             </Link>
           </nav>
         </div>
@@ -41,20 +41,24 @@ const Footer = () => {
           <p>
             Email:{" "}
             <a
-              href="mailto:contact@schoolportal.com"
+              href="mailto:support@schoolportal.edu"
               className="hover:text-primary"
             >
-              contact@schoolportal.com
+              support@schoolportal.edu
             </a>
           </p>
-          <p>Phone: +251 XXX XXX XXX</p>
-          <p>Address: Addis Ababa, Ethiopia</p>
+          <p>Phone: +251-xxx-xxx-xxx</p>
+          <p>Address: Gondar, Ethiopia</p>
         </div>
       </div>
       <div className="mt-6 border-t border-border/60">
-        <p className="mx-auto max-w-7xl px-4 py-4 text-center text-xs text-muted-foreground sm:px-6 lg:px-8">
-          © 2025 Smart Education Portal — All Rights Reserved.
-        </p>
+        <div className="mx-auto flex max-w-7xl flex-col items-center gap-1 px-4 py-4 text-center text-xs text-muted-foreground sm:px-6 lg:px-8">
+          <p>
+            © 2025 Student Portal &amp; School Management System — All Rights
+            Reserved.
+          </p>
+          <p>System version v1.0.0</p>
+        </div>
       </div>
     </footer>
   );

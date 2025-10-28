@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import Navbar from "@/components/public/Navbar";
 import Footer from "@/components/public/Footer";
 import SectionTitle from "@/components/public/SectionTitle";
@@ -150,12 +151,13 @@ const PrivacyPolicy = () => {
             </CardContent>
           </Card>
 
-          <div className="mt-16 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <div className="mt-16 flex flex-col gap-3 sm:flex-row sm:justify-start">
             <Link
               to="/"
-              className="inline-flex items-center justify-center rounded-full border border-primary/60 px-6 py-3 text-sm font-semibold text-primary transition hover:bg-primary/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="inline-flex items-center gap-2 justify-center rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground shadow-sm border border-border/40 hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
-              Back to Home
+              <ArrowLeft className="h-4 w-4" />
+              Home
             </Link>
             <Link
               to="/about"

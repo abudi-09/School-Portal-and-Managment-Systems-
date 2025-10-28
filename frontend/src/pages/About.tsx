@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import Navbar from "@/components/public/Navbar";
 import Footer from "@/components/public/Footer";
 import SectionTitle from "@/components/public/SectionTitle";
@@ -139,6 +141,15 @@ const About = () => {
 
       <main className="flex-1">
         <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="mb-6 flex justify-start">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground shadow-sm border border-border/40 hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Home
+            </Link>
+          </div>
           <div className="space-y-20">
             {/* Introduction */}
             <SectionTitle

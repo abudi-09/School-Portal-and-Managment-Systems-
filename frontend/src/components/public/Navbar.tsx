@@ -86,7 +86,7 @@ const Navbar = () => {
                 to={item.href}
                 className={({ isActive }) =>
                   cn(
-                    "rounded-md px-3 py-2 transition-colors hover:bg-accent/20 hover:text-primary",
+                    "rounded-md px-3 py-2 transition-colors hover:bg-primary/20 hover:text-primary",
                     isActive
                       ? "bg-accent/20 text-primary font-semibold"
                       : "text-muted-foreground"

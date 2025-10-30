@@ -83,15 +83,15 @@ const Announcements = () => {
             <Card
               key={announcement._id || announcement.id}
               className={`hover:shadow-md transition-shadow ${
-                !announcement.isRead ? "border-accent/50 bg-accent/5" : ""
+                !announcement.isRead ? "border-primary/50 bg-primary/5" : ""
               }`}
             >
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0">
-                        <Bell className="h-5 w-5 text-accent" />
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Bell className="h-5 w-5 text-primary" />
                       </div>
                       <div>
                         <CardTitle className="text-lg">
@@ -181,7 +181,7 @@ const Announcements = () => {
 
                 {announcement.attachments &&
                   announcement.attachments.length > 0 && (
-                    <div className="pt-4 border-t">
+                    <div className="pt-4 border-t border-border">
                       <p className="text-sm font-medium text-foreground mb-2">
                         Attachments:
                       </p>
@@ -192,7 +192,7 @@ const Announcements = () => {
                             href={att.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 text-sm underline underline-offset-4"
+                            className="inline-flex items-center gap-2 text-sm underline underline-offset-4 text-foreground"
                           >
                             <Paperclip className="h-4 w-4" />
                             {att.filename}

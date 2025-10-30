@@ -1,27 +1,92 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Student Portal - High School Management System</title>
-    <meta name="description" content="Modern student portal for managing grades, assignments, schedules, and school announcements" />
+    <meta
+      name="description"
+      content="Modern student portal for managing grades, assignments, schedules, and school announcements"
+    />
     <meta name="author" content="High School Management System" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
 
-    <meta property="og:title" content="Student Portal - High School Management System" />
-    <meta property="og:description" content="Modern student portal for managing grades, assignments, schedules, and school announcements" />
+    <meta
+      property="og:title"
+      content="Student Portal - High School Management System"
+    />
+    <meta
+      property="og:description"
+      content="Modern student portal for managing grades, assignments, schedules, and school announcements"
+    />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta
+      property="og:image"
+      content="https://lovable.dev/opengraph-image-p98pqg.png"
+    />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@lovable_dev" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta
+      name="twitter:image"
+      content="https://lovable.dev/opengraph-image-p98pqg.png"
+    />
   </head>
 
   <body>
     <div id="root"></div>
+    <!-- Pre-init theme to avoid flash on load. Reads per-user or guest/local preferences if present. -->
+    <script>
+      (function () {
+        try {
+          var SYSTEM_QUERY = "(prefers-color-scheme: dark)";
+          var apply = function (theme) {
+            var root = document.documentElement;
+            if (theme === "dark") {
+              root.classList.add("dark");
+              root.style.colorScheme = "dark";
+            } else {
+              root.classList.remove("dark");
+              root.style.colorScheme = "light";
+            }
+          };
+
+          // Prefer a per-user preference key if present (theme-pref-<id>),
+          // otherwise guest/global keys.
+          var mode = null;
+          for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k && k.indexOf("theme-pref-") === 0) {
+              mode = localStorage.getItem(k);
+              break;
+            }
+          }
+          if (!mode) {
+            mode =
+              localStorage.getItem("theme-guest-mode") ||
+              localStorage.getItem("theme-global-default") ||
+              null;
+          }
+
+          if (mode) {
+            if (mode === "system") {
+              var isDark =
+                window.matchMedia && window.matchMedia(SYSTEM_QUERY).matches;
+              apply(isDark ? "dark" : "light");
+            } else {
+              apply(mode === "dark" ? "dark" : "light");
+            }
+          }
+        } catch (e) {
+          // silent
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

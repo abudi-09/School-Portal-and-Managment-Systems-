@@ -195,26 +195,26 @@ const HeadAnnouncements = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
             Announcements
           </h1>
-          <p className="text-gray-600">
+          <p className="text-muted-foreground">
             Create and manage school-wide announcements
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2 bg-gray-600 hover:bg-gray-700 text-white border-gray-600">
+            <Button className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground border-border">
               <Plus className="h-4 w-4" />
               New Announcement
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl border-gray-200 max-h-[80vh] overflow-y-auto">
-            <DialogHeader className="bg-gray-50 border-b border-gray-200">
-              <DialogTitle className="text-gray-900">
+          <DialogContent className="max-w-2xl border-border max-h-[80vh] overflow-y-auto">
+            <DialogHeader className="bg-muted border-b border-border">
+              <DialogTitle className="text-foreground">
                 Create Announcement
               </DialogTitle>
-              <DialogDescription className="text-gray-600">
+              <DialogDescription className="text-muted-foreground">
                 Post a new announcement for teachers, students, or all users
               </DialogDescription>
             </DialogHeader>
@@ -222,7 +222,7 @@ const HeadAnnouncements = () => {
               <div className="space-y-2">
                 <Label
                   htmlFor="audience"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-semibold text-muted-foreground"
                 >
                   Target Audience
                 </Label>
@@ -230,7 +230,7 @@ const HeadAnnouncements = () => {
                   value={createAudience}
                   onValueChange={(v) => setCreateAudience(v as any)}
                 >
-                  <SelectTrigger className="border-gray-300">
+                  <SelectTrigger className="border-border">
                     <SelectValue placeholder="Select audience" />
                   </SelectTrigger>
                   <SelectContent>
@@ -287,12 +287,12 @@ const HeadAnnouncements = () => {
               <div className="space-y-2">
                 <Label
                   htmlFor="category"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-semibold text-muted-foreground"
                 >
                   Category
                 </Label>
                 <Select>
-                  <SelectTrigger className="border-gray-300">
+                  <SelectTrigger className="border-border">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -307,14 +307,14 @@ const HeadAnnouncements = () => {
               <div className="space-y-2">
                 <Label
                   htmlFor="title"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-semibold text-muted-foreground"
                 >
                   Title
                 </Label>
                 <Input
                   id="title"
                   placeholder="Enter announcement title"
-                  className="border-gray-300"
+                  className="border-border"
                   value={createTitle}
                   onChange={(e) => setCreateTitle(e.target.value)}
                 />
@@ -322,7 +322,7 @@ const HeadAnnouncements = () => {
               <div className="space-y-2">
                 <Label
                   htmlFor="content"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-semibold text-muted-foreground"
                 >
                   Message
                 </Label>
@@ -330,7 +330,7 @@ const HeadAnnouncements = () => {
                   id="content"
                   placeholder="Write your announcement message"
                   rows={8}
-                  className="border-gray-300"
+                  className="border-border"
                   value={createMessage}
                   onChange={(e) => setCreateMessage(e.target.value)}
                 />
@@ -341,18 +341,18 @@ const HeadAnnouncements = () => {
                 </Label>
                 <Button
                   variant="outline"
-                  className="w-full gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+                  className="w-full gap-2 border-border text-muted-foreground hover:bg-muted/10"
                 >
                   <Paperclip className="h-4 w-4" />
                   Attach File
                 </Button>
               </div>
             </div>
-            <DialogFooter className="bg-gray-50 border-t border-gray-200">
+            <DialogFooter className="bg-muted border-t border-border">
               <Button
                 variant="outline"
                 onClick={() => setOpen(false)}
-                className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="border-border text-muted-foreground hover:bg-muted/10"
               >
                 Save as Draft
               </Button>
@@ -410,7 +410,7 @@ const HeadAnnouncements = () => {
                     console.error("Failed to create announcement", err);
                   }
                 }}
-                className="bg-gray-600 hover:bg-gray-700 text-white"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 Post Announcement
               </Button>
@@ -421,12 +421,12 @@ const HeadAnnouncements = () => {
 
       {/* Edit Announcement Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-2xl border-gray-200 max-h-[80vh] overflow-y-auto">
-          <DialogHeader className="bg-gray-50 border-b border-gray-200">
-            <DialogTitle className="text-gray-900">
+        <DialogContent className="max-w-2xl border-border max-h-[80vh] overflow-y-auto">
+          <DialogHeader className="bg-muted border-b border-border">
+            <DialogTitle className="text-foreground">
               Edit Announcement
             </DialogTitle>
-            <DialogDescription className="text-gray-600">
+            <DialogDescription className="text-muted-foreground">
               Modify the announcement details
             </DialogDescription>
           </DialogHeader>
@@ -435,7 +435,7 @@ const HeadAnnouncements = () => {
               <div className="space-y-2">
                 <Label
                   htmlFor="edit-audience"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-semibold text-muted-foreground"
                 >
                   Target Audience
                 </Label>
@@ -466,12 +466,12 @@ const HeadAnnouncements = () => {
               <div className="space-y-2">
                 <Label
                   htmlFor="edit-category"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-semibold text-muted-foreground"
                 >
                   Category
                 </Label>
                 <Select defaultValue={selectedAnnouncement.category}>
-                  <SelectTrigger className="border-gray-300">
+                  <SelectTrigger className="border-border">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -486,20 +486,20 @@ const HeadAnnouncements = () => {
               <div className="space-y-2">
                 <Label
                   htmlFor="edit-title"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-semibold text-muted-foreground"
                 >
                   Title
                 </Label>
                 <Input
                   id="edit-title"
                   defaultValue={selectedAnnouncement.title}
-                  className="border-gray-300"
+                  className="border-border"
                 />
               </div>
               <div className="space-y-2">
                 <Label
                   htmlFor="edit-content"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-semibold text-muted-foreground"
                 >
                   Message
                 </Label>
@@ -507,7 +507,7 @@ const HeadAnnouncements = () => {
                   id="edit-content"
                   defaultValue={selectedAnnouncement.content}
                   rows={8}
-                  className="border-gray-300"
+                  className="border-border"
                 />
               </div>
               <div className="space-y-2">
@@ -516,7 +516,7 @@ const HeadAnnouncements = () => {
                 </Label>
                 <Button
                   variant="outline"
-                  className="w-full gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+                  className="w-full gap-2 border-border text-muted-foreground hover:bg-muted/10"
                 >
                   <Paperclip className="h-4 w-4" />
                   {selectedAnnouncement.hasAttachment
@@ -526,17 +526,17 @@ const HeadAnnouncements = () => {
               </div>
             </div>
           )}
-          <DialogFooter className="bg-gray-50 border-t border-gray-200">
+          <DialogFooter className="bg-muted border-t border-border">
             <Button
               variant="outline"
               onClick={() => setEditOpen(false)}
-              className="border-gray-300 text-gray-700 hover:bg-gray-50"
+              className="border-border text-muted-foreground hover:bg-muted/10"
             >
               Cancel
             </Button>
             <Button
               onClick={() => setEditOpen(false)}
-              className="bg-gray-600 hover:bg-gray-700 text-white"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               Update Announcement
             </Button>
@@ -546,51 +546,57 @@ const HeadAnnouncements = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-gray-200">
+        <Card className="border-border">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Posted</p>
-                <p className="text-3xl font-bold text-gray-900">
+                <p className="text-sm text-muted-foreground mb-1">
+                  Total Posted
+                </p>
+                <p className="text-3xl font-bold text-foreground">
                   {announcements.length}
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-100 text-gray-600">
+              <div className="p-3 rounded-lg bg-muted text-muted-foreground">
                 <Bell className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-gray-200">
+        <Card className="border-border">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Views</p>
-                <p className="text-3xl font-bold text-gray-900">
+                <p className="text-sm text-muted-foreground mb-1">
+                  Total Views
+                </p>
+                <p className="text-3xl font-bold text-foreground">
                   {announcements.reduce((sum, a) => sum + a.views, 0)}
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-100 text-gray-600">
+              <div className="p-3 rounded-lg bg-muted text-muted-foreground">
                 <Eye className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-gray-200">
+        <Card className="border-border">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Avg. Engagement</p>
-                <p className="text-3xl font-bold text-gray-900">
+                <p className="text-sm text-muted-foreground mb-1">
+                  Avg. Engagement
+                </p>
+                <p className="text-3xl font-bold text-foreground">
                   {Math.round(
                     announcements.reduce((sum, a) => sum + a.views, 0) /
                       announcements.length
                   )}
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-100 text-gray-600">
+              <div className="p-3 rounded-lg bg-muted text-muted-foreground">
                 <TrendingUp className="h-6 w-6" />
               </div>
             </div>
@@ -600,9 +606,9 @@ const HeadAnnouncements = () => {
 
       {/* Filter */}
       <div className="flex items-center gap-2">
-        <Filter className="h-4 w-4 text-gray-600" />
+        <Filter className="h-4 w-4 text-muted-foreground" />
         <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="w-48 border-gray-300">
+          <SelectTrigger className="w-48 border-border">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -619,32 +625,32 @@ const HeadAnnouncements = () => {
         {pagedAnnouncements.map((announcement) => (
           <Card
             key={announcement.id}
-            className="border-gray-200 hover:bg-gray-50 transition-colors"
+            className="border-border hover:bg-muted/5 transition-colors"
           >
-            <CardHeader className="bg-gray-50 border-b border-gray-200">
+            <CardHeader className="bg-muted border-b border-border">
               <div className="flex items-start justify-between">
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center gap-2">
-                    <Bell className="h-4 w-4 text-gray-600" />
-                    <CardTitle className="text-lg text-gray-900">
+                    <Bell className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle className="text-lg text-foreground">
                       {announcement.title}
                     </CardTitle>
                   </div>
-                  <CardDescription className="text-gray-600">
+                  <CardDescription className="text-muted-foreground">
                     Posted by {announcement.author} • {announcement.date}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge
                     variant="secondary"
-                    className="bg-gray-100 text-gray-800 border-gray-300"
+                    className="bg-muted text-foreground border-border"
                   >
                     {announcement.category}
                   </Badge>
                   {announcement.hasAttachment && (
                     <Badge
                       variant="outline"
-                      className="border-gray-300 text-gray-700"
+                      className="border-border text-muted-foreground"
                     >
                       <Paperclip className="h-3 w-3" />
                     </Badge>
@@ -654,16 +660,16 @@ const HeadAnnouncements = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <p className="text-gray-900">{announcement.content}</p>
-                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                <p className="text-foreground">{announcement.content}</p>
+                <div className="flex items-center justify-between pt-2 border-t border-border">
                   <div className="flex items-center gap-4">
                     <Badge
                       variant="secondary"
-                      className="bg-gray-100 text-gray-800 border-gray-300"
+                      className="bg-muted text-foreground border-border"
                     >
                       {announcement.audience}
                     </Badge>
-                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Eye className="h-4 w-4" />
                       {announcement.views} views
                     </div>
@@ -673,7 +679,7 @@ const HeadAnnouncements = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handleEdit(announcement)}
-                      className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                      className="border-border text-muted-foreground hover:bg-muted/10"
                     >
                       Edit
                     </Button>
@@ -681,7 +687,7 @@ const HeadAnnouncements = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handleArchiveAnnouncement(announcement.id)}
-                      className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                      className="border-border text-muted-foreground hover:bg-muted/10"
                     >
                       Archive
                     </Button>

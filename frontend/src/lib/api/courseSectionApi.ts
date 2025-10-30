@@ -5,6 +5,7 @@ export type GradeLevel = 9 | 10 | 11 | 12;
 export type CoursePayload = {
   grade: GradeLevel;
   name: string;
+  stream?: "natural" | "social";
   isMandatory?: boolean;
 };
 
@@ -46,11 +47,16 @@ async function authorizedFetch<T>(
   return payload as T;
 }
 
-export async function listCoursesByGrade(grade: GradeLevel) {
+export async function listCoursesByGrade(
+  grade: GradeLevel,
+  stream?: "natural" | "social"
+) {
+  const qs = new URLSearchParams({ grade: String(grade) });
+  if (stream) qs.set("stream", stream);
   return authorizedFetch<{
     success: boolean;
     data: { courses: CourseResponse[] };
-  }>(`/api/admin/courses?grade=${grade}`);
+  }>(`/api/admin/courses?${qs.toString()}`);
 }
 
 export async function createCourse(payload: CoursePayload) {
@@ -115,7 +121,11 @@ export async function deleteSection(id: string) {
 
 export async function updateCourse(
   id: string,
-  payload: { name?: string; isMandatory?: boolean }
+  payload: {
+    name?: string;
+    isMandatory?: boolean;
+    stream?: "natural" | "social";
+  }
 ) {
   return authorizedFetch<{
     success: boolean;
@@ -143,6 +153,7 @@ export type CourseResponse = {
   id: string;
   name: string;
   grade: GradeLevel;
+  stream?: "natural" | "social";
   isMandatory?: boolean;
   createdAt?: string;
 };

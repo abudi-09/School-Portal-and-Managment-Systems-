@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState, useEffect } from "react";
 import { Loader2, Trash2, Edit } from "lucide-react";
 import {
   Dialog,
@@ -19,6 +19,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -110,11 +117,20 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
   const [isMandatory, setIsMandatory] = useState(false);
   const [sectionLabel, setSectionLabel] = useState("");
   const [sectionCapacity, setSectionCapacity] = useState("");
+  // stream for the add-course form (only used for grades 11 & 12)
+  const [formStream, setFormStream] = useState<"natural" | "social" | "">("");
+  // stream filter for listing courses (separate from formStream)
+  const [filterStream, setFilterStream] = useState<"natural" | "social" | "">(
+    ""
+  );
 
   const coursesQuery = useQuery<CourseResponse[]>({
-    queryKey: ["admin", "courses", grade],
+    queryKey: ["admin", "courses", grade, filterStream],
     queryFn: async () => {
-      const response = await listCoursesByGrade(grade);
+      const response = await listCoursesByGrade(
+        grade,
+        filterStream || undefined
+      );
       return response.data.courses;
     },
   });
@@ -160,15 +176,20 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
   }, [classesQuery.data, grade]);
 
   const createCourseMutation = useMutation({
-    mutationFn: (payload: { name: string; isMandatory: boolean }) =>
+    mutationFn: (payload: {
+      name: string;
+      isMandatory: boolean;
+      stream?: "natural" | "social";
+    }) =>
       createCourse({
         grade,
         name: payload.name,
         isMandatory: payload.isMandatory,
+        stream: payload.stream,
       }),
     onSuccess: (result) => {
       queryClient.setQueryData<CourseResponse[]>(
-        ["admin", "courses", grade],
+        ["admin", "courses", grade, filterStream],
         (previous = []) => [
           result.data.course,
           ...previous.filter((c) => c.id !== result.data.course.id),
@@ -180,6 +201,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       });
       setCourseName("");
       setIsMandatory(false);
+      setFormStream("");
     },
     onError: (error: unknown) => {
       const message =
@@ -229,7 +251,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
     mutationFn: (id: string) => deleteCourse(id),
     onSuccess: (result) => {
       queryClient.setQueryData<CourseResponse[]>(
-        ["admin", "courses", grade],
+        ["admin", "courses", grade, filterStream],
         (previous = []) =>
           previous.filter((c) => c.id !== result.data.course.id)
       );
@@ -290,6 +312,9 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
 
   const [editCourseName, setEditCourseName] = useState("");
   const [editIsMandatory, setEditIsMandatory] = useState(false);
+  const [editFormStream, setEditFormStream] = useState<
+    "natural" | "social" | ""
+  >("");
   const [editSectionLabel, setEditSectionLabel] = useState("");
   const [editSectionCapacity, setEditSectionCapacity] = useState<string>("");
 
@@ -299,11 +324,15 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       payload,
     }: {
       id: string;
-      payload: { name?: string; isMandatory?: boolean };
+      payload: {
+        name?: string;
+        isMandatory?: boolean;
+        stream?: "natural" | "social";
+      };
     }) => updateCourse(id, payload),
     onSuccess: (result) => {
       queryClient.setQueryData<CourseResponse[]>(
-        ["admin", "courses", grade],
+        ["admin", "courses", grade, filterStream],
         (previous = []) =>
           previous.map((c) =>
             c.id === result.data.course.id ? result.data.course : c
@@ -315,6 +344,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       });
       setEditOpen(false);
       setEditTarget(null);
+      setEditFormStream("");
     },
     onError: (error: unknown) => {
       const message =
@@ -404,9 +434,20 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       return;
     }
 
+    // Require stream selection for grade 11 & 12
+    if ([11, 12].includes(grade) && !formStream) {
+      toast({
+        title: "Stream required",
+        description: "Select a stream for senior grade courses.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     createCourseMutation.mutate({
       name: trimmedName,
       isMandatory,
+      stream: formStream || undefined,
     });
   };
 
@@ -492,6 +533,25 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                 disabled={createCourseMutation.isPending}
               />
             </div>
+            {[11, 12].includes(grade) && (
+              <div className="space-y-2">
+                <Label htmlFor={`course-stream-${grade}`}>Stream</Label>
+                <Select
+                  value={formStream}
+                  onValueChange={(v: string) =>
+                    setFormStream((v as "natural" | "social") || "")
+                  }
+                >
+                  <SelectTrigger id={`course-stream-${grade}`}>
+                    <SelectValue placeholder="Select stream" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="natural">Natural Science</SelectItem>
+                    <SelectItem value="social">Social Science</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex items-center space-x-3">
               <Switch
                 id={`course-mandatory-${grade}`}
@@ -528,6 +588,30 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
             </Alert>
           )}
 
+          {/* Stream filter for grades 11 & 12 */}
+          {[11, 12].includes(grade) && (
+            <div className="mb-4">
+              <Label className="text-sm">Filter by stream</Label>
+              <div className="w-48 mt-2">
+                <Select
+                  value={filterStream}
+                  onValueChange={(v: string) =>
+                    setFilterStream((v as "natural" | "social") || "")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All streams" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All streams</SelectItem>
+                    <SelectItem value="natural">Natural Science</SelectItem>
+                    <SelectItem value="social">Social Science</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-md border border-dashed border-border">
             {/* Show existing classes for this grade as a reference */}
             <div className="p-4 border-b">
@@ -560,17 +644,18 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                 <TableRow>
                   <TableHead className="w-1/2">Course</TableHead>
                   <TableHead>Mandatory</TableHead>
+                  <TableHead>Stream</TableHead>
                   <TableHead className="text-right">Added</TableHead>
                   <TableHead className="text-right"> </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {coursesQuery.isLoading ? (
-                  <TableSkeletonRows rows={3} cols={3} />
+                  <TableSkeletonRows rows={3} cols={5} />
                 ) : sortedCourses.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="py-6 text-center text-sm text-muted-foreground"
                     >
                       No courses configured for this grade yet.
@@ -583,6 +668,13 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                         {course.name}
                       </TableCell>
                       <TableCell>{course.isMandatory ? "Yes" : "No"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {course.stream
+                          ? course.stream === "natural"
+                            ? "Natural"
+                            : "Social"
+                          : "—"}
+                      </TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground">
                         {formatDate(course.createdAt)}
                       </TableCell>
@@ -596,9 +688,10 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                               setEditTarget({ type: "course", id: course.id });
                               setEditCourseName(course.name);
                               setEditIsMandatory(!!course.isMandatory);
+                              setEditFormStream(course.stream ?? "");
                               setEditOpen(true);
                             }}
-                            disabled={updateCourseMutation.isLoading}
+                            disabled={updateCourseMutation.isPending}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -732,7 +825,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                               );
                               setEditOpen(true);
                             }}
-                            disabled={updateSectionMutation.isLoading}
+                            disabled={updateSectionMutation.isPending}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -827,6 +920,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
         onOpenChange={(open) => {
           if (!open) {
             setEditTarget(null);
+            setEditFormStream("");
           }
           setEditOpen(open);
         }}
@@ -860,9 +954,23 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                     });
                     return;
                   }
+                  // For senior grades ensure a stream is selected
+                  if ([11, 12].includes(grade) && !editFormStream) {
+                    toast({
+                      title: "Stream required",
+                      description: "Select a stream for senior grade courses.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+
                   updateCourseMutation.mutate({
                     id: editTarget.id,
-                    payload: { name: trimmed, isMandatory: editIsMandatory },
+                    payload: {
+                      name: trimmed,
+                      isMandatory: editIsMandatory,
+                      stream: editFormStream || undefined,
+                    },
                   });
                 }}
               >
@@ -882,6 +990,25 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                     Mark as mandatory
                   </Label>
                 </div>
+                {[11, 12].includes(grade) && (
+                  <div className="space-y-2 mt-2">
+                    <Label>Stream</Label>
+                    <Select
+                      value={editFormStream}
+                      onValueChange={(v: string) =>
+                        setEditFormStream((v as "natural" | "social") || "")
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select stream" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="natural">Natural Science</SelectItem>
+                        <SelectItem value="social">Social Science</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="flex justify-end gap-2 mt-4">
                   <Button variant="ghost" onClick={() => setEditOpen(false)}>
                     Cancel
@@ -889,9 +1016,9 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                   <Button
                     type="submit"
                     variant="default"
-                    disabled={updateCourseMutation.isLoading}
+                    disabled={updateCourseMutation.isPending}
                   >
-                    {updateCourseMutation.isLoading ? "Saving..." : "Save"}
+                    {updateCourseMutation.isPending ? "Saving..." : "Save"}
                   </Button>
                 </div>
               </form>
@@ -950,9 +1077,9 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                   <Button
                     type="submit"
                     variant="default"
-                    disabled={updateSectionMutation.isLoading}
+                    disabled={updateSectionMutation.isPending}
                   >
-                    {updateSectionMutation.isLoading ? "Saving..." : "Save"}
+                    {updateSectionMutation.isPending ? "Saving..." : "Save"}
                   </Button>
                 </div>
               </form>

@@ -65,6 +65,7 @@ import {
 } from "@/components/shared/LoadingSkeletons";
 
 type StudentStatus = "active" | "inactive";
+
 type RegistrationType = "New" | "Returning";
 
 type Student = {
@@ -663,26 +664,26 @@ const AdminStudentManagement = () => {
       title: "Total Students",
       value: filteredStudents.length,
       icon: UserPlus,
-      color: "text-gray-600",
+      color: "text-muted-foreground",
     },
     {
       title: "Active",
       value: filteredStudents.filter((s) => s.status === "active").length,
       icon: CheckCircle,
-      color: "text-gray-600",
+      color: "text-muted-foreground",
     },
     {
       title: "Inactive",
       value: filteredStudents.filter((s) => s.status === "inactive").length,
       icon: XCircle,
-      color: "text-gray-600",
+      color: "text-muted-foreground",
     },
     {
       title: "New This Term",
       value: filteredStudents.filter((s) => s.registrationType === "New")
         .length,
       icon: Hash,
-      color: "text-gray-600",
+      color: "text-muted-foreground",
     },
   ];
 
@@ -693,10 +694,10 @@ const AdminStudentManagement = () => {
           {/* Header */}
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              <h1 className="text-3xl font-bold text-foreground mb-2">
                 Student Management
               </h1>
-              <p className="text-gray-600">
+              <p className="text-muted-foreground">
                 Add, manage, and generate student IDs
               </p>
             </div>
@@ -711,7 +712,7 @@ const AdminStudentManagement = () => {
               }}
             >
               <DialogTrigger asChild>
-                <Button className="gap-2 bg-gray-600 hover:bg-gray-700 text-white border-gray-600">
+                <Button className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground">
                   <UserPlus className="h-4 w-4" />
                   Add New Student
                 </Button>
@@ -778,7 +779,7 @@ const AdminStudentManagement = () => {
                           handleNewStudentChange("grade", value)
                         }
                       >
-                        <SelectTrigger id="grade" className="border-gray-300">
+                        <SelectTrigger id="grade" className="border-border">
                           <SelectValue placeholder="Select grade" />
                         </SelectTrigger>
                         <SelectContent>
@@ -927,25 +928,22 @@ const AdminStudentManagement = () => {
                 {generatedCredentials?.fullName && (
                   <div className="space-y-1">
                     <Label>Student</Label>
-                    <p className="font-semibold text-gray-900">
+                    <p className="font-semibold text-foreground">
                       {generatedCredentials.fullName}
                     </p>
                   </div>
                 )}
                 <div className="space-y-1">
                   <Label>Student ID</Label>
-                  <code className="inline-block rounded bg-gray-100 px-2 py-1 text-sm text-gray-900">
+                  <code className="inline-block rounded bg-muted px-2 py-1 text-sm text-foreground">
                     {generatedCredentials?.studentId}
                   </code>
                 </div>
                 <div className="space-y-1">
                   <Label>Temporary Password</Label>
-                  <code className="inline-block rounded bg-gray-100 px-2 py-1 text-sm text-gray-900">
+                  <code className="inline-block rounded bg-muted px-2 py-1 text-sm text-foreground">
                     {generatedCredentials?.password}
                   </code>
-                  <p className="text-xs text-gray-500">
-                    Ask the student to reset their password after signing in.
-                  </p>
                 </div>
               </div>
               <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
@@ -1002,18 +1000,18 @@ const AdminStudentManagement = () => {
                   <StatCardSkeleton key={i} />
                 ))
               : stats.map((stat) => (
-                  <Card key={stat.title} className="border-gray-200">
+                  <Card key={stat.title} className="bg-card border-border">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">
+                          <p className="text-sm text-muted-foreground mb-1">
                             {stat.title}
                           </p>
-                          <p className="text-3xl font-bold text-gray-900">
+                          <p className="text-3xl font-bold text-foreground">
                             {stat.value}
                           </p>
                         </div>
-                        <div className="p-3 rounded-lg bg-gray-100 text-gray-600">
+                        <div className="p-3 rounded-lg bg-muted text-muted-foreground">
                           <stat.icon className="h-6 w-6" />
                         </div>
                       </div>
@@ -1026,17 +1024,17 @@ const AdminStudentManagement = () => {
         {/* Search and Filter */}
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-600" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search students..."
-              className="pl-10 border-gray-300"
+              className="pl-10 border-border"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <Select>
-            <SelectTrigger className="w-full md:w-48 border-gray-300">
-              <Filter className="h-4 w-4 mr-2 text-gray-600" />
+            <SelectTrigger className="w-full md:w-48 border-border">
+              <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
               <SelectValue placeholder="Filter by grade" />
             </SelectTrigger>
             <SelectContent>
@@ -1049,7 +1047,7 @@ const AdminStudentManagement = () => {
             </SelectContent>
           </Select>
           <Select>
-            <SelectTrigger className="w-full md:w-48 border-gray-300">
+            <SelectTrigger className="w-full md:w-48 border-border">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -1063,10 +1061,10 @@ const AdminStudentManagement = () => {
         </div>
 
         {/* Students Table */}
-        <Card className="border-gray-200">
-          <CardHeader className="bg-gray-50 border-b border-gray-200">
-            <CardTitle className="text-gray-900">All Students</CardTitle>
-            <CardDescription className="text-gray-600">
+        <Card className="bg-card border-border">
+          <CardHeader className="bg-muted border-b border-border">
+            <CardTitle className="text-foreground">All Students</CardTitle>
+            <CardDescription className="text-muted-foreground">
               Manage student accounts and generate unique IDs
             </CardDescription>
           </CardHeader>
@@ -1112,13 +1110,13 @@ const AdminStudentManagement = () => {
               skeleton={
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-gray-200">
+                    <TableRow className="border-border">
                       {Array.from({ length: 7 }).map((_, i) => (
                         <TableHead
                           key={i}
-                          className="text-gray-700 font-semibold"
+                          className="text-muted-foreground font-semibold"
                         >
-                          <span aria-hidden> </span>
+                          {" "}
                         </TableHead>
                       ))}
                     </TableRow>
@@ -1133,7 +1131,7 @@ const AdminStudentManagement = () => {
             >
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-200 hover:bg-gray-50">
+                  <TableRow className="border-border hover:bg-muted">
                     <TableHead className="w-10">
                       <Checkbox
                         checked={allSelected}
@@ -1141,22 +1139,22 @@ const AdminStudentManagement = () => {
                         aria-label="Select all"
                       />
                     </TableHead>
-                    <TableHead className="text-gray-700 font-semibold">
+                    <TableHead className="text-muted-foreground font-semibold">
                       Student ID
                     </TableHead>
-                    <TableHead className="text-gray-700 font-semibold">
+                    <TableHead className="text-muted-foreground font-semibold">
                       Name
                     </TableHead>
-                    <TableHead className="text-gray-700 font-semibold">
+                    <TableHead className="text-muted-foreground font-semibold">
                       Grade
                     </TableHead>
-                    <TableHead className="text-gray-700 font-semibold">
+                    <TableHead className="text-muted-foreground font-semibold">
                       Registration
                     </TableHead>
-                    <TableHead className="text-gray-700 font-semibold">
+                    <TableHead className="text-muted-foreground font-semibold">
                       Status
                     </TableHead>
-                    <TableHead className="text-gray-700 font-semibold text-right">
+                    <TableHead className="text-muted-foreground font-semibold text-right">
                       Actions
                     </TableHead>
                   </TableRow>
@@ -1168,7 +1166,7 @@ const AdminStudentManagement = () => {
                   {paginatedStudents.map((student) => (
                     <TableRow
                       key={student.id}
-                      className="border-gray-200 hover:bg-gray-50"
+                      className="border-border hover:bg-muted/10"
                     >
                       <TableCell>
                         <Checkbox
@@ -1177,16 +1175,16 @@ const AdminStudentManagement = () => {
                           aria-label={`Select ${getStudentFullName(student)}`}
                         />
                       </TableCell>
-                      <TableCell className="font-mono text-sm text-gray-900">
+                      <TableCell className="font-mono text-sm text-foreground">
                         {student.studentId}
                       </TableCell>
-                      <TableCell className="font-medium text-gray-900">
+                      <TableCell className="font-medium text-foreground">
                         {getStudentFullName(student)}
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className="border-gray-300 text-gray-700"
+                          className="border-border text-muted-foreground bg-muted"
                         >
                           {student.grade ? student.grade.toUpperCase() : "—"}
                         </Badge>
@@ -1198,7 +1196,7 @@ const AdminStudentManagement = () => {
                               ? "default"
                               : "secondary"
                           }
-                          className="bg-gray-100 text-gray-800 border-gray-300"
+                          className="bg-muted text-muted-foreground border-border"
                         >
                           {student.registrationType}
                         </Badge>
@@ -1210,8 +1208,8 @@ const AdminStudentManagement = () => {
                           }
                           className={
                             student.status === "active"
-                              ? "bg-gray-100 text-gray-800 border-gray-300"
-                              : "border-gray-300 text-gray-700"
+                              ? "bg-muted text-foreground border-border"
+                              : "border-border text-muted-foreground"
                           }
                         >
                           {student.status}
@@ -1223,7 +1221,7 @@ const AdminStudentManagement = () => {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleEditStudent(student)}
-                            className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                            className="text-muted-foreground hover:bg-muted/10 hover:text-foreground"
                           >
                             <Edit className="h-4 w-4 mr-1" />
                             Edit
@@ -1232,7 +1230,7 @@ const AdminStudentManagement = () => {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleViewStudent(student)}
-                            className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                            className="text-muted-foreground hover:bg-muted/10 hover:text-foreground"
                           >
                             <Eye className="h-4 w-4 mr-1" />
                             View
@@ -1246,7 +1244,7 @@ const AdminStudentManagement = () => {
                                 active: student.status !== "active",
                               })
                             }
-                            className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                            className="text-muted-foreground hover:bg-muted/10 hover:text-foreground"
                           >
                             {student.status === "active" ? (
                               <>
@@ -1272,7 +1270,7 @@ const AdminStudentManagement = () => {
                               if (!confirmed) return;
                               resetPasswordMutation.mutate({ id: student.id });
                             }}
-                            className="text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                            className="text-muted-foreground hover:bg-muted/10 hover:text-foreground"
                           >
                             <RefreshCcw className="h-4 w-4 mr-1" />
                             Reset Password
@@ -1281,7 +1279,7 @@ const AdminStudentManagement = () => {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteStudent(student.id)}
-                            className="text-gray-600 hover:bg-gray-50 hover:text-red-600"
+                            className="text-muted-foreground hover:bg-muted/10 hover:text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-1" />
                             Delete
@@ -1329,16 +1327,18 @@ const AdminStudentManagement = () => {
             <section aria-labelledby="primary-info" className="space-y-3">
               <h3
                 id="primary-info"
-                className="text-sm font-semibold text-gray-700"
+                className="text-sm font-semibold text-muted-foreground"
               >
                 Primary Information
               </h3>
-              <div className="rounded border border-gray-100 bg-white p-4 shadow-sm">
+              <div className="rounded border border-border bg-card p-4 shadow-sm">
                 <dl className="grid gap-y-2">
                   <div className="flex items-center justify-between">
-                    <dt className="text-xs text-gray-500">Student ID</dt>
+                    <dt className="text-xs text-muted-foreground">
+                      Student ID
+                    </dt>
                     <dd className="flex items-center gap-2">
-                      <code className="font-mono text-sm text-gray-900">
+                      <code className="font-mono text-sm text-foreground">
                         {selectedStudent?.studentId ?? "—"}
                       </code>
                       <Button
@@ -1354,8 +1354,8 @@ const AdminStudentManagement = () => {
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <dt className="text-xs text-gray-500">Full name</dt>
-                    <dd className="text-sm font-medium text-gray-900">
+                    <dt className="text-xs text-muted-foreground">Full name</dt>
+                    <dd className="text-sm font-medium text-foreground">
                       {selectedStudent
                         ? getStudentFullName(selectedStudent)
                         : "—"}
@@ -1363,8 +1363,8 @@ const AdminStudentManagement = () => {
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <dt className="text-xs text-gray-500">Email</dt>
-                    <dd className="text-sm text-gray-700 break-words">
+                    <dt className="text-xs text-muted-foreground">Email</dt>
+                    <dd className="text-sm text-muted-foreground break-words">
                       {selectedStudent?.email ?? "—"}
                     </dd>
                   </div>
@@ -1376,25 +1376,27 @@ const AdminStudentManagement = () => {
             <section aria-labelledby="academic-contact" className="space-y-3">
               <h3
                 id="academic-contact"
-                className="text-sm font-semibold text-gray-700"
+                className="text-sm font-semibold text-muted-foreground"
               >
                 Academic & Contact
               </h3>
-              <div className="rounded border border-gray-100 bg-white p-4 shadow-sm space-y-2">
+              <div className="rounded border border-border bg-card p-4 shadow-sm space-y-2">
                 <div className="flex items-center justify-between">
-                  <dt className="text-xs text-gray-500">Grade / Class</dt>
-                  <dd className="text-sm font-medium text-gray-900">
+                  <dt className="text-xs text-muted-foreground">
+                    Grade / Class
+                  </dt>
+                  <dd className="text-sm font-medium text-foreground">
                     {selectedStudent?.grade ?? "—"}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between">
-                  <dt className="text-xs text-gray-500">Phone</dt>
-                  <dd className="text-sm text-gray-700">
+                  <dt className="text-xs text-muted-foreground">Phone</dt>
+                  <dd className="text-sm text-muted-foreground">
                     {selectedStudent?.phone ?? "—"}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between">
-                  <dt className="text-xs text-gray-500">Status</dt>
+                  <dt className="text-xs text-muted-foreground">Status</dt>
                   <dd>
                     <Badge
                       variant={
@@ -1402,7 +1404,7 @@ const AdminStudentManagement = () => {
                           ? "default"
                           : "outline"
                       }
-                      className="border-gray-300"
+                      className="border-border"
                     >
                       {selectedStudent?.status ?? "—"}
                     </Badge>
@@ -1418,13 +1420,13 @@ const AdminStudentManagement = () => {
             >
               <h3
                 id="credentials"
-                className="text-sm font-semibold text-gray-700"
+                className="text-sm font-semibold text-muted-foreground"
               >
                 Credentials
               </h3>
-              <div className="rounded border border-gray-100 bg-white p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="rounded border border-border bg-card p-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     Temporary credentials (visible immediately after
                     create/reset)
                   </p>
@@ -1435,11 +1437,13 @@ const AdminStudentManagement = () => {
                     <div className="mt-2">
                       <div className="flex items-center gap-3">
                         <div>
-                          <p className="text-xs text-gray-500">Student ID</p>
+                          <p className="text-xs text-muted-foreground">
+                            Student ID
+                          </p>
                           <p className="font-mono text-sm">{viewedStudentId}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-muted-foreground">
                             Temporary Password
                           </p>
                           <p className="font-mono text-sm">
@@ -1449,7 +1453,7 @@ const AdminStudentManagement = () => {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-muted-foreground">
                       No temporary credentials available for this student.
                     </p>
                   )}
@@ -1502,7 +1506,7 @@ const AdminStudentManagement = () => {
           </div>
 
           <DialogFooter className="flex items-center justify-between">
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-muted-foreground">
               Last updated: not tracked
             </div>
             <div className="flex items-center gap-2">

@@ -71,7 +71,7 @@ const HeadLayout = () => {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-1">
+          <nav className="flex-1 px-4 py-6 space-y-1 overflow-auto">
             {navigation.map((item) => (
               <NavLink
                 key={item.name}

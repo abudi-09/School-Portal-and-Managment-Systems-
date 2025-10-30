@@ -192,16 +192,16 @@ const AdminDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
+    <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto p-2 lg:p-4 space-y-6">
         <section className="space-y-4">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white rounded-2xl p-3 shadow-sm border border-gray-100">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-card rounded-2xl p-3 shadow-sm border border-border">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              <h1 className="text-3xl font-bold text-foreground mb-2">
                 Admin Dashboard
               </h1>
-              <p className="text-gray-600 text-lg">
+              <p className="text-muted-foreground text-lg">
                 System overview and control center
               </p>
             </div>
@@ -212,9 +212,9 @@ const AdminDashboard = () => {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="relative h-10 w-10 rounded-xl border-gray-200 hover:bg-gray-50 transition-colors"
+                  className="relative h-10 w-10 rounded-xl border-border hover:bg-muted transition-colors"
                 >
-                  <Bell className="h-5 w-5 text-gray-600" />
+                  <Bell className="h-5 w-5 text-muted-foreground" />
                   {unreadCount > 0 && (
                     <Badge
                       variant="destructive"
@@ -227,16 +227,18 @@ const AdminDashboard = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="w-80 rounded-xl border-gray-200 shadow-lg"
+                className="w-80 rounded-xl border-border shadow-lg"
               >
-                <div className="flex items-center justify-between p-4 border-b border-gray-100">
-                  <h4 className="font-semibold text-gray-900">Notifications</h4>
+                <div className="flex items-center justify-between p-4 border-b border-border">
+                  <h4 className="font-semibold text-foreground">
+                    Notifications
+                  </h4>
                   {unreadCount > 0 && (
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={markAllAsSeen}
-                      className="text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg px-3 py-1"
+                      className="text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg px-3 py-1"
                     >
                       Mark all as read
                     </Button>
@@ -244,29 +246,29 @@ const AdminDashboard = () => {
                 </div>
                 <div className="max-h-80 overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <div className="p-6 text-center text-gray-500 text-sm">
+                    <div className="p-6 text-center text-muted-foreground text-sm">
                       No notifications
                     </div>
                   ) : (
                     notifications.map((notification) => (
                       <div
                         key={notification.id}
-                        className={`p-4 border-b border-gray-100 last:border-b-0 hover:bg-gray-50/50 transition-colors ${
+                        className={`p-4 border-b border-border last:border-b-0 ${
                           !notification.seen ? "bg-blue-50/30" : ""
                         }`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
-                            <h5 className="font-semibold text-sm text-gray-900 mb-1">
+                            <h5 className="font-semibold text-sm text-foreground mb-1">
                               {notification.title}
                             </h5>
-                            <p className="text-sm text-gray-600 mb-1">
+                            <p className="text-sm text-muted-foreground mb-1">
                               {notification.message}
                             </p>
-                            <p className="text-xs text-gray-500 mb-1">
+                            <p className="text-xs text-muted-foreground mb-1">
                               {notification.user}
                             </p>
-                            <p className="text-xs text-gray-400">
+                            <p className="text-xs text-muted-foreground">
                               {new Date(
                                 notification.timestamp
                               ).toLocaleString()}
@@ -281,7 +283,7 @@ const AdminDashboard = () => {
                             size="sm"
                             variant="outline"
                             onClick={() => handleViewNotification(notification)}
-                            className="text-xs px-3 py-1 rounded-lg border-gray-200 hover:bg-gray-50"
+                            className="text-xs px-3 py-1 rounded-lg border-border hover:bg-muted"
                           >
                             View
                           </Button>
@@ -358,15 +360,15 @@ const AdminDashboard = () => {
           {stats.map((stat) => (
             <Card
               key={stat.title}
-              className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+              className="bg-card rounded-2xl shadow-sm border border-border hover:shadow-md transition-shadow"
             >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-600 mb-2">
+                    <p className="text-sm font-medium text-muted-foreground mb-2">
                       {stat.title}
                     </p>
-                    <p className="text-3xl font-bold text-gray-900 mb-3">
+                    <p className="text-3xl font-bold text-foreground mb-3">
                       {stat.value}
                     </p>
                     <div className="flex items-center gap-2">
@@ -376,9 +378,7 @@ const AdminDashboard = () => {
                       </span>
                     </div>
                   </div>
-                  <div
-                    className={`p-3 rounded-xl bg-gray-100 ${stat.color} ml-4`}
-                  >
+                  <div className={`p-3 rounded-xl bg-muted ${stat.color} ml-4`}>
                     <stat.icon className="h-6 w-6" />
                   </div>
                 </div>
@@ -387,12 +387,12 @@ const AdminDashboard = () => {
           ))}
         </div>
         {/* Quick Actions */}
-        <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
+        <Card className="bg-card rounded-2xl shadow-sm border border-border">
           <CardHeader className="pb-4">
-            <CardTitle className="text-xl font-semibold text-gray-900">
+            <CardTitle className="text-xl font-semibold text-foreground">
               Quick Actions
             </CardTitle>
-            <CardDescription className="text-gray-600">
+            <CardDescription className="text-muted-foreground">
               Frequently used administrative tasks
             </CardDescription>
           </CardHeader>
@@ -400,37 +400,37 @@ const AdminDashboard = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div
                 onClick={() => navigate("/admin/students")}
-                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group cursor-pointer"
+                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-border hover:border-blue-300 hover:bg-muted/10 transition-all group cursor-pointer"
               >
-                <Users className="h-8 w-8 text-gray-400 group-hover:text-blue-500 mb-3" />
-                <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">
+                <Users className="h-8 w-8 text-muted-foreground group-hover:text-foreground mb-3" />
+                <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
                   Add Student
                 </span>
               </div>
               <div
                 onClick={() => navigate("/admin/head-management")}
-                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all group cursor-pointer"
+                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-border hover:border-green-300 hover:bg-muted/10 transition-all group cursor-pointer"
               >
-                <UserCheck className="h-8 w-8 text-gray-400 group-hover:text-green-500 mb-3" />
-                <span className="text-sm font-medium text-gray-700 group-hover:text-green-700">
+                <UserCheck className="h-8 w-8 text-muted-foreground group-hover:text-foreground mb-3" />
+                <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
                   Approve User
                 </span>
               </div>
               <div
                 onClick={() => navigate("/admin/users")}
-                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-all group cursor-pointer"
+                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-border hover:border-purple-300 hover:bg-muted/10 transition-all group cursor-pointer"
               >
-                <UserX className="h-8 w-8 text-gray-400 group-hover:text-purple-500 mb-3" />
-                <span className="text-sm font-medium text-gray-700 group-hover:text-purple-700">
+                <UserX className="h-8 w-8 text-muted-foreground group-hover:text-foreground mb-3" />
+                <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
                   Manage Access
                 </span>
               </div>
               <div
                 onClick={() => navigate("/admin/registration")}
-                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-all group cursor-pointer"
+                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-border hover:border-orange-300 hover:bg-muted/10 transition-all group cursor-pointer"
               >
-                <AlertCircle className="h-8 w-8 text-gray-400 group-hover:text-orange-500 mb-3" />
-                <span className="text-sm font-medium text-gray-700 group-hover:text-orange-700">
+                <AlertCircle className="h-8 w-8 text-muted-foreground group-hover:text-foreground mb-3" />
+                <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
                   System Alerts
                 </span>
               </div>
@@ -440,12 +440,12 @@ const AdminDashboard = () => {
         {/* Two Column Layout */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {/* Pending Actions */}
-          <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
+          <Card className="bg-card rounded-2xl shadow-sm border border-border">
             <CardHeader className="pb-3">
-              <CardTitle className="text-xl font-semibold text-gray-900">
+              <CardTitle className="text-xl font-semibold text-foreground">
                 Pending Actions
               </CardTitle>
-              <CardDescription className="text-gray-600">
+              <CardDescription className="text-muted-foreground">
                 Items requiring your attention
               </CardDescription>
             </CardHeader>
@@ -454,10 +454,10 @@ const AdminDashboard = () => {
                 ? Array.from({ length: 3 }).map((_, i) => (
                     <div
                       key={i}
-                      className="p-3 rounded-xl border border-gray-100 bg-gray-50/40 animate-pulse"
+                      className="p-3 rounded-xl border border-border bg-muted/40 animate-pulse"
                     >
-                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
-                      <div className="h-3 bg-gray-200 rounded w-1/3" />
+                      <div className="h-4 bg-muted/30 rounded w-3/4 mb-2" />
+                      <div className="h-3 bg-muted/30 rounded w-1/3" />
                     </div>
                   ))
                 : pendingActions.map((item, index) => (
@@ -472,15 +472,15 @@ const AdminDashboard = () => {
                           navigate("/admin/students");
                         }
                       }}
-                      className={`flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:shadow-sm transition-all cursor-pointer ${
-                        index % 2 === 0 ? "bg-gray-50/50" : "bg-white"
+                      className={`flex items-center justify-between p-3 rounded-xl border border-border hover:shadow-sm transition-all cursor-pointer ${
+                        index % 2 === 0 ? "bg-muted/50" : "bg-card"
                       }`}
                     >
                       <div>
-                        <p className="font-semibold text-gray-900 text-base">
+                        <p className="font-semibold text-foreground text-base">
                           {item.type}
                         </p>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <p className="text-sm text-muted-foreground mt-1">
                           {item.count} pending
                         </p>
                       </div>
@@ -502,12 +502,12 @@ const AdminDashboard = () => {
           </Card>
 
           {/* Recent Activity */}
-          <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
+          <Card className="bg-card rounded-2xl shadow-sm border border-border">
             <CardHeader className="pb-3">
-              <CardTitle className="text-xl font-semibold text-gray-900">
+              <CardTitle className="text-xl font-semibold text-foreground">
                 Recent Activity
               </CardTitle>
-              <CardDescription className="text-gray-600">
+              <CardDescription className="text-muted-foreground">
                 Latest system actions
               </CardDescription>
             </CardHeader>
@@ -516,18 +516,20 @@ const AdminDashboard = () => {
                 <div
                   key={index}
                   className={`flex items-start gap-4 p-3 rounded-xl ${
-                    index % 2 === 0 ? "bg-gray-50/50" : "bg-white"
+                    index % 2 === 0 ? "bg-muted/50" : "bg-card"
                   }`}
                 >
                   <div className="h-3 w-3 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-base font-medium text-gray-900 mb-1">
+                    <p className="text-base font-medium text-foreground mb-1">
                       {activity.action}
                     </p>
-                    <p className="text-sm text-gray-600 mb-1">
+                    <p className="text-sm text-muted-foreground mb-1">
                       {activity.user}
                     </p>
-                    <p className="text-xs text-gray-500">{activity.time}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {activity.time}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -535,28 +537,28 @@ const AdminDashboard = () => {
           </Card>
         </div>{" "}
         {/* System Status */}
-        <Card className="bg-white rounded-2xl shadow-sm border border-gray-100">
+        <Card className="bg-card rounded-2xl shadow-sm border border-border">
           <CardHeader className="pb-4">
-            <CardTitle className="text-xl font-semibold text-gray-900">
+            <CardTitle className="text-xl font-semibold text-foreground">
               System Status
             </CardTitle>
-            <CardDescription className="text-gray-600">
+            <CardDescription className="text-muted-foreground">
               Current academic term overview
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-3">
-                <p className="text-sm font-medium text-gray-600">
+                <p className="text-sm font-medium text-muted-foreground">
                   Current Term
                 </p>
-                <p className="text-2xl font-bold text-gray-900">Fall 2024</p>
+                <p className="text-2xl font-bold text-foreground">Fall 2024</p>
               </div>
               <div className="space-y-3">
-                <p className="text-sm font-medium text-gray-600">
+                <p className="text-sm font-medium text-muted-foreground">
                   Days Remaining
                 </p>
-                <p className="text-2xl font-bold text-gray-900">42 days</p>
+                <p className="text-2xl font-bold text-foreground">42 days</p>
               </div>
             </div>
           </CardContent>

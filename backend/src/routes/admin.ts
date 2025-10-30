@@ -97,10 +97,12 @@ router.get(
           message: "Invalid or missing grade. Expected 9,10,11,12.",
         });
       }
+      // Optional stream filter for senior grades
+      const filter: any = { grade: gradeNum };
+      const stream = req.query.stream as string | undefined;
+      if (stream) filter.stream = stream;
 
-      const courses = await Course.find({ grade: gradeNum }).sort({
-        createdAt: -1,
-      });
+      const courses = await Course.find(filter).sort({ createdAt: -1 });
       return res.json({ success: true, data: { courses } });
     } catch (error: any) {
       console.error("List courses error:", error);
@@ -123,6 +125,10 @@ router.post(
       .trim()
       .isLength({ min: 1 })
       .withMessage("Course name is required"),
+    body("stream")
+      .optional()
+      .isIn(["natural", "social"])
+      .withMessage("Stream must be 'natural' or 'social'"),
     body("isMandatory")
       .optional()
       .isBoolean()
@@ -139,12 +145,27 @@ router.post(
     }
 
     try {
-      const { grade, name, isMandatory } = req.body as {
+      const { grade, name, isMandatory, stream } = req.body as {
         grade: number;
         name: string;
         isMandatory?: boolean;
+        stream?: string;
       };
-      const doc = new Course({ grade, name, isMandatory: !!isMandatory });
+
+      // For grades 11 and 12, stream is required
+      if ([11, 12].includes(Number(grade)) && !stream) {
+        return res.status(400).json({
+          success: false,
+          message: "Stream is required for grades 11 and 12",
+        });
+      }
+
+      const doc = new Course({
+        grade,
+        name,
+        isMandatory: !!isMandatory,
+        stream,
+      });
       await doc.save();
       return res.status(201).json({ success: true, data: { course: doc } });
     } catch (error: any) {
@@ -175,6 +196,10 @@ router.patch(
       .trim()
       .isLength({ min: 1 })
       .withMessage("Course name is required"),
+    body("stream")
+      .optional()
+      .isIn(["natural", "social"])
+      .withMessage("Stream must be 'natural' or 'social'"),
     body("isMandatory")
       .optional()
       .isBoolean()
@@ -196,6 +221,7 @@ router.patch(
       if (req.body.name !== undefined) update.name = req.body.name;
       if (req.body.isMandatory !== undefined)
         update.isMandatory = !!req.body.isMandatory;
+      if (req.body.stream !== undefined) update.stream = req.body.stream;
 
       const course = await Course.findById(id);
       if (!course)

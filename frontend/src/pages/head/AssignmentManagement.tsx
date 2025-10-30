@@ -92,6 +92,13 @@ const AssignmentManagement = () => {
     subjectAssignments?: { class: string; subject: string }[];
   };
 
+  type ApiClass = {
+    classId: string;
+    name?: string;
+    grade?: string;
+    section?: string;
+  };
+
   const fetchServerData = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -100,17 +107,50 @@ const AssignmentManagement = () => {
       };
       if (token) headers.Authorization = `Bearer ${token}`;
 
-      // Fetch classes
+      // Fetch classes (provide safe defaults so UI doesn't crash when fields are missing)
       const classesRes = await fetch(`${apiBaseUrl}/api/classes`, { headers });
       const classesPayload = await classesRes.json().catch(() => ({}));
       if (classesRes.ok && classesPayload?.success) {
-        const svc = (classesPayload.data?.classes ?? []).map((c: any) => ({
+        const svc = (classesPayload.data?.classes ?? []).map((c: ApiClass) => ({
           id: c.classId,
           name: c.name,
           grade: c.grade,
           section: c.section,
+          // defaults used by the UI
+          classTeacher: "Unassigned",
+          students: 0,
         }));
         setClasses(svc);
+
+        // Fetch current head assignments and merge them into the classes list
+        try {
+          const caRes = await fetch(
+            `${apiBaseUrl}/api/head/class-assignments`,
+            {
+              headers,
+            }
+          );
+          const caPayload = await caRes.json().catch(() => ({}));
+          if (caRes.ok && caPayload?.success) {
+            const assignments: any[] = caPayload.data?.assignments ?? [];
+            setClasses((prev) =>
+              prev.map((cls) => {
+                const match = assignments.find(
+                  (a) =>
+                    String(a.classId ?? "").toLowerCase() ===
+                    String(cls.id ?? "").toLowerCase()
+                );
+                return {
+                  ...cls,
+                  classTeacher:
+                    match?.headTeacherName ?? cls.classTeacher ?? "Unassigned",
+                };
+              })
+            );
+          }
+        } catch (err) {
+          console.warn("Failed to fetch class head assignments", err);
+        }
       } else {
         console.warn(
           "Failed to load classes from server",
@@ -125,32 +165,40 @@ const AssignmentManagement = () => {
         );
         const teachersPayload = await teachersRes.json().catch(() => ({}));
         if (teachersRes.ok && teachersPayload?.success) {
-          const tv = (teachersPayload.data?.teachers ?? []).map((t: any) => ({
-            id: t._id ?? String(t.id ?? ""),
-            name:
-              `${t.firstName ?? ""} ${t.lastName ?? ""}`.trim() ||
-              t.name ||
-              "Unknown",
-            department: t.department ?? t.profile?.department ?? "",
-            assignedClasses: Array.isArray(t.assignedClassIds)
-              ? t.assignedClassIds.length
-              : t.assignedClasses ?? 0,
-            email: t.email,
-            phone: t.profile?.phone ?? t.phone,
-            qualifications: t.qualifications ?? [],
-            experience: t.experience ?? "",
-            classTeacherAssignments: t.classTeacherAssignments ?? [],
-            subjectAssignments: t.subjectAssignments ?? [],
-          }));
+          const tv = (teachersPayload.data?.teachers ?? []).map(
+            (t: ApiTeacher) => ({
+              id: t._id ?? String(t.id ?? ""),
+              name:
+                `${t.firstName ?? ""} ${t.lastName ?? ""}`.trim() ||
+                (t as any).name ||
+                "Unknown",
+              department:
+                (t as any).department ?? (t as any).profile?.department ?? "",
+              assignedClasses: Array.isArray(t.assignedClassIds)
+                ? t.assignedClassIds.length
+                : (t as any).assignedClasses ?? 0,
+              email: t.email,
+              phone: (t as any).profile?.phone ?? (t as any).phone,
+              qualifications: t.qualifications ?? [],
+              experience: t.experience ?? "",
+              classTeacherAssignments: t.classTeacherAssignments ?? [],
+              subjectAssignments: t.subjectAssignments ?? [],
+            })
+          );
           setTeachers(tv);
+          setTeachersError(null);
         } else {
           console.warn(
             "Failed to load teachers from server",
             teachersPayload?.message
           );
+          setTeachersError(
+            teachersPayload?.message || "Failed to load teachers"
+          );
         }
       } catch (err) {
         console.warn("Teachers fetch error", err);
+        setTeachersError(String(err));
       }
 
       // Fetch subject assignments snapshot (used for selected class)
@@ -161,11 +209,18 @@ const AssignmentManagement = () => {
         );
         const saPayload = await saRes.json().catch(() => ({}));
         if (saRes.ok && saPayload?.success) {
-          const list = (saPayload.data?.assignments ?? []).map((a: any) => ({
-            class: a.classId,
-            subject: a.subject,
-            teacher: a.teacherName ?? "Unassigned",
-          }));
+          type ApiAssignment = {
+            classId: string;
+            subject: string;
+            teacherName?: string;
+          };
+          const list = (saPayload.data?.assignments ?? []).map(
+            (a: ApiAssignment) => ({
+              class: a.classId,
+              subject: a.subject,
+              teacher: a.teacherName ?? "Unassigned",
+            })
+          );
           setSubjectAssignmentsServer(list);
           setSubjectAssignments(
             list.map((s) => ({
@@ -210,6 +265,7 @@ const AssignmentManagement = () => {
   >([]);
   const [teacherDetailsOpen, setTeacherDetailsOpen] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
+  const [teachersError, setTeachersError] = useState<string | null>(null);
 
   // When selectedClass changes, fetch course subjects for its grade and existing assignments
   useEffect(() => {
@@ -299,6 +355,7 @@ const AssignmentManagement = () => {
       setDialogOpen(false);
       return;
     }
+
     const teacher = teachers.find((t) => t.id === selectedTeacherId);
     if (!teacher) {
       setDialogOpen(false);
@@ -630,8 +687,8 @@ const AssignmentManagement = () => {
                 if (!classSearch) return true;
                 const q = classSearch.toLowerCase();
                 return (
-                  classItem.name.toLowerCase().includes(q) ||
-                  classItem.classTeacher.toLowerCase().includes(q)
+                  (classItem.name ?? "").toLowerCase().includes(q) ||
+                  (classItem.classTeacher ?? "").toLowerCase().includes(q)
                 );
               })
               .map((classItem) => (
@@ -767,6 +824,44 @@ const AssignmentManagement = () => {
       </div>
 
       {/* Available Teachers */}
+      {teachersError ? (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-foreground">
+                  Unable to load teachers
+                </p>
+                <p className="text-sm text-muted-foreground">{teachersError}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    void fetchServerData();
+                  }}
+                >
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : teachers.length === 0 ? (
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="font-medium text-foreground mb-1">
+              No approved teachers found
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              There are no approved/active teachers available for assignment.
+              Ensure teachers are approved and you are logged in with a head
+              account.
+            </p>
+            <Button onClick={() => void fetchServerData()}>Reload</Button>
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Available Teachers</CardTitle>

@@ -427,7 +427,7 @@ const AdminHeadManagement = () => {
         <Button
           key="activate"
           variant="outline"
-          className="border-slate-200 text-slate-700 hover:bg-slate-50"
+          className="border-border text-muted-foreground hover:bg-muted/10"
           onClick={() => handleActionRequest(head, "activate")}
         >
           <ShieldCheck className="mr-2 h-4 w-4" />
@@ -442,7 +442,7 @@ const AdminHeadManagement = () => {
         <Button
           key="deactivate"
           variant="outline"
-          className="border-rose-200 text-rose-600 hover:bg-rose-50"
+          className="border-border text-rose-600 hover:bg-muted/10"
           onClick={() => handleActionRequest(head, "deactivate")}
         >
           <UserX className="mr-2 h-4 w-4" />
@@ -455,7 +455,7 @@ const AdminHeadManagement = () => {
       <Button
         key="view"
         variant="outline"
-        className="border-gray-200 text-gray-700 hover:bg-gray-100"
+        className="border-border text-muted-foreground hover:bg-muted/10"
         onClick={() => handleViewDetails(head)}
       >
         <Eye className="mr-2 h-4 w-4" />
@@ -498,10 +498,10 @@ const AdminHeadManagement = () => {
       <section className="space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-3xl font-bold text-foreground mb-2">
               Head Management
             </h1>
-            <p className="text-gray-600 max-w-2xl">
+            <p className="text-muted-foreground max-w-2xl">
               Review onboarding progress, activate accounts, and keep Head of
               School access aligned with current roles.
             </p>
@@ -516,8 +516,8 @@ const AdminHeadManagement = () => {
             ? Array.from({ length: 4 }).map((_, i) => (
                 <StatCardSkeleton key={i} />
               ))
-            : summaryCards.map(({ label, value, icon: Icon, accent }) => (
-                <Card key={label} className="border-none shadow-sm bg-white">
+            : summaryCards.map(({ label, value, icon: Icon }) => (
+                <Card key={label} className="border-none shadow-sm bg-card">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
                       {label}
@@ -525,11 +525,13 @@ const AdminHeadManagement = () => {
                   </CardHeader>
                   <CardContent className="flex items-center justify-between pb-6">
                     <div>
-                      <span className="text-3xl font-semibold text-gray-900">
+                      <span className="text-3xl font-semibold text-foreground">
                         {value}
                       </span>
                     </div>
-                    <div className={`rounded-full p-3 ${accent}`}>
+                    <div
+                      className={`rounded-full p-3 bg-muted text-muted-foreground`}
+                    >
                       <Icon className="h-5 w-5" />
                     </div>
                   </CardContent>
@@ -545,14 +547,14 @@ const AdminHeadManagement = () => {
       )}
 
       {isLoading && heads.length === 0 && (
-        <Card className="border-dashed border-gray-300 bg-muted/40">
+        <Card className="border-dashed border-border bg-muted/40">
           <CardContent className="py-6 text-center text-sm text-muted-foreground">
             Loading head accounts...
           </CardContent>
         </Card>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-2xl p-4 md:p-6 shadow-sm space-y-4">
+      <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="relative w-full md:max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -586,14 +588,16 @@ const AdminHeadManagement = () => {
           </TabsList>
         </Tabs>
       </div>
-      <div className="hidden lg:block bg-white border border-gray-200 rounded-2xl shadow-sm">
+      <div className="hidden lg:block bg-card border border-border rounded-2xl shadow-sm">
         <Table>
           <TableHeader>
-            <TableRow className="border-gray-100">
-              <TableHead className="text-gray-500">Head of School</TableHead>
-              <TableHead className="text-gray-500">Status</TableHead>
-              <TableHead className="text-gray-500">Created</TableHead>
-              <TableHead className="text-right text-gray-500">
+            <TableRow className="border-border">
+              <TableHead className="text-muted-foreground">
+                Head of School
+              </TableHead>
+              <TableHead className="text-muted-foreground">Status</TableHead>
+              <TableHead className="text-muted-foreground">Created</TableHead>
+              <TableHead className="text-right text-muted-foreground">
                 Actions
               </TableHead>
             </TableRow>
@@ -603,9 +607,9 @@ const AdminHeadManagement = () => {
               <TableSkeletonRows rows={6} cols={4} />
             )}
             {paginatedHeads.map((head) => (
-              <TableRow key={head.id} className="border-gray-100">
+              <TableRow key={head.id} className="border-border">
                 <TableCell className="align-top">
-                  <div className="font-semibold text-gray-900">
+                  <div className="font-semibold text-foreground">
                     {head.fullName}
                   </div>
                   <div className="text-sm text-muted-foreground">
@@ -621,7 +625,7 @@ const AdminHeadManagement = () => {
                     {STATUS_LABELS[head.status]}
                   </span>
                 </TableCell>
-                <TableCell className="align-top text-gray-600">
+                <TableCell className="align-top text-muted-foreground">
                   {formatDate(head.createdAt)}
                 </TableCell>
                 <TableCell className="align-top">
@@ -635,7 +639,7 @@ const AdminHeadManagement = () => {
               <TableRow>
                 <TableCell
                   colSpan={4}
-                  className="py-12 text-center text-gray-500"
+                  className="py-12 text-center text-muted-foreground"
                 >
                   No Head of School records match your filters.
                 </TableCell>
@@ -657,7 +661,7 @@ const AdminHeadManagement = () => {
           currentPage={page}
           totalPages={totalPages}
           onPageChange={setPage}
-          className="border-t border-gray-100"
+          className="border-t border-border"
         />
       </div>
 
@@ -666,11 +670,11 @@ const AdminHeadManagement = () => {
         {paginatedHeads.map((head) => (
           <div
             key={head.id}
-            className="bg-white shadow rounded-2xl border border-gray-200 p-4 space-y-3"
+            className="bg-card shadow rounded-2xl border border-border p-4 space-y-3"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-base font-semibold text-gray-900">
+                <p className="text-base font-semibold text-foreground">
                   {head.fullName}
                 </p>
                 <p className="text-sm text-muted-foreground">{head.email}</p>
@@ -683,7 +687,7 @@ const AdminHeadManagement = () => {
                 {STATUS_LABELS[head.status]}
               </span>
             </div>
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-muted-foreground">
               Joined {formatDate(head.createdAt)}
             </div>
             <div className="flex flex-wrap gap-2">{renderActions(head)}</div>
@@ -695,7 +699,7 @@ const AdminHeadManagement = () => {
           onPageChange={setPage}
         />
         {filteredHeads.length === 0 && (
-          <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-6 text-center text-gray-500">
+          <div className="bg-card border border-dashed border-border rounded-2xl p-6 text-center text-muted-foreground">
             No Head of School records match your filters.
           </div>
         )}
@@ -748,8 +752,10 @@ const AdminHeadManagement = () => {
       <Dialog open={detailsOpen} onOpenChange={closeDetails}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Head of School Details</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-foreground">
+              Head of School Details
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Review account information before taking further action.
             </DialogDescription>
           </DialogHeader>
@@ -757,7 +763,7 @@ const AdminHeadManagement = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900">
+                  <h3 className="text-xl font-semibold text-foreground">
                     {detailsHead.fullName}
                   </h3>
                   <p className="text-sm text-muted-foreground">
@@ -772,7 +778,7 @@ const AdminHeadManagement = () => {
                   {STATUS_LABELS[detailsHead.status]}
                 </span>
               </div>
-              <div className="grid gap-3 text-sm text-gray-700">
+              <div className="grid gap-3 text-sm text-muted-foreground">
                 <div>
                   <p className="text-muted-foreground">Department</p>
                   <p className="font-medium">
@@ -793,8 +799,8 @@ const AdminHeadManagement = () => {
                 </div>
               </div>
               {detailsHead.notes && (
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-                  <p className="font-medium text-gray-900 mb-1">Notes</p>
+                <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground mb-1">Notes</p>
                   <p>{detailsHead.notes}</p>
                 </div>
               )}

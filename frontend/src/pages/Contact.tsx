@@ -324,13 +324,23 @@ const Contact = () => {
                         render={({ field }) => (
                           <Select
                             value={field.value ?? ""}
-                            onValueChange={(value) => field.onChange(value)}
+                            onValueChange={(value) =>
+                              // Map the sentinel "none" back to empty string
+                              // so the form field stays empty when the user
+                              // selects the "Not specified" option.
+                              field.onChange(value === "none" ? "" : value)
+                            }
                           >
                             <SelectTrigger id="role">
                               <SelectValue placeholder="Select your role" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">Not specified</SelectItem>
+                              {/* Use a non-empty sentinel value to avoid runtime
+                  errors from the Select implementation which
+                  forbids empty string item values. */}
+                              <SelectItem value="none">
+                                Not specified
+                              </SelectItem>
                               {roleOptions.map((option) => (
                                 <SelectItem
                                   key={option.value}

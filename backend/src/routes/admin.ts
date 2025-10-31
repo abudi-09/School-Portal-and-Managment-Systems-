@@ -293,6 +293,10 @@ router.post(
       .optional()
       .isInt({ min: 1 })
       .withMessage("Capacity must be a positive integer"),
+    body("stream")
+      .optional()
+      .isIn(["natural", "social"])
+      .withMessage("Stream must be 'natural' or 'social'"),
   ],
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
@@ -305,19 +309,28 @@ router.post(
     }
 
     try {
-      const { grade, label, capacity } = req.body as {
+      const { grade, label, capacity, stream } = req.body as {
         grade: number;
         label: string;
         capacity?: number;
+        stream?: string;
       };
-      const doc = new Section({ grade, label, capacity });
+      const doc = new Section({ grade, label, capacity, stream });
       await doc.save();
       return res.status(201).json({ success: true, data: { section: doc } });
     } catch (error: any) {
       if (error?.code === 11000) {
+        // Duplicate key may include stream; provide clearer message
+        const key = error?.keyValue
+          ? Object.keys(error.keyValue).join(",")
+          : null;
+        const msg =
+          key && key.includes("stream")
+            ? "Section with this label already exists for the specified grade and stream"
+            : "Section already exists for this grade";
         return res.status(409).json({
           success: false,
-          message: "Section already exists for this grade",
+          message: msg,
         });
       }
       console.error("Create section error:", error);
@@ -361,6 +374,7 @@ router.patch(
       const update: any = {};
       if (req.body.label !== undefined) update.label = req.body.label;
       if (req.body.capacity !== undefined) update.capacity = req.body.capacity;
+      if (req.body.stream !== undefined) update.stream = req.body.stream;
 
       const section = await Section.findById(id);
       if (!section)

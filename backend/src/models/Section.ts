@@ -4,6 +4,7 @@ export interface ISection extends Document {
   label: string;
   normalizedLabel: string;
   grade: 9 | 10 | 11 | 12;
+  stream?: "natural" | "social";
   capacity?: number;
   createdAt: Date;
   updatedAt: Date;
@@ -19,17 +20,29 @@ const sectionSchema = new Schema<ISection>(
       trim: true,
     },
     grade: { type: Number, required: true, enum: [9, 10, 11, 12] },
+    // Optional stream for senior grades (11,12)
+    stream: {
+      type: String,
+      enum: ["natural", "social"],
+    },
     capacity: { type: Number },
   },
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
-sectionSchema.pre("validate", function (next) {
-  this.normalizedLabel = (this.label ?? "").trim().toLowerCase();
+sectionSchema.pre<ISection>("validate", function (next) {
+  // Ensure TypeScript knows the `this` type inside middleware.
+  const doc = this as ISection;
+  doc.normalizedLabel = (doc.label ?? "").trim().toLowerCase();
   next();
 });
 
-sectionSchema.index({ grade: 1, normalizedLabel: 1 }, { unique: true });
+// Make uniqueness include stream so senior grades can have same labeled sections
+// across different streams (e.g., "STEM" in Natural and Social).
+sectionSchema.index(
+  { grade: 1, normalizedLabel: 1, stream: 1 },
+  { unique: true }
+);
 
 const SectionModel: Model<ISection> =
   mongoose.models.Section || mongoose.model<ISection>("Section", sectionSchema);

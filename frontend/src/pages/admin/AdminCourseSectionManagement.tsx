@@ -596,14 +596,20 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                 <Select
                   value={filterStream}
                   onValueChange={(v: string) =>
-                    setFilterStream((v as "natural" | "social") || "")
+                    // Map the explicit "all" option back to an empty string
+                    // so the Select shows the placeholder (cleared state).
+                    setFilterStream(
+                      v === "all" ? "" : (v as "natural" | "social")
+                    )
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="All streams" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All streams</SelectItem>
+                    {/* Use a non-empty sentinel value for the "All" option
+            because Select items must not use an empty string. */}
+                    <SelectItem value="all">All streams</SelectItem>
                     <SelectItem value="natural">Natural Science</SelectItem>
                     <SelectItem value="social">Social Science</SelectItem>
                   </SelectContent>

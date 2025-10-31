@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { getAuthToken } from "@/lib/utils";
 import {
   Users,
   Search,
@@ -85,7 +86,7 @@ const apiBaseUrl =
   (import.meta.env.VITE_API_BASE_URL as string) ?? "http://localhost:5000";
 
 const authHeaders = () => {
-  const token = localStorage.getItem("token");
+  const token = getAuthToken();
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -102,6 +103,7 @@ const TeacherManagement = () => {
   // Data fetching
   const pendingQuery = useQuery({
     queryKey: ["head", "pending-teachers"],
+    enabled: !!getAuthToken(),
     queryFn: async (): Promise<Teacher[]> => {
       const res = await fetch(`${apiBaseUrl}/api/head/pending-teachers`, {
         headers: authHeaders(),
@@ -116,6 +118,7 @@ const TeacherManagement = () => {
 
   const approvedQuery = useQuery({
     queryKey: ["head", "approved-teachers"],
+    enabled: !!getAuthToken(),
     queryFn: async (): Promise<Teacher[]> => {
       const res = await fetch(
         `${apiBaseUrl}/api/head/teachers?status=approved`,

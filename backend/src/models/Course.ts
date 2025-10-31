@@ -4,6 +4,7 @@ export interface ICourse extends Document {
   name: string;
   normalizedName: string;
   grade: 9 | 10 | 11 | 12;
+  stream?: "natural" | "social";
   isMandatory: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -24,8 +25,9 @@ const courseSchema = new Schema<ICourse>(
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
-courseSchema.pre("validate", function (next) {
-  this.normalizedName = (this.name ?? "").trim().toLowerCase();
+courseSchema.pre<ICourse>("validate", function (next) {
+  const doc = this as ICourse;
+  doc.normalizedName = (doc.name ?? "").trim().toLowerCase();
   next();
 });
 

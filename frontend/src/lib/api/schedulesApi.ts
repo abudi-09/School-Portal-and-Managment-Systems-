@@ -15,7 +15,17 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error("API Error:", error.response?.status, error.response?.data);
+    // Log detailed information for both HTTP and network errors.
+    // When a network error occurs (connection reset, DNS, etc.) axios may not
+    // have a response property — include error.message and error.code.
+    console.error(
+      "API Error:",
+      { code: (error && error.code) || null, message: error?.message },
+      "responseStatus:",
+      error.response?.status ?? null,
+      "responseData:",
+      error.response?.data ?? null
+    );
     return Promise.reject(error);
   }
 );

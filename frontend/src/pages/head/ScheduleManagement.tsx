@@ -40,6 +40,14 @@ import TablePagination from "@/components/shared/TablePagination";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/useAuth";
 import {
+  listSectionsByGradeHead,
+  listCoursesByGrade,
+  type GradeLevel,
+  type SectionResponse,
+  type CourseResponse,
+} from "@/lib/api/courseSectionApi";
+import { getAuthToken } from "@/lib/utils";
+import {
   createClassSchedule,
   createExamSchedule,
   deleteClassSchedule,
@@ -95,15 +103,7 @@ const ScheduleManagement = () => {
   >(null);
   const [isEditingExam, setIsEditingExam] = useState(false);
 
-  // Filters
-  // Class filters
-  const [filterGrade, setFilterGrade] = useState<string>("all");
-  const [filterSection, setFilterSection] = useState<string>("all");
-  const [filterDay, setFilterDay] = useState<string>("all");
-  const [filterTeacher, setFilterTeacher] = useState<string>("all");
-  // Exam filters
-  const [filterExamType, setFilterExamType] = useState<string>("all");
-  const [filterExamRoom, setFilterExamRoom] = useState<string>("all");
+  // (Filter section removed) Page now shows full schedules without client-side filters
 
   // Form state
   const [formData, setFormData] = useState({
@@ -119,6 +119,26 @@ const ScheduleManagement = () => {
     type: "",
     invigilator: "",
   });
+
+  // Dynamic options for Add Class Period
+  const [selectedGrade, setSelectedGrade] = useState<GradeLevel | "">("");
+  const [selectedSection, setSelectedSection] = useState<string>("");
+  const [selectedStream, setSelectedStream] = useState<
+    "" | "natural" | "social"
+  >("");
+  const [availableSections, setAvailableSections] = useState<SectionResponse[]>(
+    []
+  );
+  const [availableSubjects, setAvailableSubjects] = useState<CourseResponse[]>(
+    []
+  );
+  const [availableStreams, setAvailableStreams] = useState<
+    Array<"natural" | "social">
+  >([]);
+  const [assignedTeacherIds, setAssignedTeacherIds] = useState<string[] | null>(
+    null
+  );
+  const [sectionsLoading, setSectionsLoading] = useState(false);
 
   const days = [
     "Monday",
@@ -182,10 +202,7 @@ const ScheduleManagement = () => {
   );
 
   const gradeOptions = useMemo(() => ["9", "10", "11", "12"], []);
-  const sectionOptions = useMemo(
-    () => ["A", "B", "C", "D", "E", "F", "G", "H", "I"],
-    []
-  );
+  // (Filter-related dynamic sections removed)
   const classSectionOptions = useMemo(() => {
     const grades = ["9", "10", "11", "12"];
     const sections = ["A", "B", "C", "D", "E", "F", "G", "H", "I"];
@@ -196,23 +213,12 @@ const ScheduleManagement = () => {
     return combos;
   }, []);
 
-  // Load class schedules when filters change
+  // Load class schedules (no page-level filters)
   useEffect(() => {
     const loadClass = async () => {
-      console.log("Loading class schedules with filters:", {
-        filterGrade,
-        filterSection,
-        filterDay,
-        filterTeacher,
-      });
       try {
         setLoadingClass(true);
-        const items = await getClassSchedules({
-          grade: filterGrade === "all" ? undefined : filterGrade,
-          section: filterSection === "all" ? undefined : filterSection,
-          day: filterDay === "all" ? undefined : filterDay,
-          teacherId: filterTeacher === "all" ? undefined : filterTeacher,
-        });
+        const items = await getClassSchedules();
         const mapped: ClassScheduleItem[] = items.map(
           (it: BackendClassSchedule) => {
             const teacher = teachers.find((t) => t._id === it.teacherId);
@@ -233,12 +239,14 @@ const ScheduleManagement = () => {
           }
         );
         setClassSchedule(mapped);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Failed to load class schedules:", err);
         toast({
           title: "Failed to load class schedules",
           description: String(
-            err?.response?.data?.message ?? err?.message ?? err
+            (err as any)?.response?.data?.message ??
+              (err as any)?.message ??
+              err
           ),
           variant: "destructive" as any,
         });
@@ -248,17 +256,14 @@ const ScheduleManagement = () => {
     };
     void loadClass();
     setClassPage(1);
-  }, [filterGrade, filterSection, filterDay, filterTeacher, teachers, toast]);
+  }, [teachers, toast]);
 
-  // Load exam schedules when filters change
+  // Load exam schedules (no page-level filters)
   useEffect(() => {
     const loadExam = async () => {
       try {
         setLoadingExam(true);
-        const items = await getExamSchedules({
-          type: filterExamType === "all" ? undefined : filterExamType,
-          room: filterExamRoom === "all" ? undefined : filterExamRoom,
-        });
+        const items = await getExamSchedules();
         const mapped: ExamScheduleItem[] = items.map(
           (it: BackendExamSchedule) => ({
             _id: it._id,
@@ -272,11 +277,13 @@ const ScheduleManagement = () => {
           })
         );
         setExamSchedule(mapped);
-      } catch (err: any) {
+      } catch (err: unknown) {
         toast({
           title: "Failed to load exam schedules",
           description: String(
-            err?.response?.data?.message ?? err?.message ?? err
+            (err as any)?.response?.data?.message ??
+              (err as any)?.message ??
+              err
           ),
           variant: "destructive" as any,
         });
@@ -286,7 +293,7 @@ const ScheduleManagement = () => {
     };
     void loadExam();
     setExamPage(1);
-  }, [filterExamType, filterExamRoom, toast]);
+  }, [toast]);
 
   // Load teachers on component mount
   useEffect(() => {
@@ -301,6 +308,8 @@ const ScheduleManagement = () => {
     };
     void loadTeachers();
   }, []);
+
+  // (Page-level section filter removed)
 
   // Load rooms on component mount
   useEffect(() => {
@@ -329,12 +338,219 @@ const ScheduleManagement = () => {
       type: "",
       invigilator: "",
     });
+    setSelectedGrade("");
+    setSelectedSection("");
+    setSelectedStream("");
+    setAvailableSections([]);
+    setAvailableSubjects([]);
+    setAssignedTeacherIds(null);
+  };
+
+  // Load sections whenever grade changes
+  useEffect(() => {
+    const loadSections = async () => {
+      try {
+        setSectionsLoading(true);
+        // Require authentication before requesting admin resources
+        const token = getAuthToken();
+        if (!token || !isAuthenticated) {
+          setAvailableSections([]);
+          setSelectedSection("");
+          return;
+        }
+        if (!selectedGrade) {
+          setAvailableSections([]);
+          setSelectedSection("");
+          return;
+        }
+        const res = await listSectionsByGradeHead(selectedGrade as GradeLevel);
+        setAvailableSections(res.data.sections);
+        // Clear section if not available anymore
+        setSelectedSection((prev) =>
+          res.data.sections.some((s) => s.label === prev) ? prev : ""
+        );
+      } catch (e) {
+        setAvailableSections([]);
+      } finally {
+        setSectionsLoading(false);
+      }
+    };
+    void loadSections();
+    // For senior grades, pre-load stream options from available courses
+    const loadStreams = async () => {
+      try {
+        const token = getAuthToken();
+        if (
+          !token ||
+          !selectedGrade ||
+          (selectedGrade !== 11 && selectedGrade !== 12)
+        ) {
+          setAvailableStreams([]);
+          return;
+        }
+        const res = await listCoursesByGrade(selectedGrade as GradeLevel);
+        const present = Array.from(
+          new Set(
+            (res.data.courses || [])
+              .map((c) => c.stream)
+              .filter((s): s is "natural" | "social" => !!s)
+          )
+        );
+        setAvailableStreams(present);
+      } catch (e) {
+        setAvailableStreams([]);
+      }
+    };
+    void loadStreams();
+  }, [selectedGrade, isAuthenticated]);
+
+  // Load subjects whenever grade/stream changes
+  useEffect(() => {
+    const loadSubjects = async () => {
+      try {
+        const token = getAuthToken();
+        if (!token || !isAuthenticated) {
+          setAvailableSubjects([]);
+          return;
+        }
+        if (!selectedGrade) {
+          setAvailableSubjects([]);
+          return;
+        }
+        const isSenior = selectedGrade === 11 || selectedGrade === 12;
+        if (isSenior && !selectedStream) {
+          setAvailableSubjects([]);
+          return;
+        }
+        const res = await listCoursesByGrade(
+          selectedGrade as GradeLevel,
+          selectedGrade === 11 || selectedGrade === 12
+            ? selectedStream || undefined
+            : undefined
+        );
+        setAvailableSubjects(res.data.courses);
+        // If current subject is not in the list, clear it
+        setFormData((prev) =>
+          res.data.courses.some((c) => c.name === prev.subject)
+            ? prev
+            : { ...prev, subject: "" }
+        );
+      } catch (e) {
+        setAvailableSubjects([]);
+      }
+    };
+    void loadSubjects();
+  }, [selectedGrade, selectedStream, isAuthenticated]);
+
+  // Load assigned teachers for selected class+subject (if available) to narrow choices
+  useEffect(() => {
+    const loadAssignedTeachers = async () => {
+      try {
+        setAssignedTeacherIds(null);
+        if (!selectedGrade || !selectedSection || !formData.subject) return;
+        const classId = `${selectedGrade}${selectedSection}`;
+        const apiBaseUrl =
+          import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+        const token = localStorage.getItem("token");
+        const res = await fetch(
+          `${apiBaseUrl}/api/head/subject-assignments?classId=${encodeURIComponent(
+            classId
+          )}`,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          }
+        );
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || !payload?.success) {
+          setAssignedTeacherIds(null);
+          return;
+        }
+        type ApiAssignment = { subject: string; teacherName?: string };
+        const matches: string[] = (payload.data?.assignments ?? [])
+          .filter(
+            (a: ApiAssignment) =>
+              a.subject === formData.subject && a.teacherName
+          )
+          .map((a: ApiAssignment) => a.teacherName as string);
+        if (matches.length === 0) {
+          setAssignedTeacherIds([]);
+          return;
+        }
+        // Map teacher names to ids
+        const matchedIds = teachers
+          .filter((t) =>
+            matches.includes(`${t.firstName} ${t.lastName}`.trim())
+          )
+          .map((t) => t._id);
+        setAssignedTeacherIds(matchedIds);
+      } catch (e) {
+        setAssignedTeacherIds(null);
+      }
+    };
+    void loadAssignedTeachers();
+  }, [selectedGrade, selectedSection, formData.subject, teachers]);
+
+  // Helper to detect time overlap
+  const timesOverlap = (
+    aStart: string,
+    aEnd: string,
+    bStart: string,
+    bEnd: string
+  ) => {
+    const toMin = (t: string) => {
+      const [h, m] = t.split(":").map((n) => Number(n));
+      return h * 60 + m;
+    };
+    const as = toMin(aStart);
+    const ae = toMin(aEnd);
+    const bs = toMin(bStart);
+    const be = toMin(bEnd);
+    return as < be && bs < ae;
   };
 
   const handleAddClassPeriod = async () => {
     try {
+      // Basic validation per requirements
+      if (!selectedGrade) throw new Error("Grade is required");
+      if (!selectedSection) throw new Error("Section is required");
+      const isSenior = selectedGrade === 11 || selectedGrade === 12;
+      if (isSenior && !selectedStream)
+        throw new Error("Stream is required for grades 11–12");
+      if (!formData.subject)
+        throw new Error("Subject is required and must be selected");
+      if (!formData.day) throw new Error("Day is required");
+      if (!formData.startTime || !formData.endTime)
+        throw new Error("Start and end time are required");
+      if (formData.startTime >= formData.endTime)
+        throw new Error("Start time must be before end time");
+
+      // Schedule conflict prevention: teacher overlaps on same day
+      if (formData.teacher) {
+        const existing = await getClassSchedules({
+          teacherId: formData.teacher,
+          day: formData.day,
+        });
+        const conflict = existing.some((s) =>
+          timesOverlap(
+            formData.startTime,
+            formData.endTime,
+            s.startTime,
+            s.endTime
+          )
+        );
+        if (conflict)
+          throw new Error(
+            "Selected teacher has a conflicting period at the same time."
+          );
+      }
+
+      // Compute classId code from grade + section
+      const classId = `${selectedGrade}${selectedSection}`;
       const created = await createClassSchedule({
-        section: formData.class,
+        section: classId,
         day: formData.day,
         period: formData.period || undefined,
         startTime: formData.startTime,
@@ -668,85 +884,9 @@ const ScheduleManagement = () => {
         </TabsList>
 
         <TabsContent value="class" className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-end gap-3 md:gap-4 md:justify-between">
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 w-full md:w-auto">
-              <div className="space-y-1">
-                <Label>Grade</Label>
-                <Select value={filterGrade} onValueChange={setFilterGrade}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    {gradeOptions.map((g) => (
-                      <SelectItem key={g} value={g}>
-                        {g}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Section</Label>
-                <Select value={filterSection} onValueChange={setFilterSection}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    {sectionOptions.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Day</Label>
-                <Select value={filterDay} onValueChange={setFilterDay}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All days" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    {days.map((d) => (
-                      <SelectItem key={d} value={d}>
-                        {d}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Teacher</Label>
-                <Select value={filterTeacher} onValueChange={setFilterTeacher}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All teachers" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    {teachers.map((t) => (
-                      <SelectItem key={t._id} value={t._id}>
-                        {t.firstName} {t.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+          <div className="flex items-center md:justify-between gap-3">
+            <div />
             <div className="flex items-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setFilterGrade("all");
-                  setFilterSection("all");
-                  setFilterDay("all");
-                  setFilterTeacher("all");
-                }}
-              >
-                Clear Filters
-              </Button>
               <Dialog
                 open={open}
                 onOpenChange={(isOpen) => {
@@ -838,35 +978,145 @@ const ScheduleManagement = () => {
                         />
                       </div>
                     </div>
+                    {/* Dynamic Grade / Section / Stream */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>Grade</Label>
+                        <Select
+                          value={selectedGrade ? String(selectedGrade) : ""}
+                          onValueChange={(value) => {
+                            const g = Number(value) as GradeLevel;
+                            setSelectedGrade(g);
+                            // Clear dependent selections
+                            setSelectedSection("");
+                            setSelectedStream("");
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select grade" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {gradeOptions.map((g) => (
+                              <SelectItem key={g} value={g}>
+                                {g}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Section</Label>
+                        <Select
+                          value={selectedSection}
+                          onValueChange={(value) => setSelectedSection(value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                selectedGrade
+                                  ? sectionsLoading
+                                    ? "Loading sections..."
+                                    : "Select section"
+                                  : "Select grade first"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {!selectedGrade && (
+                              <SelectItem value="__disabled" disabled>
+                                Select grade first
+                              </SelectItem>
+                            )}
+                            {selectedGrade && sectionsLoading && (
+                              <SelectItem value="__loading" disabled>
+                                Loading sections...
+                              </SelectItem>
+                            )}
+                            {selectedGrade &&
+                              !sectionsLoading &&
+                              availableSections.length === 0 && (
+                                <SelectItem value="__empty" disabled>
+                                  No sections available for this grade
+                                </SelectItem>
+                              )}
+                            {selectedGrade &&
+                              !sectionsLoading &&
+                              availableSections.length > 0 &&
+                              availableSections.map((s) => (
+                                <SelectItem key={s.id} value={s.label}>
+                                  {s.label}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {(selectedGrade === 11 || selectedGrade === 12) && (
+                        <div className="space-y-2">
+                          <Label>Stream</Label>
+                          <Select
+                            value={selectedStream}
+                            onValueChange={(value) =>
+                              setSelectedStream(value as "natural" | "social")
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select stream" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(availableStreams.length > 0
+                                ? availableStreams
+                                : (["natural", "social"] as Array<
+                                    "natural" | "social"
+                                  >)
+                              ).map((s) => (
+                                <SelectItem key={s} value={s}>
+                                  {s === "natural"
+                                    ? "Natural Science"
+                                    : "Social Science"}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
                     <div className="space-y-2">
-                      <Label>Class</Label>
+                      <Label>Subject</Label>
                       <Select
-                        value={formData.class}
+                        value={formData.subject}
                         onValueChange={(value) =>
-                          setFormData({ ...formData, class: value })
+                          setFormData({ ...formData, subject: value })
                         }
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select class" />
+                          <SelectValue
+                            placeholder={
+                              !selectedGrade || !selectedSection
+                                ? "Select grade and section first"
+                                : (selectedGrade === 11 ||
+                                    selectedGrade === 12) &&
+                                  !selectedStream
+                                ? "Select stream first"
+                                : "Select subject"
+                            }
+                          />
                         </SelectTrigger>
                         <SelectContent>
-                          {classSectionOptions.map((s) => (
-                            <SelectItem key={s} value={s}>
-                              {s}
+                          {availableSubjects.map((c) => (
+                            <SelectItem key={c.id} value={c.name}>
+                              {c.name}
+                              {(selectedGrade === 11 || selectedGrade === 12) &&
+                              c.stream
+                                ? ` — ${
+                                    c.stream === "natural"
+                                      ? "Natural"
+                                      : "Social"
+                                  }`
+                                : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Subject</Label>
-                      <Input
-                        placeholder="Enter subject"
-                        value={formData.subject}
-                        onChange={(e) =>
-                          setFormData({ ...formData, subject: e.target.value })
-                        }
-                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Teacher</Label>
@@ -880,7 +1130,12 @@ const ScheduleManagement = () => {
                           <SelectValue placeholder="Select teacher" />
                         </SelectTrigger>
                         <SelectContent>
-                          {teachers.map((teacher) => (
+                          {(assignedTeacherIds && assignedTeacherIds.length > 0
+                            ? teachers.filter((t) =>
+                                assignedTeacherIds.includes(t._id)
+                              )
+                            : teachers
+                          ).map((teacher) => (
                             <SelectItem key={teacher._id} value={teacher._id}>
                               {teacher.firstName} {teacher.lastName}
                             </SelectItem>
@@ -1029,58 +1284,9 @@ const ScheduleManagement = () => {
         </TabsContent>
 
         <TabsContent value="exam" className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-end gap-3 md:gap-4 md:justify-between">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full md:w-auto">
-              <div className="space-y-1">
-                <Label>Exam Type</Label>
-                <Select
-                  value={filterExamType}
-                  onValueChange={setFilterExamType}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="Mid-Term">Mid-Term</SelectItem>
-                    <SelectItem value="Final">Final</SelectItem>
-                    <SelectItem value="Quiz">Quiz</SelectItem>
-                    <SelectItem value="Test">Test</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Room</Label>
-                <Select
-                  value={filterExamRoom}
-                  onValueChange={setFilterExamRoom}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All rooms" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    {rooms
-                      .filter((r) => r.active)
-                      .map((r) => (
-                        <SelectItem key={r._id} value={r.name}>
-                          {r.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+          <div className="flex items-center md:justify-between gap-3">
+            <div />
             <div className="flex items-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setFilterExamType("all");
-                  setFilterExamRoom("all");
-                }}
-              >
-                Clear Filters
-              </Button>
               <Dialog
                 open={roomsDialogOpen}
                 onOpenChange={(isOpen) => {

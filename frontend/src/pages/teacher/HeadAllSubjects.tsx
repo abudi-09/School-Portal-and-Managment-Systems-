@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/useAuth";
+import { getAuthToken } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -108,11 +109,16 @@ export default function HeadAllSubjects() {
       const selected = classes.find((c) => c.classId === selectedClassId);
       if (!selected) return;
       try {
-        const token = localStorage.getItem("token");
+        const token = getAuthToken();
+        // If there's no auth token, don't call admin endpoints — they'll return 403.
+        if (!token) {
+          setSubjects([]);
+          return;
+        }
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         };
-        if (token) headers.Authorization = `Bearer ${token}`;
         const res = await fetch(
           `${apiBaseUrl}/api/admin/courses?grade=${selected.grade}`,
           { headers }

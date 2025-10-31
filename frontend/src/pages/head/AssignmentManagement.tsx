@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getAuthToken } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import {
   ClipboardList,
@@ -101,7 +102,7 @@ const AssignmentManagement = () => {
 
   const fetchServerData = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = getAuthToken();
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
@@ -150,6 +151,14 @@ const AssignmentManagement = () => {
           }
         } catch (err) {
           console.warn("Failed to fetch class head assignments", err);
+        }
+        // If there's no auth token, avoid calling admin/head endpoints that require auth
+        if (!token) {
+          // Ensure dependent UI state is empty/initialised
+          setTeachers([]);
+          setSubjectAssignmentsServer([]);
+          setSubjectAssignments([]);
+          return;
         }
       } else {
         console.warn(
@@ -272,11 +281,19 @@ const AssignmentManagement = () => {
     const loadForClass = async () => {
       if (!selectedClass) return;
       try {
+        // Require auth token before calling admin endpoints — avoid 403 when
+        // not logged in.
         const token = localStorage.getItem("token");
+        if (!token) {
+          setSubjectOptions([]);
+          setSubjectAssignmentsServer([]);
+          setSubjectAssignments([]);
+          return;
+        }
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         };
-        if (token) headers.Authorization = `Bearer ${token}`;
 
         const cls = classes.find((c) => c.id === selectedClass);
         if (!cls || !cls.grade) return;

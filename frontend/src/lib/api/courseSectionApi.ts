@@ -13,6 +13,7 @@ export type SectionPayload = {
   grade: GradeLevel;
   label: string;
   capacity?: number;
+  stream?: "natural" | "social";
 };
 
 const API_BASE_URL =
@@ -74,6 +75,14 @@ export async function listSectionsByGrade(grade: GradeLevel) {
     success: boolean;
     data: { sections: SectionResponse[] };
   }>(`/api/admin/sections?grade=${grade}`);
+}
+
+// Head-role read-only sections listing
+export async function listSectionsByGradeHead(grade: GradeLevel) {
+  return authorizedFetch<{
+    success: boolean;
+    data: { sections: SectionResponse[] };
+  }>(`/api/head/sections?grade=${grade}`);
 }
 
 export async function listClasses() {
@@ -138,7 +147,7 @@ export async function updateCourse(
 
 export async function updateSection(
   id: string,
-  payload: { label?: string; capacity?: number }
+  payload: { label?: string; capacity?: number; stream?: "natural" | "social" }
 ) {
   return authorizedFetch<{
     success: boolean;
@@ -163,5 +172,6 @@ export type SectionResponse = {
   label: string;
   grade: GradeLevel;
   capacity?: number;
+  stream?: "natural" | "social";
   createdAt?: string;
 };

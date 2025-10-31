@@ -1,6 +1,7 @@
 import express from "express";
 import { body, param, validationResult } from "express-validator";
 import User, { type IUser } from "../models/User";
+import Section from "../models/Section";
 import ClassHeadAssignment from "../models/ClassHeadAssignment";
 import ClassSubjectAssignment from "../models/ClassSubjectAssignment";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
@@ -931,3 +932,31 @@ router.put(
 );
 
 export default router;
+// Read-only list of sections by grade (Head access)
+// GET /api/head/sections?grade=9
+router.get(
+  "/sections",
+  authMiddleware,
+  authorizeRoles("head"),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const gradeNum = Number(req.query.grade);
+      if (![9, 10, 11, 12].includes(gradeNum)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or missing grade. Expected 9,10,11,12.",
+        });
+      }
+
+      const sections = await Section.find({ grade: gradeNum }).sort({
+        createdAt: -1,
+      });
+      return res.json({ success: true, data: { sections } });
+    } catch (error: any) {
+      console.error("Head list sections error:", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Server error retrieving sections" });
+    }
+  }
+);

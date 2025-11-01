@@ -258,10 +258,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const academicInfo: Record<string, unknown> = {};
         if (data.subject) academicInfo.subjects = [data.subject];
         if (data.grade) academicInfo.grade = String(data.grade);
+        if (data.stream) academicInfo.stream = data.stream; // persist stream for grades 11/12
         if (Object.keys(academicInfo).length > 0) {
           payload.academicInfo = academicInfo as {
             subjects?: string[];
             grade?: string;
+            stream?: "natural" | "social";
           };
         }
       }

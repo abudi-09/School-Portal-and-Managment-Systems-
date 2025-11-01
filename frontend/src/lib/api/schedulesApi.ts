@@ -185,6 +185,8 @@ export async function getTeachers() {
 export async function getTeachersBySubject(params: {
   subject: string;
   classId?: string;
+  grade?: number | string;
+  stream?: "natural" | "social";
 }) {
   const { data } = await api.get<{
     success: boolean;

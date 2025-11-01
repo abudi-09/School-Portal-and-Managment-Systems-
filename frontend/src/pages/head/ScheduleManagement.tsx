@@ -352,7 +352,7 @@ const ScheduleManagement = () => {
     setAssignedTeacherIds(null);
   };
 
-  // Load sections whenever grade changes
+  // Load sections whenever grade or (for senior) stream changes
   useEffect(() => {
     const loadSections = async () => {
       try {
@@ -369,7 +369,17 @@ const ScheduleManagement = () => {
           setSelectedSection("");
           return;
         }
-        const res = await listSectionsByGradeHead(selectedGrade as GradeLevel);
+        // For grades 11 & 12, require stream selection before loading sections
+        const isSenior = selectedGrade === 11 || selectedGrade === 12;
+        if (isSenior && !selectedStream) {
+          setAvailableSections([]);
+          setSelectedSection("");
+          return;
+        }
+        const res = await listSectionsByGradeHead(
+          selectedGrade as GradeLevel,
+          isSenior ? selectedStream || undefined : undefined
+        );
         setAvailableSections(res.data.sections);
         // Clear section if not available anymore
         setSelectedSection((prev) =>
@@ -408,7 +418,7 @@ const ScheduleManagement = () => {
       }
     };
     void loadStreams();
-  }, [selectedGrade, isAuthenticated]);
+  }, [selectedGrade, selectedStream, isAuthenticated]);
 
   // Load subjects whenever grade/section/stream changes
   useEffect(() => {
@@ -463,6 +473,11 @@ const ScheduleManagement = () => {
         const list = await getTeachersBySubject({
           subject: formData.subject,
           classId,
+          grade: selectedGrade,
+          stream:
+            selectedGrade === 11 || selectedGrade === 12
+              ? selectedStream || undefined
+              : undefined,
         });
         setSubjectTeachers(list);
         // If exactly one eligible teacher, preselect it
@@ -474,7 +489,7 @@ const ScheduleManagement = () => {
       }
     };
     void loadSubjectTeachers();
-  }, [formData.subject, selectedGrade, selectedSection]);
+  }, [formData.subject, selectedGrade, selectedSection, selectedStream]);
 
   // Helper to detect time overlap
   const timesOverlap = (
@@ -986,15 +1001,24 @@ const ScheduleManagement = () => {
                         <Select
                           value={selectedSection}
                           onValueChange={(value) => setSelectedSection(value)}
+                          disabled={
+                            !selectedGrade ||
+                            ((selectedGrade === 11 || selectedGrade === 12) &&
+                              !selectedStream)
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue
                               placeholder={
-                                selectedGrade
-                                  ? sectionsLoading
-                                    ? "Loading sections..."
-                                    : "Select section"
-                                  : "Select grade first"
+                                !selectedGrade
+                                  ? "Select grade first"
+                                  : (selectedGrade === 11 ||
+                                      selectedGrade === 12) &&
+                                    !selectedStream
+                                  ? "Select stream first"
+                                  : sectionsLoading
+                                  ? "Loading sections..."
+                                  : "Select section"
                               }
                             />
                           </SelectTrigger>
@@ -1004,6 +1028,13 @@ const ScheduleManagement = () => {
                                 Select grade first
                               </SelectItem>
                             )}
+                            {selectedGrade &&
+                              (selectedGrade === 11 || selectedGrade === 12) &&
+                              !selectedStream && (
+                                <SelectItem value="__stream" disabled>
+                                  Select stream first
+                                </SelectItem>
+                              )}
                             {selectedGrade && sectionsLoading && (
                               <SelectItem value="__loading" disabled>
                                 Loading sections...
@@ -1032,9 +1063,11 @@ const ScheduleManagement = () => {
                           <Label>Stream</Label>
                           <Select
                             value={selectedStream}
-                            onValueChange={(value) =>
-                              setSelectedStream(value as "natural" | "social")
-                            }
+                            onValueChange={(value) => {
+                              setSelectedStream(value as "natural" | "social");
+                              // Reset section when stream changes to avoid mismatches
+                              setSelectedSection("");
+                            }}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select stream" />

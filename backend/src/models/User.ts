@@ -122,6 +122,11 @@ const userSchema = new Schema<IUser>(
       class: String,
       section: String,
       grade: String,
+      // For teachers: the main stream they teach in senior grades (11/12)
+      stream: {
+        type: String,
+        enum: ["natural", "social"],
+      },
       subjects: [String],
     },
     // For teachers: list of class ids (canonical strings like "10-A") they are assigned to
@@ -223,6 +228,9 @@ userSchema.index({ status: 1 });
 userSchema.index({ "academicInfo.studentId": 1 });
 userSchema.index({ "employmentInfo.employeeId": 1 });
 userSchema.index({ assignedClassIds: 1 });
+userSchema.index({ "academicInfo.grade": 1 });
+userSchema.index({ "academicInfo.stream": 1 });
+userSchema.index({ "academicInfo.subjects": 1 });
 
 // Pre-save middleware to hash password
 userSchema.pre("save", async function (next) {

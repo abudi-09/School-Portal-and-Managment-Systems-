@@ -338,7 +338,10 @@ router.get(
   async (req: express.Request, res: express.Response) => {
     try {
       const subject = (req.query.subject as string | undefined)?.trim();
-      const classId = (req.query.classId as string | undefined)?.toLowerCase();
+      // Normalize classId to lowercase to match how assignments are stored
+      const classId = (req.query.classId as string | undefined)?.trim();
+      const gradeParam = req.query.grade as string | undefined;
+      const streamParam = (req.query.stream as string | undefined)?.trim();
       if (!subject) {
         return res.status(400).json({
           success: false,
@@ -346,8 +349,20 @@ router.get(
         });
       }
 
+      const escapeRegex = (s: string) =>
+        s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
       const filter: Record<string, unknown> = { subject };
-      if (classId) filter.classId = classId;
+      if (classId) {
+        filter.classId = classId.toLowerCase();
+      } else if (gradeParam) {
+        // ClassSubjectAssignment stores grade as an uppercase string like "11"
+        filter.grade = String(gradeParam).toUpperCase();
+        // Note: stream filtering is not persisted on the assignment. For now, stream is accepted
+        // to align with the API contract but cannot be enforced without extending the data model.
+        // We keep the parameter for forward-compatibility.
+        void streamParam; // placeholder acknowledgment
+      }
 
       const assignments = await (ClassSubjectAssignment as any)
         .find(filter)
@@ -361,12 +376,39 @@ router.get(
         )
       );
 
-      if (teacherIds.length === 0) {
+      // Fallback/augment: also match teachers from profile (grade/subject and stream for 11/12)
+      // This allows listing eligible teachers even before explicit class assignments exist.
+      const byProfileIds: string[] = [];
+      if (gradeParam) {
+        const gradeStr = String(gradeParam).trim();
+        const subjRegex = new RegExp(`^${escapeRegex(subject)}$`, "i");
+        const profileQuery: Record<string, unknown> = {
+          role: "teacher",
+          isActive: true,
+          "academicInfo.grade": gradeStr,
+          "academicInfo.subjects": { $elemMatch: { $regex: subjRegex } },
+        };
+        const gNum = Number(gradeStr);
+        if ((gNum === 11 || gNum === 12) && streamParam) {
+          // Requires stream match for senior grades if provided and stored
+          (profileQuery as any)["academicInfo.stream"] = streamParam;
+        }
+        const profileTeachers = await User.find(profileQuery)
+          .select("_id")
+          .lean();
+        for (const t of profileTeachers) {
+          byProfileIds.push(String((t as any)._id));
+        }
+      }
+
+      const unionIds = Array.from(new Set([...teacherIds, ...byProfileIds]));
+
+      if (unionIds.length === 0) {
         return res.json({ success: true, data: { teachers: [] } });
       }
 
       const teachers = await User.find({
-        _id: { $in: teacherIds },
+        _id: { $in: unionIds },
         role: "teacher",
         isActive: true,
       })

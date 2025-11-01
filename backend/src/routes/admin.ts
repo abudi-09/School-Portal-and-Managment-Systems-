@@ -132,7 +132,10 @@ router.post(
       .optional()
       .isIn(["natural", "social"])
       .withMessage("Stream must be 'natural' or 'social'"),
-    body("isCommon").optional().isBoolean().withMessage("isCommon must be boolean"),
+    body("isCommon")
+      .optional()
+      .isBoolean()
+      .withMessage("isCommon must be boolean"),
     body("isMandatory")
       .optional()
       .isBoolean()
@@ -191,7 +194,9 @@ router.post(
         // Provide a more helpful duplicate response
         try {
           const { grade, name, stream, isCommon } = req.body as any;
-          const normalizedName = String(name || "").trim().toLowerCase();
+          const normalizedName = String(name || "")
+            .trim()
+            .toLowerCase();
           const gradeNum = Number(grade);
           let conflict: any = null;
           if (isCommon) {
@@ -238,19 +243,17 @@ router.post(
           return res.status(409).json({
             success: false,
             code: "DUPLICATE_COURSE",
-            message:
-              conflict?.isCommon
-                ? `A common course named '${conflict.name}' already exists for grade ${gradeNum}.`
-                : conflict?.stream
-                ? `Course '${conflict.name}' already exists for grade ${gradeNum} in the '${conflict.stream}' stream.`
-                : "Course already exists for this grade/stream/common scope",
+            message: conflict?.isCommon
+              ? `A common course named '${conflict.name}' already exists for grade ${gradeNum}.`
+              : conflict?.stream
+              ? `Course '${conflict.name}' already exists for grade ${gradeNum} in the '${conflict.stream}' stream.`
+              : "Course already exists for this grade/stream/common scope",
             conflict: detail,
           });
         } catch (lookupErr) {
           return res.status(409).json({
             success: false,
-            message:
-              "Course already exists for this grade/stream/common scope",
+            message: "Course already exists for this grade/stream/common scope",
           });
         }
       }
@@ -279,7 +282,10 @@ router.patch(
       .optional()
       .isIn(["natural", "social"])
       .withMessage("Stream must be 'natural' or 'social'"),
-    body("isCommon").optional().isBoolean().withMessage("isCommon must be boolean"),
+    body("isCommon")
+      .optional()
+      .isBoolean()
+      .withMessage("isCommon must be boolean"),
     body("isMandatory")
       .optional()
       .isBoolean()
@@ -302,7 +308,8 @@ router.patch(
       if (req.body.isMandatory !== undefined)
         update.isMandatory = !!req.body.isMandatory;
       if (req.body.stream !== undefined) update.stream = req.body.stream;
-      if (req.body.isCommon !== undefined) update.isCommon = !!req.body.isCommon;
+      if (req.body.isCommon !== undefined)
+        update.isCommon = !!req.body.isCommon;
 
       const course = await Course.findById(id);
       if (!course)
@@ -312,8 +319,10 @@ router.patch(
 
       // For grades 11 and 12: enforce XOR between stream and isCommon
       if (course.grade === 11 || course.grade === 12) {
-        const nextStream = update.stream !== undefined ? update.stream : course.stream;
-        const nextCommon = update.isCommon !== undefined ? update.isCommon : course.isCommon;
+        const nextStream =
+          update.stream !== undefined ? update.stream : course.stream;
+        const nextCommon =
+          update.isCommon !== undefined ? update.isCommon : course.isCommon;
         const hasStream = !!nextStream;
         const common = !!nextCommon;
         if (!hasStream && !common) {
@@ -350,30 +359,50 @@ router.patch(
           const gradeNum = Number(req.body.grade ?? current?.grade);
           // Determine intended post-update state
           const nextName = (req.body.name ?? current?.name) as string;
-          const normalizedName = String(nextName || "").trim().toLowerCase();
+          const normalizedName = String(nextName || "")
+            .trim()
+            .toLowerCase();
           const nextStream = req.body.stream ?? current?.stream;
           const nextCommon = req.body.isCommon ?? current?.isCommon;
           let conflict: any = null;
           if (nextCommon) {
             conflict =
-              (await Course.findOne({ grade: gradeNum, normalizedName, isCommon: true }).lean()) ||
-              (await Course.findOne({ grade: gradeNum, normalizedName, stream: { $in: ["natural", "social"] } }).lean());
+              (await Course.findOne({
+                grade: gradeNum,
+                normalizedName,
+                isCommon: true,
+              }).lean()) ||
+              (await Course.findOne({
+                grade: gradeNum,
+                normalizedName,
+                stream: { $in: ["natural", "social"] },
+              }).lean());
           } else if (nextStream) {
             conflict =
-              (await Course.findOne({ grade: gradeNum, normalizedName, stream: nextStream }).lean()) ||
-              (await Course.findOne({ grade: gradeNum, normalizedName, isCommon: true }).lean());
+              (await Course.findOne({
+                grade: gradeNum,
+                normalizedName,
+                stream: nextStream,
+              }).lean()) ||
+              (await Course.findOne({
+                grade: gradeNum,
+                normalizedName,
+                isCommon: true,
+              }).lean());
           } else {
-            conflict = await Course.findOne({ grade: gradeNum, normalizedName }).lean();
+            conflict = await Course.findOne({
+              grade: gradeNum,
+              normalizedName,
+            }).lean();
           }
           return res.status(409).json({
             success: false,
             code: "DUPLICATE_COURSE",
-            message:
-              conflict?.isCommon
-                ? `A common course named '${conflict.name}' already exists for grade ${gradeNum}.`
-                : conflict?.stream
-                ? `Course '${conflict.name}' already exists for grade ${gradeNum} in the '${conflict.stream}' stream.`
-                : "Course already exists for this grade/stream/common scope",
+            message: conflict?.isCommon
+              ? `A common course named '${conflict.name}' already exists for grade ${gradeNum}.`
+              : conflict?.stream
+              ? `Course '${conflict.name}' already exists for grade ${gradeNum} in the '${conflict.stream}' stream.`
+              : "Course already exists for this grade/stream/common scope",
             conflict: conflict
               ? {
                   id: conflict._id?.toString?.(),

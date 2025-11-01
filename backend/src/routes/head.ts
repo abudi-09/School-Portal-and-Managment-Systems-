@@ -328,6 +328,64 @@ router.get(
   }
 );
 
+// @route   GET /api/head/teachers/by-subject
+// @desc    Get teachers who teach a given subject; if classId provided, limit to that class's assignment
+// @access  Private/Head+Admin
+router.get(
+  "/teachers/by-subject",
+  authMiddleware,
+  authorizeRoles("head", "admin"),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const subject = (req.query.subject as string | undefined)?.trim();
+      const classId = (req.query.classId as string | undefined)?.toLowerCase();
+      if (!subject) {
+        return res.status(400).json({
+          success: false,
+          message: "Query parameter 'subject' is required",
+        });
+      }
+
+      const filter: Record<string, unknown> = { subject };
+      if (classId) filter.classId = classId;
+
+      const assignments = await (ClassSubjectAssignment as any)
+        .find(filter)
+        .select("teacher")
+        .lean();
+      const teacherIds = Array.from(
+        new Set(
+          (assignments as Array<{ teacher?: mongoose.Types.ObjectId }>)
+            .map((a) => a.teacher?.toString())
+            .filter(Boolean) as string[]
+        )
+      );
+
+      if (teacherIds.length === 0) {
+        return res.json({ success: true, data: { teachers: [] } });
+      }
+
+      const teachers = await User.find({
+        _id: { $in: teacherIds },
+        role: "teacher",
+        isActive: true,
+      })
+        .select("firstName lastName email role isActive")
+        .lean();
+
+      res.json({ success: true, data: { teachers } });
+    } catch (error: any) {
+      console.error("Get teachers by subject error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error retrieving teachers by subject",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
 // @route   GET /api/head/class-assignments
 // @desc    List head teacher assignments per class
 // @access  Private/Head+Admin
@@ -933,7 +991,7 @@ router.put(
 
 export default router;
 // Read-only list of sections by grade (Head access)
-// GET /api/head/sections?grade=9
+// GET /api/head/sections?grade=9[&stream=natural|social]
 router.get(
   "/sections",
   authMiddleware,
@@ -948,7 +1006,11 @@ router.get(
         });
       }
 
-      const sections = await Section.find({ grade: gradeNum }).sort({
+      const filter: any = { grade: gradeNum };
+      const stream = req.query.stream as string | undefined;
+      if (stream) filter.stream = stream;
+
+      const sections = await Section.find(filter).sort({
         createdAt: -1,
       });
       return res.json({ success: true, data: { sections } });
@@ -957,6 +1019,43 @@ router.get(
       return res
         .status(500)
         .json({ success: false, message: "Server error retrieving sections" });
+    }
+  }
+);
+
+// Read-only list of courses by grade (Head access)
+// GET /api/head/courses?grade=9[&stream=natural|social]
+router.get(
+  "/courses",
+  authMiddleware,
+  authorizeRoles("head", "admin"),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const gradeNum = Number(req.query.grade);
+      if (![9, 10, 11, 12].includes(gradeNum)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or missing grade. Expected 9,10,11,12.",
+        });
+      }
+
+      const filter: any = { grade: gradeNum };
+      const stream = (req.query.stream as string | undefined)?.trim();
+      if ((gradeNum === 11 || gradeNum === 12) && stream) {
+        // Include both common and stream-specific courses for senior grades when filtering by stream
+        filter.$or = [{ isCommon: true }, { stream }];
+      } else if (stream) {
+        filter.stream = stream;
+      }
+
+      const courses = await Course.find(filter).sort({ createdAt: -1 });
+      return res.json({ success: true, data: { courses } });
+    } catch (error: any) {
+      console.error("Head list courses error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Server error retrieving courses",
+      });
     }
   }
 );

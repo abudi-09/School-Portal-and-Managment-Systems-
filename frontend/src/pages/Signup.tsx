@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   GraduationCap,
@@ -41,6 +41,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import {
+  listCoursesPublic,
+  type GradeLevel,
+  type CourseResponse,
+} from "@/lib/api/courseSectionApi";
 
 // Validation schemas
 const step1Schema = z.object({
@@ -52,6 +57,9 @@ const step1Schema = z.object({
 const step2Schema = z
   .object({
     subject: z.string().optional(),
+    // The following are enforced conditionally in handleStep2Submit for teachers
+    grade: z.number().optional(),
+    stream: z.enum(["natural", "social"]).optional(),
     position: z.string().optional(),
     password: z
       .string()
@@ -79,6 +87,16 @@ const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Teacher-specific fields
+  const [teacherGrade, setTeacherGrade] = useState<GradeLevel | "">("");
+  const [teacherStream, setTeacherStream] = useState<"" | "natural" | "social">(
+    ""
+  );
+  const [availableSubjects, setAvailableSubjects] = useState<CourseResponse[]>(
+    []
+  );
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const gradeOptions = useMemo<GradeLevel[]>(() => [9, 10, 11, 12], []);
 
   const step1Form = useForm<Step1Form>({
     resolver: zodResolver(step1Schema),
@@ -104,12 +122,46 @@ const Signup = () => {
   const handleStep2Submit = async (data: Step2Form) => {
     setLoading(true);
     try {
+      // Extra validation for teachers
+      if (step1Data.role === "teacher") {
+        if (!teacherGrade) {
+          toast({
+            title: "Select grade",
+            description: "Please select the grade you teach.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+        if ((teacherGrade === 11 || teacherGrade === 12) && !teacherStream) {
+          toast({
+            title: "Select stream",
+            description: "Please select the stream for grades 11–12.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+        if (!data.subject) {
+          toast({
+            title: "Select subject",
+            description: "Please select your subject.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+      }
       const success = await signup({
         name: step1Data.name,
         email: step1Data.email,
         password: data.password,
         role: step1Data.role,
         subject: step1Data.role === "teacher" ? data.subject : undefined,
+        grade:
+          step1Data.role === "teacher" ? teacherGrade || undefined : undefined,
+        stream:
+          step1Data.role === "teacher" ? teacherStream || undefined : undefined,
         position: step1Data.role === "head" ? data.position : undefined,
       });
 
@@ -137,6 +189,34 @@ const Signup = () => {
       setLoading(false);
     }
   };
+
+  // Load subjects for teacher when grade (and stream if 11/12) changes
+  useEffect(() => {
+    const loadSubjects = async () => {
+      try {
+        setSubjectsLoading(true);
+        setAvailableSubjects([]);
+        if (!teacherGrade) return;
+        const isSenior = teacherGrade === 11 || teacherGrade === 12;
+        if (isSenior && !teacherStream) return;
+        const res = await listCoursesPublic(
+          teacherGrade as GradeLevel,
+          isSenior ? teacherStream || undefined : undefined
+        );
+        setAvailableSubjects(res.data.courses);
+        // If selected subject is no longer valid, clear it
+        const current = step2Form.getValues("subject") || "";
+        if (current && !res.data.courses.some((c) => c.name === current)) {
+          step2Form.setValue("subject", "");
+        }
+      } catch (e) {
+        setAvailableSubjects([]);
+      } finally {
+        setSubjectsLoading(false);
+      }
+    };
+    void loadSubjects();
+  }, [teacherGrade, teacherStream, step2Form]);
 
   const getPasswordStrength = (password: string) => {
     let strength = 0;
@@ -365,29 +445,110 @@ const Signup = () => {
                 className="space-y-4 animate-in fade-in duration-300"
               >
                 {step1Data.role === "teacher" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="subject">Subject</Label>
-                    <Select
-                      value={step2Form.watch("subject")}
-                      onValueChange={(value) =>
-                        step2Form.setValue("subject", value)
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select your subject" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Mathematics">Mathematics</SelectItem>
-                        <SelectItem value="English">English</SelectItem>
-                        <SelectItem value="Science">Science</SelectItem>
-                        <SelectItem value="History">History</SelectItem>
-                        <SelectItem value="Geography">Geography</SelectItem>
-                        <SelectItem value="Physics">Physics</SelectItem>
-                        <SelectItem value="Chemistry">Chemistry</SelectItem>
-                        <SelectItem value="Biology">Biology</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <>
+                    <div className="space-y-2">
+                      <Label>Grade you teach</Label>
+                      <Select
+                        value={teacherGrade ? String(teacherGrade) : ""}
+                        onValueChange={(v) => {
+                          const g = Number(v) as GradeLevel;
+                          setTeacherGrade(g);
+                          // Reset dependent selections
+                          setTeacherStream("");
+                          step2Form.setValue("subject", "");
+                        }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select grade" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {gradeOptions.map((g) => (
+                            <SelectItem key={g} value={String(g)}>
+                              {g}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {(teacherGrade === 11 || teacherGrade === 12) && (
+                      <div className="space-y-2">
+                        <Label>Stream</Label>
+                        <Select
+                          value={teacherStream}
+                          onValueChange={(v) => {
+                            setTeacherStream(v as "natural" | "social");
+                            step2Form.setValue("subject", "");
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select stream" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="natural">
+                              Natural Science
+                            </SelectItem>
+                            <SelectItem value="social">
+                              Social Science
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label>Subject</Label>
+                      <Select
+                        value={step2Form.watch("subject")}
+                        onValueChange={(value) =>
+                          step2Form.setValue("subject", value)
+                        }
+                        disabled={
+                          !teacherGrade ||
+                          ((teacherGrade === 11 || teacherGrade === 12) &&
+                            !teacherStream) ||
+                          subjectsLoading
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue
+                            placeholder={
+                              !teacherGrade
+                                ? "Select grade first"
+                                : (teacherGrade === 11 ||
+                                    teacherGrade === 12) &&
+                                  !teacherStream
+                                ? "Select stream first"
+                                : subjectsLoading
+                                ? "Loading subjects..."
+                                : availableSubjects.length === 0
+                                ? "No subjects available"
+                                : "Select your subject"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableSubjects.length === 0 ? (
+                            <SelectItem value="__none" disabled>
+                              {subjectsLoading
+                                ? "Loading..."
+                                : "No subjects available"}
+                            </SelectItem>
+                          ) : (
+                            availableSubjects.map((c) => (
+                              <SelectItem key={c.id} value={c.name}>
+                                {c.name}
+                                {(teacherGrade === 11 || teacherGrade === 12) &&
+                                c.stream
+                                  ? c.stream === "natural"
+                                    ? " — Natural"
+                                    : " — Social"
+                                  : null}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
                 )}
 
                 {step1Data.role === "head" && (

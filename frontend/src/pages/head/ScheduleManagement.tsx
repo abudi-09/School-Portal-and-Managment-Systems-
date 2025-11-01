@@ -41,7 +41,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/useAuth";
 import {
   listSectionsByGradeHead,
-  listCoursesByGrade,
+  listCoursesByGradeHead,
   type GradeLevel,
   type SectionResponse,
   type CourseResponse,
@@ -55,6 +55,7 @@ import {
   getClassSchedules,
   getExamSchedules,
   getTeachers,
+  getTeachersBySubject,
   getRooms,
   createRoom,
   updateRoom,
@@ -201,6 +202,19 @@ const ScheduleManagement = () => {
     examPage * ROWS_PER_PAGE
   );
 
+  // Helper: consistent error message extraction without using 'any'
+  const getErrorMessage = (err: unknown): string => {
+    if (typeof err === "string") return err;
+    if (err && typeof err === "object") {
+      const e = err as {
+        response?: { data?: { message?: string } };
+        message?: string;
+      };
+      return e.response?.data?.message || e.message || JSON.stringify(e);
+    }
+    return String(err);
+  };
+
   const gradeOptions = useMemo(() => ["9", "10", "11", "12"], []);
   // (Filter-related dynamic sections removed)
   const classSectionOptions = useMemo(() => {
@@ -243,12 +257,8 @@ const ScheduleManagement = () => {
         console.error("Failed to load class schedules:", err);
         toast({
           title: "Failed to load class schedules",
-          description: String(
-            (err as any)?.response?.data?.message ??
-              (err as any)?.message ??
-              err
-          ),
-          variant: "destructive" as any,
+          description: getErrorMessage(err),
+          variant: "destructive",
         });
       } finally {
         setLoadingClass(false);
@@ -280,12 +290,8 @@ const ScheduleManagement = () => {
       } catch (err: unknown) {
         toast({
           title: "Failed to load exam schedules",
-          description: String(
-            (err as any)?.response?.data?.message ??
-              (err as any)?.message ??
-              err
-          ),
-          variant: "destructive" as any,
+          description: getErrorMessage(err),
+          variant: "destructive",
         });
       } finally {
         setLoadingExam(false);
@@ -301,7 +307,7 @@ const ScheduleManagement = () => {
       try {
         const teachersData = await getTeachers();
         setTeachers(teachersData);
-      } catch (err: any) {
+      } catch (err) {
         console.error("Failed to load teachers:", err);
         // Don't show toast for teachers loading failure as it's not critical
       }
@@ -388,7 +394,7 @@ const ScheduleManagement = () => {
           setAvailableStreams([]);
           return;
         }
-        const res = await listCoursesByGrade(selectedGrade as GradeLevel);
+        const res = await listCoursesByGradeHead(selectedGrade as GradeLevel);
         const present = Array.from(
           new Set(
             (res.data.courses || [])
@@ -404,7 +410,7 @@ const ScheduleManagement = () => {
     void loadStreams();
   }, [selectedGrade, isAuthenticated]);
 
-  // Load subjects whenever grade/stream changes
+  // Load subjects whenever grade/section/stream changes
   useEffect(() => {
     const loadSubjects = async () => {
       try {
@@ -413,7 +419,7 @@ const ScheduleManagement = () => {
           setAvailableSubjects([]);
           return;
         }
-        if (!selectedGrade) {
+        if (!selectedGrade || !selectedSection) {
           setAvailableSubjects([]);
           return;
         }
@@ -422,7 +428,7 @@ const ScheduleManagement = () => {
           setAvailableSubjects([]);
           return;
         }
-        const res = await listCoursesByGrade(
+        const res = await listCoursesByGradeHead(
           selectedGrade as GradeLevel,
           selectedGrade === 11 || selectedGrade === 12
             ? selectedStream || undefined
@@ -440,58 +446,35 @@ const ScheduleManagement = () => {
       }
     };
     void loadSubjects();
-  }, [selectedGrade, selectedStream, isAuthenticated]);
+  }, [selectedGrade, selectedSection, selectedStream, isAuthenticated]);
 
-  // Load assigned teachers for selected class+subject (if available) to narrow choices
+  // Teachers filtered by the selected subject (and class) — required behaviour
+  const [subjectTeachers, setSubjectTeachers] = useState<
+    Array<{ _id: string; firstName: string; lastName: string; email: string }>
+  >([]);
   useEffect(() => {
-    const loadAssignedTeachers = async () => {
+    const loadSubjectTeachers = async () => {
       try {
-        setAssignedTeacherIds(null);
-        if (!selectedGrade || !selectedSection || !formData.subject) return;
+        if (!formData.subject || !selectedGrade || !selectedSection) {
+          setSubjectTeachers([]);
+          return;
+        }
         const classId = `${selectedGrade}${selectedSection}`;
-        const apiBaseUrl =
-          import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
-        const token = localStorage.getItem("token");
-        const res = await fetch(
-          `${apiBaseUrl}/api/head/subject-assignments?classId=${encodeURIComponent(
-            classId
-          )}`,
-          {
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-          }
-        );
-        const payload = await res.json().catch(() => ({}));
-        if (!res.ok || !payload?.success) {
-          setAssignedTeacherIds(null);
-          return;
+        const list = await getTeachersBySubject({
+          subject: formData.subject,
+          classId,
+        });
+        setSubjectTeachers(list);
+        // If exactly one eligible teacher, preselect it
+        if (list.length === 1) {
+          setFormData((prev) => ({ ...prev, teacher: list[0]._id }));
         }
-        type ApiAssignment = { subject: string; teacherName?: string };
-        const matches: string[] = (payload.data?.assignments ?? [])
-          .filter(
-            (a: ApiAssignment) =>
-              a.subject === formData.subject && a.teacherName
-          )
-          .map((a: ApiAssignment) => a.teacherName as string);
-        if (matches.length === 0) {
-          setAssignedTeacherIds([]);
-          return;
-        }
-        // Map teacher names to ids
-        const matchedIds = teachers
-          .filter((t) =>
-            matches.includes(`${t.firstName} ${t.lastName}`.trim())
-          )
-          .map((t) => t._id);
-        setAssignedTeacherIds(matchedIds);
       } catch (e) {
-        setAssignedTeacherIds(null);
+        setSubjectTeachers([]);
       }
     };
-    void loadAssignedTeachers();
-  }, [selectedGrade, selectedSection, formData.subject, teachers]);
+    void loadSubjectTeachers();
+  }, [formData.subject, selectedGrade, selectedSection]);
 
   // Helper to detect time overlap
   const timesOverlap = (
@@ -560,7 +543,9 @@ const ScheduleManagement = () => {
         room: formData.room || undefined,
       });
       // Find teacher name for display
-      const teacher = teachers.find((t) => t._id === formData.teacher);
+      const teacher =
+        subjectTeachers.find((t) => t._id === formData.teacher) ||
+        teachers.find((t) => t._id === formData.teacher);
       const teacherName = teacher
         ? `${teacher.firstName} ${teacher.lastName}`
         : undefined;
@@ -582,13 +567,12 @@ const ScheduleManagement = () => {
       toast({ title: "Class period added" });
       resetForm();
       setOpen(false);
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ?? err?.message ?? "Failed to add";
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err) || "Failed to add";
       toast({
         title: "Add failed",
         description: String(msg),
-        variant: "destructive" as any,
+        variant: "destructive",
       });
     }
   };
@@ -621,13 +605,12 @@ const ScheduleManagement = () => {
       toast({ title: "Exam scheduled" });
       resetForm();
       setExamDialogOpen(false);
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ?? err?.message ?? "Failed to schedule";
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err) || "Failed to schedule";
       toast({
         title: "Schedule failed",
         description: String(msg),
-        variant: "destructive" as any,
+        variant: "destructive",
       });
     }
   };
@@ -666,13 +649,11 @@ const ScheduleManagement = () => {
         capacity: undefined,
         active: true,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: "Room save failed",
-        description: String(
-          err?.response?.data?.message ?? err?.message ?? err
-        ),
-        variant: "destructive" as any,
+        description: getErrorMessage(err),
+        variant: "destructive",
       });
     }
   };
@@ -691,13 +672,11 @@ const ScheduleManagement = () => {
       await deleteRoom(id);
       await refreshRooms();
       toast({ title: "Room deleted" });
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: "Delete failed",
-        description: String(
-          err?.response?.data?.message ?? err?.message ?? err
-        ),
-        variant: "destructive" as any,
+        description: getErrorMessage(err),
+        variant: "destructive",
       });
     }
   };
@@ -819,13 +798,12 @@ const ScheduleManagement = () => {
       resetForm();
       setEditDialogOpen(false);
       setEditingItem(null);
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ?? err?.message ?? "Update failed";
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err) || "Update failed";
       toast({
         title: "Update failed",
         description: String(msg),
-        variant: "destructive" as any,
+        variant: "destructive",
       });
     }
   };
@@ -847,13 +825,12 @@ const ScheduleManagement = () => {
         setClassSchedule((prev) => prev.filter((c) => c._id !== id));
         toast({ title: "Class period deleted" });
       }
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ?? err?.message ?? "Delete failed";
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err) || "Delete failed";
       toast({
         title: "Delete failed",
         description: String(msg),
-        variant: "destructive" as any,
+        variant: "destructive",
       });
     }
   };
@@ -1087,6 +1064,12 @@ const ScheduleManagement = () => {
                         onValueChange={(value) =>
                           setFormData({ ...formData, subject: value })
                         }
+                        disabled={
+                          !selectedGrade ||
+                          !selectedSection ||
+                          ((selectedGrade === 11 || selectedGrade === 12) &&
+                            !selectedStream)
+                        }
                       >
                         <SelectTrigger>
                           <SelectValue
@@ -1125,21 +1108,33 @@ const ScheduleManagement = () => {
                         onValueChange={(value) =>
                           setFormData({ ...formData, teacher: value })
                         }
+                        disabled={
+                          !formData.subject || subjectTeachers.length === 0
+                        }
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select teacher" />
+                          <SelectValue
+                            placeholder={
+                              !formData.subject
+                                ? "Select subject first"
+                                : subjectTeachers.length === 0
+                                ? "No teacher available"
+                                : "Select teacher"
+                            }
+                          />
                         </SelectTrigger>
                         <SelectContent>
-                          {(assignedTeacherIds && assignedTeacherIds.length > 0
-                            ? teachers.filter((t) =>
-                                assignedTeacherIds.includes(t._id)
-                              )
-                            : teachers
-                          ).map((teacher) => (
-                            <SelectItem key={teacher._id} value={teacher._id}>
-                              {teacher.firstName} {teacher.lastName}
+                          {subjectTeachers.length === 0 ? (
+                            <SelectItem value="__none" disabled>
+                              No teacher available
                             </SelectItem>
-                          ))}
+                          ) : (
+                            subjectTeachers.map((teacher) => (
+                              <SelectItem key={teacher._id} value={teacher._id}>
+                                {teacher.firstName} {teacher.lastName}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>

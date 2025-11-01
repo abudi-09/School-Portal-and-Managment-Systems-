@@ -99,8 +99,11 @@ router.get(
       }
       // Optional stream filter for senior grades
       const filter: any = { grade: gradeNum };
-      const stream = req.query.stream as string | undefined;
-      if (stream) filter.stream = stream;
+      const stream = (req.query.stream as string | undefined)?.trim();
+      if ((gradeNum === 11 || gradeNum === 12) && stream) {
+        // When filtering by stream for senior grades, include common courses too
+        filter.$or = [{ isCommon: true }, { stream }];
+      }
 
       const courses = await Course.find(filter).sort({ createdAt: -1 });
       return res.json({ success: true, data: { courses } });
@@ -129,6 +132,7 @@ router.post(
       .optional()
       .isIn(["natural", "social"])
       .withMessage("Stream must be 'natural' or 'social'"),
+    body("isCommon").optional().isBoolean().withMessage("isCommon must be boolean"),
     body("isMandatory")
       .optional()
       .isBoolean()
@@ -145,19 +149,32 @@ router.post(
     }
 
     try {
-      const { grade, name, isMandatory, stream } = req.body as {
+      const { grade, name, isMandatory, stream, isCommon } = req.body as {
         grade: number;
         name: string;
         isMandatory?: boolean;
         stream?: string;
+        isCommon?: boolean;
       };
 
-      // For grades 11 and 12, stream is required
-      if ([11, 12].includes(Number(grade)) && !stream) {
-        return res.status(400).json({
-          success: false,
-          message: "Stream is required for grades 11 and 12",
-        });
+      // For grades 11 and 12: either stream OR isCommon must be provided (but not both)
+      if ([11, 12].includes(Number(grade))) {
+        const hasStream = !!stream;
+        const common = !!isCommon;
+        if (!hasStream && !common) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "For grades 11 and 12, either stream must be set or the course must be marked common",
+          });
+        }
+        if (hasStream && common) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Course cannot be both stream-specific and common at the same time",
+          });
+        }
       }
 
       const doc = new Course({
@@ -165,15 +182,77 @@ router.post(
         name,
         isMandatory: !!isMandatory,
         stream,
+        isCommon: !!isCommon,
       });
       await doc.save();
       return res.status(201).json({ success: true, data: { course: doc } });
     } catch (error: any) {
       if (error?.code === 11000) {
-        return res.status(409).json({
-          success: false,
-          message: "Course already exists for this grade",
-        });
+        // Provide a more helpful duplicate response
+        try {
+          const { grade, name, stream, isCommon } = req.body as any;
+          const normalizedName = String(name || "").trim().toLowerCase();
+          const gradeNum = Number(grade);
+          let conflict: any = null;
+          if (isCommon) {
+            // Existing common or any stream-specific with same name
+            conflict =
+              (await Course.findOne({
+                grade: gradeNum,
+                normalizedName,
+                isCommon: true,
+              }).lean()) ||
+              (await Course.findOne({
+                grade: gradeNum,
+                normalizedName,
+                stream: { $in: ["natural", "social"] },
+              }).lean());
+          } else if (stream) {
+            // Existing same stream-specific or common with same name
+            conflict =
+              (await Course.findOne({
+                grade: gradeNum,
+                normalizedName,
+                stream,
+              }).lean()) ||
+              (await Course.findOne({
+                grade: gradeNum,
+                normalizedName,
+                isCommon: true,
+              }).lean());
+          } else {
+            // Grades 9/10: any course with same normalizedName in grade
+            conflict = await Course.findOne({
+              grade: gradeNum,
+              normalizedName,
+            }).lean();
+          }
+          const detail = conflict
+            ? {
+                id: conflict._id?.toString?.(),
+                name: conflict.name,
+                isCommon: !!conflict.isCommon,
+                stream: conflict.stream ?? null,
+              }
+            : undefined;
+          return res.status(409).json({
+            success: false,
+            code: "DUPLICATE_COURSE",
+            message:
+              conflict?.isCommon
+                ? `A common course named '${conflict.name}' already exists for grade ${gradeNum}.`
+                : conflict?.stream
+                ? `Course '${conflict.name}' already exists for grade ${gradeNum} in the '${conflict.stream}' stream.`
+                : "Course already exists for this grade/stream/common scope",
+            conflict: detail,
+          });
+        } catch (lookupErr) {
+          return res.status(409).json({
+            success: false,
+            message:
+              "Course already exists for this grade/stream/common scope",
+          });
+        }
       }
       console.error("Create course error:", error);
       return res
@@ -200,6 +279,7 @@ router.patch(
       .optional()
       .isIn(["natural", "social"])
       .withMessage("Stream must be 'natural' or 'social'"),
+    body("isCommon").optional().isBoolean().withMessage("isCommon must be boolean"),
     body("isMandatory")
       .optional()
       .isBoolean()
@@ -222,6 +302,7 @@ router.patch(
       if (req.body.isMandatory !== undefined)
         update.isMandatory = !!req.body.isMandatory;
       if (req.body.stream !== undefined) update.stream = req.body.stream;
+      if (req.body.isCommon !== undefined) update.isCommon = !!req.body.isCommon;
 
       const course = await Course.findById(id);
       if (!course)
@@ -229,16 +310,85 @@ router.patch(
           .status(404)
           .json({ success: false, message: "Course not found" });
 
+      // For grades 11 and 12: enforce XOR between stream and isCommon
+      if (course.grade === 11 || course.grade === 12) {
+        const nextStream = update.stream !== undefined ? update.stream : course.stream;
+        const nextCommon = update.isCommon !== undefined ? update.isCommon : course.isCommon;
+        const hasStream = !!nextStream;
+        const common = !!nextCommon;
+        if (!hasStream && !common) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "For grades 11 and 12, either stream must be set or the course must be marked common",
+          });
+        }
+        if (hasStream && common) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Course cannot be both stream-specific and common at the same time",
+          });
+        }
+      } else {
+        // For 9/10 ensure no stream/common
+        update.stream = undefined;
+        update.isCommon = false;
+      }
+
       Object.assign(course, update);
       await course.save();
 
       return res.json({ success: true, data: { course } });
     } catch (error: any) {
       if (error?.code === 11000) {
-        return res.status(409).json({
-          success: false,
-          message: "Course already exists for this grade",
-        });
+        // Make duplicate message descriptive for updates as well
+        try {
+          const current = await Course.findById(req.params.id)
+            .select("grade name stream isCommon")
+            .lean();
+          const gradeNum = Number(req.body.grade ?? current?.grade);
+          // Determine intended post-update state
+          const nextName = (req.body.name ?? current?.name) as string;
+          const normalizedName = String(nextName || "").trim().toLowerCase();
+          const nextStream = req.body.stream ?? current?.stream;
+          const nextCommon = req.body.isCommon ?? current?.isCommon;
+          let conflict: any = null;
+          if (nextCommon) {
+            conflict =
+              (await Course.findOne({ grade: gradeNum, normalizedName, isCommon: true }).lean()) ||
+              (await Course.findOne({ grade: gradeNum, normalizedName, stream: { $in: ["natural", "social"] } }).lean());
+          } else if (nextStream) {
+            conflict =
+              (await Course.findOne({ grade: gradeNum, normalizedName, stream: nextStream }).lean()) ||
+              (await Course.findOne({ grade: gradeNum, normalizedName, isCommon: true }).lean());
+          } else {
+            conflict = await Course.findOne({ grade: gradeNum, normalizedName }).lean();
+          }
+          return res.status(409).json({
+            success: false,
+            code: "DUPLICATE_COURSE",
+            message:
+              conflict?.isCommon
+                ? `A common course named '${conflict.name}' already exists for grade ${gradeNum}.`
+                : conflict?.stream
+                ? `Course '${conflict.name}' already exists for grade ${gradeNum} in the '${conflict.stream}' stream.`
+                : "Course already exists for this grade/stream/common scope",
+            conflict: conflict
+              ? {
+                  id: conflict._id?.toString?.(),
+                  name: conflict.name,
+                  isCommon: !!conflict.isCommon,
+                  stream: conflict.stream ?? null,
+                }
+              : undefined,
+          });
+        } catch {
+          return res.status(409).json({
+            success: false,
+            message: "Course already exists for this grade/stream/common scope",
+          });
+        }
       }
       console.error("Update course error:", error);
       return res
@@ -249,7 +399,7 @@ router.patch(
 );
 
 // -------- Sections --------
-// GET /api/admin/sections?grade=9
+// GET /api/admin/sections?grade=9[&stream=natural|social]
 router.get(
   "/sections",
   authMiddleware,
@@ -264,7 +414,11 @@ router.get(
         });
       }
 
-      const sections = await Section.find({ grade: gradeNum }).sort({
+      const filter: any = { grade: gradeNum };
+      const stream = req.query.stream as string | undefined;
+      if (stream) filter.stream = stream;
+
+      const sections = await Section.find(filter).sort({
         createdAt: -1,
       });
       return res.json({ success: true, data: { sections } });
@@ -315,6 +469,14 @@ router.post(
         capacity?: number;
         stream?: string;
       };
+      // For grades 11 and 12, stream is required
+      if ([11, 12].includes(Number(grade)) && !stream) {
+        return res.status(400).json({
+          success: false,
+          message: "Stream is required for grades 11 and 12",
+        });
+      }
+
       const doc = new Section({ grade, label, capacity, stream });
       await doc.save();
       return res.status(201).json({ success: true, data: { section: doc } });
@@ -358,6 +520,10 @@ router.patch(
       .optional()
       .isInt({ min: 1 })
       .withMessage("Capacity must be a positive integer"),
+    body("stream")
+      .optional()
+      .isIn(["natural", "social"])
+      .withMessage("Stream must be 'natural' or 'social'"),
   ],
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);

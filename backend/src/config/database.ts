@@ -6,7 +6,37 @@ const MAX_RETRIES = 5;
 const BASE_DELAY_MS = 1000; // 1s
 
 const connectWithRetry = async (retries = 0): Promise<void> => {
+  // Mask credentials and print only host(s) we will try to connect to.
   try {
+    const maskMongoUri = (u?: string) => {
+      if (!u) return u;
+      // Replace userinfo (user:pass@) with ***:***@
+      return u.replace(/\/\/([^@]+)@/, "//***:***@");
+    };
+
+    const extractHostPart = (u?: string) => {
+      if (!u) return "";
+      // remove protocol and any path
+      const afterProto = u.replace(/^.*?:\/\//, "");
+      const hostAndRest = afterProto.split("/")[0] || "";
+      // If auth present, strip it
+      const hostPart = hostAndRest.includes("@")
+        ? hostAndRest.split("@")[1] || ""
+        : hostAndRest;
+      return hostPart;
+    };
+
+    try {
+      const masked = maskMongoUri(env.mongoUri);
+      const hosts = extractHostPart(env.mongoUri);
+      console.log(
+        `🔎 MongoDB connection target (hosts only, credentials masked): ${hosts}`
+      );
+      console.log(`🔒 MongoDB URI (masked): ${masked}`);
+    } catch (e) {
+      // Don't let logging interfere with connection; keep silent on parse errors
+    }
+
     // Explicit connection options to make failures more deterministic
     const options = {
       // Increase timeouts to better tolerate slow networks/TLS inspection

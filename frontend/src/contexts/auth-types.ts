@@ -20,6 +20,8 @@ export interface SignupData {
   password: string;
   role: "teacher" | "head";
   subject?: string;
+  grade?: 9 | 10 | 11 | 12;
+  stream?: "natural" | "social";
   position?: string;
 }
 

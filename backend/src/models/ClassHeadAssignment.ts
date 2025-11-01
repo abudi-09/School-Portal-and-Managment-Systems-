@@ -56,7 +56,6 @@ const classHeadAssignmentSchema = new Schema<IClassHeadAssignment>(
   }
 );
 
-classHeadAssignmentSchema.index({ classId: 1 }, { unique: true });
 classHeadAssignmentSchema.index({ grade: 1, section: 1 });
 
 export default mongoose.model<IClassHeadAssignment>(

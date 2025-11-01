@@ -6,6 +6,7 @@ export type CoursePayload = {
   grade: GradeLevel;
   name: string;
   stream?: "natural" | "social";
+  isCommon?: boolean;
   isMandatory?: boolean;
 };
 
@@ -60,6 +61,40 @@ export async function listCoursesByGrade(
   }>(`/api/admin/courses?${qs.toString()}`);
 }
 
+// Head-role read-only courses listing by grade (and optional stream)
+export async function listCoursesByGradeHead(
+  grade: GradeLevel,
+  stream?: "natural" | "social"
+) {
+  const qs = new URLSearchParams({ grade: String(grade) });
+  if (stream) qs.set("stream", stream);
+  return authorizedFetch<{
+    success: boolean;
+    data: { courses: CourseResponse[] };
+  }>(`/api/head/courses?${qs.toString()}`);
+}
+
+// Public courses listing for signup (no auth required)
+export async function listCoursesPublic(
+  grade: GradeLevel,
+  stream?: "natural" | "social"
+) {
+  const API_BASE_URL =
+    import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+  const qs = new URLSearchParams({ grade: String(grade) });
+  if (stream) qs.set("stream", stream);
+  const res = await fetch(`${API_BASE_URL}/api/courses?${qs.toString()}`);
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = (payload && payload.message) || "Failed to load courses";
+    throw new Error(message);
+  }
+  return payload as {
+    success: boolean;
+    data: { courses: CourseResponse[] };
+  };
+}
+
 export async function createCourse(payload: CoursePayload) {
   return authorizedFetch<{
     success: boolean;
@@ -70,19 +105,28 @@ export async function createCourse(payload: CoursePayload) {
   });
 }
 
-export async function listSectionsByGrade(grade: GradeLevel) {
+export async function listSectionsByGrade(
+  grade: GradeLevel,
+  stream?: "natural" | "social"
+) {
+  const qs = new URLSearchParams({ grade: String(grade) });
+  if (stream) qs.set("stream", stream);
   return authorizedFetch<{
     success: boolean;
     data: { sections: SectionResponse[] };
-  }>(`/api/admin/sections?grade=${grade}`);
+  }>(`/api/admin/sections?${qs.toString()}`);
 }
-
 // Head-role read-only sections listing
-export async function listSectionsByGradeHead(grade: GradeLevel) {
+export async function listSectionsByGradeHead(
+  grade: GradeLevel,
+  stream?: "natural" | "social"
+) {
+  const qs = new URLSearchParams({ grade: String(grade) });
+  if (stream) qs.set("stream", stream);
   return authorizedFetch<{
     success: boolean;
     data: { sections: SectionResponse[] };
-  }>(`/api/head/sections?grade=${grade}`);
+  }>(`/api/head/sections?${qs.toString()}`);
 }
 
 export async function listClasses() {
@@ -134,6 +178,7 @@ export async function updateCourse(
     name?: string;
     isMandatory?: boolean;
     stream?: "natural" | "social";
+    isCommon?: boolean;
   }
 ) {
   return authorizedFetch<{
@@ -163,6 +208,7 @@ export type CourseResponse = {
   name: string;
   grade: GradeLevel;
   stream?: "natural" | "social";
+  isCommon?: boolean;
   isMandatory?: boolean;
   createdAt?: string;
 };

@@ -182,6 +182,24 @@ export async function getTeachers() {
   return data.data.teachers;
 }
 
+export async function getTeachersBySubject(params: {
+  subject: string;
+  classId?: string;
+}) {
+  const { data } = await api.get<{
+    success: boolean;
+    data: {
+      teachers: Array<{
+        _id: string;
+        firstName: string;
+        lastName: string;
+        email: string;
+      }>;
+    };
+  }>("/api/head/teachers/by-subject", { params });
+  return data.data.teachers;
+}
+
 // Rooms API
 export interface Room {
   _id: string;

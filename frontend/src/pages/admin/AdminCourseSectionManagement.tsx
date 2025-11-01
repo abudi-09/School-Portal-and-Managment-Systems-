@@ -115,6 +115,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
   const queryClient = useQueryClient();
   const [courseName, setCourseName] = useState("");
   const [isMandatory, setIsMandatory] = useState(false);
+  const [isCommon, setIsCommon] = useState(false);
   const [sectionLabel, setSectionLabel] = useState("");
   const [sectionCapacity, setSectionCapacity] = useState("");
   // stream for the add-course form (only used for grades 11 & 12)
@@ -123,6 +124,14 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
   const [filterStream, setFilterStream] = useState<"natural" | "social" | "">(
     ""
   );
+  // stream for the add-section form (grades 11 & 12 only)
+  const [sectionFormStream, setSectionFormStream] = useState<
+    "natural" | "social" | ""
+  >("");
+  // stream filter for listing sections
+  const [sectionFilterStream, setSectionFilterStream] = useState<
+    "natural" | "social" | ""
+  >("");
 
   const coursesQuery = useQuery<CourseResponse[]>({
     queryKey: ["admin", "courses", grade, filterStream],
@@ -136,9 +145,12 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
   });
 
   const sectionsQuery = useQuery<SectionResponse[]>({
-    queryKey: ["admin", "sections", grade],
+    queryKey: ["admin", "sections", grade, sectionFilterStream],
     queryFn: async () => {
-      const response = await listSectionsByGrade(grade);
+      const response = await listSectionsByGrade(
+        grade,
+        sectionFilterStream || undefined
+      );
       return response.data.sections;
     },
   });
@@ -180,12 +192,14 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       name: string;
       isMandatory: boolean;
       stream?: "natural" | "social";
+      isCommon?: boolean;
     }) =>
       createCourse({
         grade,
         name: payload.name,
         isMandatory: payload.isMandatory,
         stream: payload.stream,
+        isCommon: payload.isCommon,
       }),
     onSuccess: (result) => {
       queryClient.setQueryData<CourseResponse[]>(
@@ -202,6 +216,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       setCourseName("");
       setIsMandatory(false);
       setFormStream("");
+      setIsCommon(false);
     },
     onError: (error: unknown) => {
       const message =
@@ -215,15 +230,20 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
   });
 
   const createSectionMutation = useMutation({
-    mutationFn: (payload: { label: string; capacity?: number }) =>
+    mutationFn: (payload: {
+      label: string;
+      capacity?: number;
+      stream?: "natural" | "social";
+    }) =>
       createSection({
         grade,
         label: payload.label,
         capacity: payload.capacity,
+        stream: payload.stream,
       }),
     onSuccess: (result) => {
       queryClient.setQueryData<SectionResponse[]>(
-        ["admin", "sections", grade],
+        ["admin", "sections", grade, sectionFilterStream],
         (previous = []) => [
           result.data.section,
           ...previous.filter((s) => s.id !== result.data.section.id),
@@ -235,6 +255,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       });
       setSectionLabel("");
       setSectionCapacity("");
+      setSectionFormStream("");
     },
     onError: (error: unknown) => {
       const message =
@@ -275,7 +296,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
     mutationFn: (id: string) => deleteSection(id),
     onSuccess: (result) => {
       queryClient.setQueryData<SectionResponse[]>(
-        ["admin", "sections", grade],
+        ["admin", "sections", grade, sectionFilterStream],
         (previous = []) =>
           previous.filter((s) => s.id !== result.data.section.id)
       );
@@ -312,11 +333,15 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
 
   const [editCourseName, setEditCourseName] = useState("");
   const [editIsMandatory, setEditIsMandatory] = useState(false);
+  const [editIsCommon, setEditIsCommon] = useState(false);
   const [editFormStream, setEditFormStream] = useState<
     "natural" | "social" | ""
   >("");
   const [editSectionLabel, setEditSectionLabel] = useState("");
   const [editSectionCapacity, setEditSectionCapacity] = useState<string>("");
+  const [editSectionStream, setEditSectionStream] = useState<
+    "natural" | "social" | ""
+  >("");
 
   const updateCourseMutation = useMutation({
     mutationFn: ({
@@ -328,6 +353,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
         name?: string;
         isMandatory?: boolean;
         stream?: "natural" | "social";
+        isCommon?: boolean;
       };
     }) => updateCourse(id, payload),
     onSuccess: (result) => {
@@ -363,11 +389,15 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       payload,
     }: {
       id: string;
-      payload: { label?: string; capacity?: number };
+      payload: {
+        label?: string;
+        capacity?: number;
+        stream?: "natural" | "social";
+      };
     }) => updateSection(id, payload),
     onSuccess: (result) => {
       queryClient.setQueryData<SectionResponse[]>(
-        ["admin", "sections", grade],
+        ["admin", "sections", grade, sectionFilterStream],
         (previous = []) =>
           previous.map((s) =>
             s.id === result.data.section.id ? result.data.section : s
@@ -379,6 +409,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       });
       setEditOpen(false);
       setEditTarget(null);
+      setEditSectionStream("");
     },
     onError: (error: unknown) => {
       const message =
@@ -420,12 +451,16 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       return;
     }
 
-    if (
-      sortedCourses.some(
-        (course) =>
-          course.name.trim().toLowerCase() === trimmedName.toLowerCase()
-      )
-    ) {
+    const isDuplicateCourse = sortedCourses.some((course) => {
+      const sameName =
+        course.name.trim().toLowerCase() === trimmedName.toLowerCase();
+      if (![11, 12].includes(grade)) return sameName;
+      // For senior grades, duplicate if same name and same scope (common or stream-specific)
+      if (isCommon) return sameName && !!course.isCommon;
+      const sameStream = (course.stream || "") === (formStream || "");
+      return sameName && sameStream && !course.isCommon;
+    });
+    if (isDuplicateCourse) {
       toast({
         title: "Duplicate course",
         description: "This course already exists for the selected grade.",
@@ -434,11 +469,20 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       return;
     }
 
-    // Require stream selection for grade 11 & 12
-    if ([11, 12].includes(grade) && !formStream) {
+    // For senior grades require either stream OR common (but not both)
+    if ([11, 12].includes(grade) && !(formStream || isCommon)) {
       toast({
-        title: "Stream required",
-        description: "Select a stream for senior grade courses.",
+        title: "Stream or common required",
+        description:
+          "For Grades 11–12, select a stream or mark the course as common for both streams.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if ([11, 12].includes(grade) && formStream && isCommon) {
+      toast({
+        title: "Invalid selection",
+        description: "A course cannot be both stream-specific and common.",
         variant: "destructive",
       });
       return;
@@ -447,7 +491,8 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
     createCourseMutation.mutate({
       name: trimmedName,
       isMandatory,
-      stream: formStream || undefined,
+      stream: isCommon ? undefined : formStream || undefined,
+      isCommon: isCommon || undefined,
     });
   };
 
@@ -465,12 +510,14 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       return;
     }
 
-    if (
-      sortedSections.some(
-        (section) =>
-          section.label.trim().toLowerCase() === trimmedLabel.toLowerCase()
-      )
-    ) {
+    const isDuplicateSection = sortedSections.some((section) => {
+      const sameLabel =
+        section.label.trim().toLowerCase() === trimmedLabel.toLowerCase();
+      if (![11, 12].includes(grade)) return sameLabel;
+      const sameStream = (section.stream || "") === (sectionFormStream || "");
+      return sameLabel && sameStream;
+    });
+    if (isDuplicateSection) {
       toast({
         title: "Duplicate section",
         description: "This section already exists for the selected grade.",
@@ -493,9 +540,20 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
       parsedCapacity = Math.floor(numericValue);
     }
 
+    // Require stream for sections in grades 11 and 12
+    if ([11, 12].includes(grade) && !sectionFormStream) {
+      toast({
+        title: "Stream required",
+        description: "Select a stream for senior grade sections.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     createSectionMutation.mutate({
       label: trimmedLabel,
       capacity: parsedCapacity,
+      stream: sectionFormStream || undefined,
     });
   };
 
@@ -534,22 +592,43 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
               />
             </div>
             {[11, 12].includes(grade) && (
-              <div className="space-y-2">
-                <Label htmlFor={`course-stream-${grade}`}>Stream</Label>
-                <Select
-                  value={formStream}
-                  onValueChange={(v: string) =>
-                    setFormStream((v as "natural" | "social") || "")
-                  }
-                >
-                  <SelectTrigger id={`course-stream-${grade}`}>
-                    <SelectValue placeholder="Select stream" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="natural">Natural Science</SelectItem>
-                    <SelectItem value="social">Social Science</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor={`course-stream-${grade}`}>Stream</Label>
+                  <Select
+                    value={formStream}
+                    onValueChange={(v: string) => {
+                      setFormStream((v as "natural" | "social") || "");
+                      if (v) setIsCommon(false);
+                    }}
+                    disabled={isCommon}
+                  >
+                    <SelectTrigger id={`course-stream-${grade}`}>
+                      <SelectValue placeholder="Select stream" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="natural">Natural Science</SelectItem>
+                      <SelectItem value="social">Social Science</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Switch
+                    id={`course-common-${grade}`}
+                    checked={isCommon}
+                    onCheckedChange={(checked) => {
+                      setIsCommon(checked);
+                      if (checked) setFormStream("");
+                    }}
+                    disabled={createCourseMutation.isPending}
+                  />
+                  <Label
+                    htmlFor={`course-common-${grade}`}
+                    className="text-sm text-muted-foreground"
+                  >
+                    Make this a common course for both streams
+                  </Label>
+                </div>
               </div>
             )}
             <div className="flex items-center space-x-3">
@@ -675,7 +754,9 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                       </TableCell>
                       <TableCell>{course.isMandatory ? "Yes" : "No"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {course.stream
+                        {course.isCommon
+                          ? "Common"
+                          : course.stream
                           ? course.stream === "natural"
                             ? "Natural"
                             : "Social"
@@ -695,6 +776,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                               setEditCourseName(course.name);
                               setEditIsMandatory(!!course.isMandatory);
                               setEditFormStream(course.stream ?? "");
+                              setEditIsCommon(!!course.isCommon);
                               setEditOpen(true);
                             }}
                             disabled={updateCourseMutation.isPending}
@@ -746,6 +828,25 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                 disabled={createSectionMutation.isPending}
               />
             </div>
+            {[11, 12].includes(grade) && (
+              <div className="space-y-2">
+                <Label htmlFor={`section-stream-${grade}`}>Stream</Label>
+                <Select
+                  value={sectionFormStream}
+                  onValueChange={(v: string) =>
+                    setSectionFormStream((v as "natural" | "social") || "")
+                  }
+                >
+                  <SelectTrigger id={`section-stream-${grade}`}>
+                    <SelectValue placeholder="Select stream" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="natural">Natural Science</SelectItem>
+                    <SelectItem value="social">Social Science</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor={`section-capacity-${grade}`}>
                 Capacity (optional)
@@ -783,23 +884,50 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
             </Alert>
           )}
 
+          {/* Stream filter for grades 11 & 12 */}
+          {[11, 12].includes(grade) && (
+            <div className="mb-4">
+              <Label className="text-sm">Filter by stream</Label>
+              <div className="w-48 mt-2">
+                <Select
+                  value={sectionFilterStream}
+                  onValueChange={(v: string) =>
+                    setSectionFilterStream(
+                      v === "all" ? "" : (v as "natural" | "social")
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All streams" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All streams</SelectItem>
+                    <SelectItem value="natural">Natural Science</SelectItem>
+                    <SelectItem value="social">Social Science</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-md border border-dashed border-border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-1/2">Section</TableHead>
+                  <TableHead className="w-1/3">Section</TableHead>
                   <TableHead>Capacity</TableHead>
+                  <TableHead>Stream</TableHead>
                   <TableHead className="text-right">Added</TableHead>
                   <TableHead className="text-right"> </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sectionsQuery.isLoading ? (
-                  <TableSkeletonRows rows={3} cols={3} />
+                  <TableSkeletonRows rows={3} cols={5} />
                 ) : sortedSections.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="py-6 text-center text-sm text-muted-foreground"
                     >
                       No sections configured for this grade yet.
@@ -812,6 +940,13 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                         {section.label}
                       </TableCell>
                       <TableCell>{section.capacity ?? "—"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {section.stream
+                          ? section.stream === "natural"
+                            ? "Natural"
+                            : "Social"
+                          : "—"}
+                      </TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground">
                         {formatDate(section.createdAt)}
                       </TableCell>
@@ -829,6 +964,7 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                               setEditSectionCapacity(
                                 section.capacity?.toString() ?? ""
                               );
+                              setEditSectionStream(section.stream ?? "");
                               setEditOpen(true);
                             }}
                             disabled={updateSectionMutation.isPending}
@@ -960,11 +1096,28 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                     });
                     return;
                   }
-                  // For senior grades ensure a stream is selected
-                  if ([11, 12].includes(grade) && !editFormStream) {
+                  // For senior grades ensure stream XOR common
+                  if (
+                    [11, 12].includes(grade) &&
+                    !(editFormStream || editIsCommon)
+                  ) {
                     toast({
-                      title: "Stream required",
-                      description: "Select a stream for senior grade courses.",
+                      title: "Stream or common required",
+                      description:
+                        "For Grades 11–12, select a stream or mark the course as common.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  if (
+                    [11, 12].includes(grade) &&
+                    editFormStream &&
+                    editIsCommon
+                  ) {
+                    toast({
+                      title: "Invalid selection",
+                      description:
+                        "A course cannot be both stream-specific and common.",
                       variant: "destructive",
                     });
                     return;
@@ -975,7 +1128,10 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                     payload: {
                       name: trimmed,
                       isMandatory: editIsMandatory,
-                      stream: editFormStream || undefined,
+                      stream: editIsCommon
+                        ? undefined
+                        : editFormStream || undefined,
+                      isCommon: editIsCommon || undefined,
                     },
                   });
                 }}
@@ -997,22 +1153,40 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                   </Label>
                 </div>
                 {[11, 12].includes(grade) && (
-                  <div className="space-y-2 mt-2">
-                    <Label>Stream</Label>
-                    <Select
-                      value={editFormStream}
-                      onValueChange={(v: string) =>
-                        setEditFormStream((v as "natural" | "social") || "")
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select stream" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="natural">Natural Science</SelectItem>
-                        <SelectItem value="social">Social Science</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-3 mt-2">
+                    <div className="space-y-2">
+                      <Label>Stream</Label>
+                      <Select
+                        value={editFormStream}
+                        onValueChange={(v: string) => {
+                          setEditFormStream((v as "natural" | "social") || "");
+                          if (v) setEditIsCommon(false);
+                        }}
+                        disabled={editIsCommon}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select stream" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="natural">
+                            Natural Science
+                          </SelectItem>
+                          <SelectItem value="social">Social Science</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        checked={editIsCommon}
+                        onCheckedChange={(checked) => {
+                          setEditIsCommon(checked);
+                          if (checked) setEditFormStream("");
+                        }}
+                      />
+                      <Label className="text-sm text-muted-foreground">
+                        Make this a common course for both streams
+                      </Label>
+                    </div>
                   </div>
                 )}
                 <div className="flex justify-end gap-2 mt-4">
@@ -1055,9 +1229,21 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                     }
                     parsed = Math.floor(n);
                   }
+                  if ([11, 12].includes(grade) && !editSectionStream) {
+                    toast({
+                      title: "Stream required",
+                      description: "Select a stream for senior grade sections.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
                   updateSectionMutation.mutate({
                     id: editTarget.id,
-                    payload: { label: trimmed, capacity: parsed },
+                    payload: {
+                      label: trimmed,
+                      capacity: parsed,
+                      stream: editSectionStream || undefined,
+                    },
                   });
                 }}
               >
@@ -1068,6 +1254,25 @@ const GradePanel = ({ grade }: { grade: GradeLevel }) => {
                     onChange={(e) => setEditSectionLabel(e.target.value)}
                   />
                 </div>
+                {[11, 12].includes(grade) && (
+                  <div className="space-y-2 mt-2">
+                    <Label>Stream</Label>
+                    <Select
+                      value={editSectionStream}
+                      onValueChange={(v: string) =>
+                        setEditSectionStream((v as "natural" | "social") || "")
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select stream" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="natural">Natural Science</SelectItem>
+                        <SelectItem value="social">Social Science</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-2 mt-2">
                   <Label>Capacity (optional)</Label>
                   <Input

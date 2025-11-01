@@ -254,8 +254,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
 
       // Optional structured info
-      if (data.role === "teacher" && data.subject) {
-        payload.academicInfo = { subjects: [data.subject] };
+      if (data.role === "teacher") {
+        const academicInfo: Record<string, unknown> = {};
+        if (data.subject) academicInfo.subjects = [data.subject];
+        if (data.grade) academicInfo.grade = String(data.grade);
+        if (Object.keys(academicInfo).length > 0) {
+          payload.academicInfo = academicInfo as {
+            subjects?: string[];
+            grade?: string;
+          };
+        }
       }
       if (data.role === "head" && data.position) {
         payload.employmentInfo = { position: data.position };

@@ -34,6 +34,15 @@ sectionSchema.pre<ISection>("validate", function (next) {
   // Ensure TypeScript knows the `this` type inside middleware.
   const doc = this as ISection;
   doc.normalizedLabel = (doc.label ?? "").trim().toLowerCase();
+  // Enforce stream rules based on grade
+  if (doc.grade === 11 || doc.grade === 12) {
+    if (!doc.stream) {
+      return next(new Error("Stream is required for grades 11 and 12"));
+    }
+  } else {
+    // Ensure no stream stored for junior grades
+    delete (doc as any).stream;
+  }
   next();
 });
 

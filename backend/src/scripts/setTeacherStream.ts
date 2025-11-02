@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
-import connectDB from "../../config/database";
-import User from "../../models/User";
+import connectDB from "../config/database";
+import User from "../models/User";
 
 /**
  * Small utility to set academicInfo.stream for specific teachers by email.

@@ -39,6 +39,20 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  listClasses,
+  listSectionsByGradeHead,
+  type SectionResponse,
+  type GradeLevel,
+} from "@/lib/api/courseSectionApi";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 // Local types
 type Teacher = {
@@ -52,6 +66,9 @@ type Teacher = {
   experience?: string;
   classTeacherAssignments?: string[];
   subjectAssignments?: { class: string; subject: string }[];
+  grade?: string;
+  subjects?: string[];
+  stream?: string;
 };
 
 const AssignmentManagement = () => {
@@ -60,7 +77,7 @@ const AssignmentManagement = () => {
     {
       id: string;
       name: string;
-      grade?: string;
+      grade?: number | string;
       section?: string;
       students?: number;
       classTeacher?: string;
@@ -73,157 +90,123 @@ const AssignmentManagement = () => {
   const [subjectAssignments, setSubjectAssignments] = useState<
     { class: string; subject: string; teacher: string }[]
   >([]);
-
   const apiBaseUrl =
     import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
   const { toast } = useToast();
 
-  // Fetch approved teachers and classes from the server
-  type ApiTeacher = {
-    _id: string;
-    firstName?: string;
-    lastName?: string;
-    email?: string;
-    department?: string;
-    assignedClassIds?: string[];
-    phone?: string;
-    qualifications?: string[];
-    experience?: string;
-    classTeacherAssignments?: string[];
-    subjectAssignments?: { class: string; subject: string }[];
-  };
-
-  type ApiClass = {
-    classId: string;
-    name?: string;
-    grade?: string;
-    section?: string;
-  };
-
+  // Server bootstrap: load classes, teachers, and subject assignments
   const fetchServerData = async () => {
     try {
+      // Load classes (aligned with admin management)
+      try {
+        const classesPayload = await listClasses();
+        const mapped = (classesPayload.data?.classes ?? []).map((c) => ({
+          id: c.classId,
+          name: c.name || `${c.grade}${String(c.section).toUpperCase()}`,
+          grade: c.grade,
+          section: c.section,
+          classTeacher: "Unassigned",
+        }));
+        setClasses(mapped);
+      } catch (err) {
+        console.warn("Failed to fetch classes list", err);
+        setClasses([]);
+      }
+
       const token = getAuthToken();
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
       if (token) headers.Authorization = `Bearer ${token}`;
 
-      // Fetch classes (provide safe defaults so UI doesn't crash when fields are missing)
-      const classesRes = await fetch(`${apiBaseUrl}/api/classes`, { headers });
-      const classesPayload = await classesRes.json().catch(() => ({}));
-      if (classesRes.ok && classesPayload?.success) {
-        const svc = (classesPayload.data?.classes ?? []).map((c: ApiClass) => ({
-          id: c.classId,
-          name: c.name,
-          grade: c.grade,
-          section: c.section,
-          // defaults used by the UI
-          classTeacher: "Unassigned",
-          students: 0,
-        }));
-        setClasses(svc);
-
-        // Fetch current head assignments and merge them into the classes list
-        try {
-          const caRes = await fetch(
-            `${apiBaseUrl}/api/head/class-assignments`,
-            {
-              headers,
-            }
-          );
-          const caPayload = await caRes.json().catch(() => ({}));
-          if (caRes.ok && caPayload?.success) {
-            const assignments: any[] = caPayload.data?.assignments ?? [];
-            setClasses((prev) =>
-              prev.map((cls) => {
-                const match = assignments.find(
-                  (a) =>
-                    String(a.classId ?? "").toLowerCase() ===
-                    String(cls.id ?? "").toLowerCase()
-                );
-                return {
-                  ...cls,
-                  classTeacher:
-                    match?.headTeacherName ?? cls.classTeacher ?? "Unassigned",
-                };
-              })
-            );
-          }
-        } catch (err) {
-          console.warn("Failed to fetch class head assignments", err);
-        }
-        // If there's no auth token, avoid calling admin/head endpoints that require auth
-        if (!token) {
-          // Ensure dependent UI state is empty/initialised
-          setTeachers([]);
-          setSubjectAssignmentsServer([]);
-          setSubjectAssignments([]);
-          return;
-        }
-      } else {
-        console.warn(
-          "Failed to load classes from server",
-          classesPayload?.message
-        );
+      if (!token) {
+        // If no auth, clear dependent state and exit
+        setTeachers([]);
+        setSubjectAssignmentsServer([]);
+        setSubjectAssignments([]);
+        return;
       }
+
       // Fetch teachers for head view
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       try {
         const teachersRes = await fetch(
-          `${apiBaseUrl}/api/head/teachers?limit=200`,
+          `${apiBaseUrl}/api/head/teachers?status=approved&limit=200`,
           { headers }
         );
         const teachersPayload = await teachersRes.json().catch(() => ({}));
-        if (teachersRes.ok && teachersPayload?.success) {
-          const tv = (teachersPayload.data?.teachers ?? []).map(
-            (t: ApiTeacher) => ({
-              id: t._id ?? String(t.id ?? ""),
-              name:
-                `${t.firstName ?? ""} ${t.lastName ?? ""}`.trim() ||
-                (t as any).name ||
-                "Unknown",
-              department:
-                (t as any).department ?? (t as any).profile?.department ?? "",
-              assignedClasses: Array.isArray(t.assignedClassIds)
-                ? t.assignedClassIds.length
-                : (t as any).assignedClasses ?? 0,
-              email: t.email,
-              phone: (t as any).profile?.phone ?? (t as any).phone,
-              qualifications: t.qualifications ?? [],
-              experience: t.experience ?? "",
-              classTeacherAssignments: t.classTeacherAssignments ?? [],
-              subjectAssignments: t.subjectAssignments ?? [],
-            })
-          );
+        if (teachersRes.ok && (teachersPayload as any)?.success) {
+          type ApiTeacher = {
+            _id?: string;
+            firstName?: string;
+            lastName?: string;
+            email?: string;
+            qualifications?: string[];
+            experience?: string;
+            classTeacherAssignments?: string[];
+            subjectAssignments?: { class: string; subject: string }[];
+            assignedClassIds?: string[];
+            academicInfo?: {
+              grade?: string;
+              subjects?: string[];
+              stream?: string;
+            };
+            profile?: { department?: string; phone?: string };
+            department?: string;
+            phone?: string;
+          };
+          const tv: Teacher[] = (
+            (teachersPayload as any).data?.teachers ?? []
+          ).map((t: ApiTeacher) => ({
+            id: t._id ?? "",
+            name:
+              `${t.firstName ?? ""} ${t.lastName ?? ""}`.trim() || "Unknown",
+            department: t.department ?? t.profile?.department ?? "",
+            assignedClasses: Array.isArray(t.assignedClassIds)
+              ? t.assignedClassIds.length
+              : 0,
+            email: t.email,
+            phone: t.profile?.phone ?? t.phone,
+            qualifications: t.qualifications ?? [],
+            experience: t.experience ?? "",
+            classTeacherAssignments: t.classTeacherAssignments ?? [],
+            subjectAssignments: t.subjectAssignments ?? [],
+            grade: t.academicInfo?.grade,
+            subjects: t.academicInfo?.subjects ?? [],
+            stream: t.academicInfo?.stream,
+          }));
           setTeachers(tv);
           setTeachersError(null);
         } else {
           console.warn(
             "Failed to load teachers from server",
-            teachersPayload?.message
+            (teachersPayload as any)?.message
           );
           setTeachersError(
-            teachersPayload?.message || "Failed to load teachers"
+            (teachersPayload as any)?.message || "Failed to load teachers"
           );
         }
       } catch (err) {
         console.warn("Teachers fetch error", err);
         setTeachersError(String(err));
       }
+      /* eslint-enable @typescript-eslint/no-explicit-any */
 
-      // Fetch subject assignments snapshot (used for selected class)
+      // Fetch subject assignments snapshot (used to show current state)
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       try {
         const saRes = await fetch(
           `${apiBaseUrl}/api/head/subject-assignments`,
           { headers }
         );
         const saPayload = await saRes.json().catch(() => ({}));
-        if (saRes.ok && saPayload?.success) {
+        if (saRes.ok && (saPayload as any)?.success) {
           type ApiAssignment = {
             classId: string;
             subject: string;
             teacherName?: string;
           };
-          const list = (saPayload.data?.assignments ?? []).map(
+          const list = ((saPayload as any).data?.assignments ?? []).map(
             (a: ApiAssignment) => ({
               class: a.classId,
               subject: a.subject,
@@ -242,6 +225,7 @@ const AssignmentManagement = () => {
       } catch (err) {
         console.warn("Failed to load subject assignments", err);
       }
+      /* eslint-enable @typescript-eslint/no-explicit-any */
     } catch (error) {
       console.error("Error fetching server data", error);
     }
@@ -257,6 +241,26 @@ const AssignmentManagement = () => {
   const [teacherSearch, setTeacherSearch] = useState("");
   const [classSearch, setClassSearch] = useState("");
   const [subjectSearch, setSubjectSearch] = useState("");
+  // Track per-teacher expanded assignment controls
+  // Expand per-teacher assignment container
+  const [expandedByTeacher, setExpandedByTeacher] = useState<
+    Record<string, boolean>
+  >({});
+  const [gradeByTeacher, setGradeByTeacher] = useState<Record<string, string>>(
+    {}
+  );
+  const [streamByTeacher, setStreamByTeacher] = useState<
+    Record<string, "natural" | "social" | "">
+  >({});
+  const [sectionByTeacher, setSectionByTeacher] = useState<
+    Record<string, string>
+  >({});
+  const [sectionOptsByTeacher, setSectionOptsByTeacher] = useState<
+    Record<string, SectionResponse[]>
+  >({});
+  const [sectionsLoadingByTeacher, setSectionsLoadingByTeacher] = useState<
+    Record<string, boolean>
+  >({});
 
   // UI state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -300,7 +304,7 @@ const AssignmentManagement = () => {
 
         // fetch courses for grade
         const coursesRes = await fetch(
-          `${apiBaseUrl}/api/admin/courses?grade=${cls.grade}`,
+          `${apiBaseUrl}/api/head/courses?grade=${cls.grade}`,
           { headers }
         );
         const coursesPayload = await coursesRes.json().catch(() => ({}));
@@ -365,6 +369,204 @@ const AssignmentManagement = () => {
   const openTeacherDetails = (teacher: Teacher) => {
     setSelectedTeacher(teacher);
     setTeacherDetailsOpen(true);
+  };
+
+  // Directly assign a teacher as head for the selected class
+  const assignHeadDirect = async (teacherId: string, classId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      // capture existing class info to update teacher counts locally after success
+      const clsBefore = classes.find((c) => c.id === classId);
+      const prevTeacherName = clsBefore?.classTeacher;
+      const className = clsBefore?.name ?? classId;
+
+      let res = await fetch(
+        `${apiBaseUrl}/api/head/class-assignments/${classId}`,
+        {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({ teacherId }),
+        }
+      );
+      type AssignResponse = {
+        success?: boolean;
+        message?: string;
+        code?: string;
+      };
+      let payload: AssignResponse = (await res
+        .json()
+        .catch(() => ({}))) as AssignResponse;
+      if (res.status === 409 && payload?.code === "CONFIRM_REASSIGN") {
+        res = await fetch(
+          `${apiBaseUrl}/api/head/class-assignments/${classId}`,
+          {
+            method: "PUT",
+            headers,
+            body: JSON.stringify({ teacherId, confirmReassign: true }),
+          }
+        );
+        payload = (await res.json().catch(() => ({}))) as AssignResponse;
+      }
+      if (!res.ok || !payload?.success) {
+        throw new Error(payload?.message || "Failed to assign class head");
+      }
+
+      toast({
+        title: "Head assigned",
+        description: payload?.message || "Assignment saved",
+      });
+      const newHeadName = teachers.find((t) => t.id === teacherId)?.name;
+      setClasses((prev) =>
+        prev.map((c) =>
+          c.id === classId
+            ? { ...c, classTeacher: newHeadName || c.classTeacher }
+            : c
+        )
+      );
+
+      // Update teachers counts and assignments locally
+      setTeachers((prev) =>
+        prev.map((t) => {
+          // decrement previous head's counters
+          if (
+            prevTeacherName &&
+            t.name === prevTeacherName &&
+            prevTeacherName !== "Unassigned"
+          ) {
+            const updatedAssignments = (t.classTeacherAssignments || []).filter(
+              (x) => x !== className
+            );
+            return {
+              ...t,
+              assignedClasses: Math.max(0, (t.assignedClasses || 1) - 1),
+              classTeacherAssignments: updatedAssignments,
+            };
+          }
+          // increment new head's counters
+          if (t.id === teacherId) {
+            const already = (t.classTeacherAssignments || []).includes(
+              className
+            );
+            return {
+              ...t,
+              assignedClasses: (t.assignedClasses || 0) + (already ? 0 : 1),
+              classTeacherAssignments: already
+                ? t.classTeacherAssignments
+                : [...(t.classTeacherAssignments || []), className],
+            };
+          }
+          return t;
+        })
+      );
+    } catch (error: unknown) {
+      console.error("Assign head error", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      toast({
+        title: "Assignment failed",
+        description: msg,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Helpers for expanded assignment controls per teacher
+  const toggleExpanded = (teacherId: string) => {
+    const opening = !expandedByTeacher[teacherId];
+    setExpandedByTeacher((prev) => ({
+      ...prev,
+      [teacherId]: !prev[teacherId],
+    }));
+    // prime defaults when opening first time
+    if (opening) {
+      const t = teachers.find((x) => x.id === teacherId);
+      const existingGrade =
+        gradeByTeacher[teacherId] ?? (t?.grade ? String(t.grade) : "");
+      const existingStream = streamByTeacher[teacherId] ?? t?.stream ?? "";
+      if (!gradeByTeacher[teacherId] && t?.grade) {
+        setGradeByTeacher((p) => ({ ...p, [teacherId]: String(t.grade) }));
+      }
+      // Prime stream state if teacher already has one (useful for grades 11/12)
+      if (!streamByTeacher[teacherId] && t?.stream) {
+        const val =
+          t.stream === "natural" || t.stream === "social"
+            ? (t.stream as "natural" | "social")
+            : "";
+        setStreamByTeacher((p) => ({ ...p, [teacherId]: val }));
+      }
+      // If grade is present and either it's 9/10 or (11/12 and stream already present), fetch sections
+      const gNum = Number(existingGrade);
+      if ([9, 10].includes(gNum)) {
+        void fetchSectionsFor(teacherId);
+      } else if ([11, 12].includes(gNum) && existingStream) {
+        void fetchSectionsFor(teacherId);
+      }
+    }
+  };
+
+  const fetchSectionsFor = async (teacherId: string) => {
+    const gradeStr = gradeByTeacher[teacherId];
+    const stream = streamByTeacher[teacherId];
+    const gNum = Number(gradeStr);
+    if (![9, 10, 11, 12].includes(gNum)) return;
+    setSectionsLoadingByTeacher((p) => ({ ...p, [teacherId]: true }));
+    try {
+      const res = await listSectionsByGradeHead(
+        gNum as GradeLevel,
+        gNum >= 11 ? stream || undefined : undefined
+      );
+      setSectionOptsByTeacher((p) => ({
+        ...p,
+        [teacherId]: res.data.sections || [],
+      }));
+    } catch (e) {
+      setSectionOptsByTeacher((p) => ({ ...p, [teacherId]: [] }));
+    } finally {
+      setSectionsLoadingByTeacher((p) => ({ ...p, [teacherId]: false }));
+    }
+  };
+
+  const onChangeGrade = async (teacherId: string, grade: string) => {
+    setGradeByTeacher((p) => ({ ...p, [teacherId]: grade }));
+    // reset selections
+    setStreamByTeacher((p) => ({ ...p, [teacherId]: "" }));
+    setSectionByTeacher((p) => ({ ...p, [teacherId]: "" }));
+    // 9/10: fetch sections immediately
+    const gNum = Number(grade);
+    if (gNum === 9 || gNum === 10) {
+      await fetchSectionsFor(teacherId);
+    } else {
+      // clear until stream selected
+      setSectionOptsByTeacher((p) => ({ ...p, [teacherId]: [] }));
+    }
+  };
+
+  const onChangeStream = async (
+    teacherId: string,
+    stream: "natural" | "social"
+  ) => {
+    setStreamByTeacher((p) => ({ ...p, [teacherId]: stream }));
+    setSectionByTeacher((p) => ({ ...p, [teacherId]: "" }));
+    await fetchSectionsFor(teacherId);
+  };
+
+  const onAssignHeadFromExpanded = async (teacherId: string) => {
+    const grade = gradeByTeacher[teacherId];
+    const section = sectionByTeacher[teacherId];
+    if (!grade || !section) return;
+    // Try to find existing class id; otherwise compute grade+section
+    const match = classes.find(
+      (c) =>
+        String(c.grade) === String(grade) &&
+        String(c.section).toUpperCase() === String(section).toUpperCase()
+    );
+    const classId = match
+      ? match.id
+      : `${grade}${String(section).toUpperCase()}`;
+    await assignHeadDirect(teacherId, classId);
   };
 
   const handleConfirmAssignment = () => {
@@ -693,62 +895,215 @@ const AssignmentManagement = () => {
           <CardContent className="space-y-4">
             <div className="mb-3">
               <Input
-                placeholder="Search classes by name or teacher"
-                value={classSearch}
-                onChange={(e) => setClassSearch(e.target.value)}
+                placeholder="Search teachers by name or subject"
+                value={teacherSearch}
+                onChange={(e) => setTeacherSearch(e.target.value)}
               />
             </div>
 
-            {classes
-              .filter((classItem) => {
-                if (!classSearch) return true;
-                const q = classSearch.toLowerCase();
-                return (
-                  (classItem.name ?? "").toLowerCase().includes(q) ||
-                  (classItem.classTeacher ?? "").toLowerCase().includes(q)
+            {(() => {
+              const q = teacherSearch.trim().toLowerCase();
+              const filteredTeachers = teachers.filter((t) => {
+                if (!q) return true;
+                const subjMatch = (t.subjects || []).some((s) =>
+                  s.toLowerCase().includes(q)
                 );
-              })
-              .map((classItem) => (
-                <div
-                  key={classItem.id}
-                  className="flex items-center justify-between p-4 rounded-lg bg-secondary"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-medium text-foreground">
-                        Class {classItem.name}
-                      </p>
-                      <Badge variant="outline">
-                        {classItem.students} students
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Class Teacher:{" "}
-                      <span
-                        className={
-                          classItem.classTeacher === "Unassigned"
-                            ? "text-warning font-medium"
-                            : "text-foreground"
-                        }
-                      >
-                        {classItem.classTeacher}
-                      </span>
-                    </p>
+                return (
+                  t.name.toLowerCase().includes(q) ||
+                  (t.department || "").toLowerCase().includes(q) ||
+                  subjMatch
+                );
+              });
+
+              if (filteredTeachers.length === 0) {
+                return (
+                  <div className="text-sm text-muted-foreground py-6 text-center">
+                    No teachers available. Approve teachers first or adjust your
+                    search.
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedClass(classItem.id);
-                      openAssignmentDialog("teacher");
-                    }}
-                  >
-                    {classItem.classTeacher === "Unassigned"
-                      ? "Assign"
-                      : "Change"}
-                  </Button>
-                </div>
-              ))}
+                );
+              }
+
+              return (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Teacher</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Subjects</TableHead>
+                      <TableHead className="text-right">Assign</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTeachers.map((t) => {
+                      const expanded = !!expandedByTeacher[t.id];
+                      const selGrade =
+                        gradeByTeacher[t.id] ??
+                        (t.grade ? String(t.grade) : "");
+                      const selStream = streamByTeacher[t.id] ?? "";
+                      const selSection = sectionByTeacher[t.id] ?? "";
+                      const sectionOpts = sectionOptsByTeacher[t.id] ?? [];
+                      const loadingSections = !!sectionsLoadingByTeacher[t.id];
+                      return (
+                        <>
+                          <TableRow key={t.id}>
+                            <TableCell className="font-medium">
+                              {t.name}
+                            </TableCell>
+                            <TableCell>{t.grade ?? "—"}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {(t.subjects ?? []).length === 0 ? (
+                                  <span className="text-sm text-muted-foreground">
+                                    —
+                                  </span>
+                                ) : (
+                                  (t.subjects ?? []).map((s) => (
+                                    <Badge key={s} variant="secondary">
+                                      {s}
+                                    </Badge>
+                                  ))
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                onClick={() => toggleExpanded(t.id)}
+                              >
+                                {(t.assignedClasses ?? 0) > 0
+                                  ? "Reassign"
+                                  : "Assign as Head of Class"}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                          {expanded && (
+                            <TableRow>
+                              <TableCell colSpan={4}>
+                                <div className="p-4 bg-secondary rounded-md flex flex-col gap-3 items-start">
+                                  <div className="flex items-center gap-2">
+                                    <Label className="mr-1">Grade</Label>
+                                    <Select
+                                      value={selGrade || undefined}
+                                      onValueChange={(v) =>
+                                        onChangeGrade(t.id, v)
+                                      }
+                                    >
+                                      <SelectTrigger className="w-28">
+                                        <SelectValue placeholder="Select" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="9">9</SelectItem>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="11">11</SelectItem>
+                                        <SelectItem value="12">12</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  {(Number(selGrade) === 11 ||
+                                    Number(selGrade) === 12) && (
+                                    <div className="flex items-center gap-2">
+                                      <Label className="mr-1">Stream</Label>
+                                      <Select
+                                        value={selStream || undefined}
+                                        onValueChange={(v) =>
+                                          onChangeStream(
+                                            t.id,
+                                            v as "natural" | "social"
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger className="w-36">
+                                          <SelectValue placeholder="Choose" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="natural">
+                                            Natural
+                                          </SelectItem>
+                                          <SelectItem value="social">
+                                            Social
+                                          </SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-2">
+                                    <Label className="mr-1">Section</Label>
+                                    <Select
+                                      value={selSection || undefined}
+                                      onValueChange={(v) =>
+                                        setSectionByTeacher((p) => ({
+                                          ...p,
+                                          [t.id]: v,
+                                        }))
+                                      }
+                                      disabled={
+                                        loadingSections ||
+                                        !selGrade ||
+                                        (Number(selGrade) >= 11 && !selStream)
+                                      }
+                                    >
+                                      <SelectTrigger className="w-36">
+                                        <SelectValue
+                                          placeholder={
+                                            loadingSections
+                                              ? "Loading..."
+                                              : "Choose"
+                                          }
+                                        />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {sectionOpts.length === 0 &&
+                                        !loadingSections ? (
+                                          <div className="px-2 py-1 text-sm text-muted-foreground">
+                                            No sections
+                                          </div>
+                                        ) : (
+                                          sectionOpts.map((s) => (
+                                            <SelectItem
+                                              key={s.id}
+                                              value={s.label}
+                                            >
+                                              {s.label}
+                                            </SelectItem>
+                                          ))
+                                        )}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      size="sm"
+                                      disabled={
+                                        !selGrade ||
+                                        !selSection ||
+                                        (Number(selGrade) >= 11 && !selStream)
+                                      }
+                                      onClick={() =>
+                                        onAssignHeadFromExpanded(t.id)
+                                      }
+                                    >
+                                      Confirm Assign
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => toggleExpanded(t.id)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              );
+            })()}
           </CardContent>
         </Card>
 
@@ -840,84 +1195,7 @@ const AssignmentManagement = () => {
         </Card>
       </div>
 
-      {/* Available Teachers */}
-      {teachersError ? (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-foreground">
-                  Unable to load teachers
-                </p>
-                <p className="text-sm text-muted-foreground">{teachersError}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    void fetchServerData();
-                  }}
-                >
-                  Retry
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : teachers.length === 0 ? (
-        <Card>
-          <CardContent className="p-6 text-center">
-            <p className="font-medium text-foreground mb-1">
-              No approved teachers found
-            </p>
-            <p className="text-sm text-muted-foreground mb-4">
-              There are no approved/active teachers available for assignment.
-              Ensure teachers are approved and you are logged in with a head
-              account.
-            </p>
-            <Button onClick={() => void fetchServerData()}>Reload</Button>
-          </CardContent>
-        </Card>
-      ) : null}
-      <Card>
-        <CardHeader>
-          <CardTitle>Available Teachers</CardTitle>
-          <CardDescription>
-            View all teachers and their current assignments
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teachers.map((teacher) => (
-              <div
-                key={teacher.id}
-                className="p-4 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
-              >
-                <p className="font-medium text-foreground mb-1">
-                  {teacher.name}
-                </p>
-                <p className="text-sm text-muted-foreground mb-2">
-                  {teacher.department}
-                </p>
-                <div className="flex items-center justify-between">
-                  <Badge variant="outline">
-                    {teacher.assignedClasses} classes
-                  </Badge>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => openTeacherDetails(teacher)}
-                    className="gap-2 px-4 py-2 rounded-full flex items-center"
-                  >
-                    <Eye className="h-4 w-4 mr-2" />
-                    View Details
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Available Teachers section removed: list is now presented on Teacher Management page */}
 
       {/* Assignment Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -980,23 +1258,31 @@ const AssignmentManagement = () => {
                   <SelectValue placeholder="Choose a teacher" />
                 </SelectTrigger>
                 <SelectContent>
-                  {teachers
-                    .filter((t) => {
+                  {(() => {
+                    const filtered = teachers.filter((t) => {
                       if (!teacherSearch) return true;
                       const q = teacherSearch.toLowerCase();
                       return (
                         t.name.toLowerCase().includes(q) ||
                         t.department.toLowerCase().includes(q)
                       );
-                    })
-                    .map((teacher) => (
+                    });
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="px-2 py-1 text-sm text-muted-foreground">
+                          No teachers available. Approve teachers first.
+                        </div>
+                      );
+                    }
+                    return filtered.map((teacher) => (
                       <SelectItem
                         key={teacher.id}
                         value={teacher.id.toString()}
                       >
                         {teacher.name} - {teacher.department}
                       </SelectItem>
-                    ))}
+                    ));
+                  })()}
                 </SelectContent>
               </Select>
             </div>

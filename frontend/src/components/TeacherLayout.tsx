@@ -51,16 +51,10 @@ const TeacherLayout = () => {
       headOnly: true,
     },
     {
-      name: "All Subjects",
-      href: "/teacher/head-all-subjects",
-      icon: BookOpen,
+      name: "All Grades Management",
+      href: "/teacher/head-grades",
+      icon: Award,
     },
-    {
-      name: "Attendance Management",
-      href: "/teacher/head-attendance",
-      icon: Users,
-    },
-    { name: "Head Class Grades", href: "/teacher/head-grades", icon: Award },
   ];
 
   // Combine navigation based on role

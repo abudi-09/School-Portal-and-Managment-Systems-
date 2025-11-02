@@ -462,6 +462,10 @@ const ScheduleManagement = () => {
   const [subjectTeachers, setSubjectTeachers] = useState<
     Array<{ _id: string; firstName: string; lastName: string; email: string }>
   >([]);
+  // Map of teacherId -> existing class schedules (their occupied slots)
+  const [teacherAvailability, setTeacherAvailability] = useState<
+    Record<string, BackendClassSchedule[]>
+  >({});
   useEffect(() => {
     const loadSubjectTeachers = async () => {
       try {
@@ -480,16 +484,92 @@ const ScheduleManagement = () => {
               : undefined,
         });
         setSubjectTeachers(list);
-        // If exactly one eligible teacher, preselect it
-        if (list.length === 1) {
-          setFormData((prev) => ({ ...prev, teacher: list[0]._id }));
+        // Fetch existing schedules for each teacher so we can compute availability
+        try {
+          const pairs = await Promise.all(
+            list.map(async (t) => {
+              try {
+                const schedules = await getClassSchedules({ teacherId: t._id });
+                return [t._id, schedules] as const;
+              } catch (e) {
+                return [t._id, [] as BackendClassSchedule[]] as const;
+              }
+            })
+          );
+          const map = Object.fromEntries(pairs);
+          setTeacherAvailability(map);
+
+          // If exactly one eligible (non-conflicting) teacher, preselect it.
+          const eligible = list.filter((t) => {
+            const scheds = map[t._id] || [];
+            if (!formData.day || !formData.startTime || !formData.endTime)
+              return true; // cannot determine conflict without times
+            // check overlap on same day
+            const conflict = scheds.some(
+              (s) =>
+                s.day === formData.day &&
+                timesOverlap(
+                  formData.startTime,
+                  formData.endTime,
+                  s.startTime,
+                  s.endTime
+                )
+            );
+            return !conflict;
+          });
+          if (eligible.length === 1) {
+            setFormData((prev) => ({ ...prev, teacher: eligible[0]._id }));
+          }
+        } catch (e) {
+          // ignore availability fetch errors but keep teachers list
         }
       } catch (e) {
         setSubjectTeachers([]);
       }
     };
     void loadSubjectTeachers();
-  }, [formData.subject, selectedGrade, selectedSection, selectedStream]);
+  }, [
+    formData.subject,
+    selectedGrade,
+    selectedSection,
+    selectedStream,
+    formData.day,
+    formData.startTime,
+    formData.endTime,
+  ]);
+
+  // Clear selected teacher if they become conflicted based on current time/day
+  useEffect(() => {
+    if (!formData.teacher) return;
+    const scheds = teacherAvailability[formData.teacher] || [];
+    if (!formData.day || !formData.startTime || !formData.endTime) return;
+    const conflict = scheds.some(
+      (s) =>
+        s.day === formData.day &&
+        timesOverlap(
+          formData.startTime,
+          formData.endTime,
+          s.startTime,
+          s.endTime
+        )
+    );
+    if (conflict) {
+      setFormData((prev) => ({ ...prev, teacher: "" }));
+      toast({
+        title: "Selected teacher is not available",
+        description:
+          "The previously selected teacher has a conflicting period. Please choose another teacher.",
+        variant: "destructive",
+      });
+    }
+  }, [
+    formData.day,
+    formData.startTime,
+    formData.endTime,
+    formData.teacher,
+    teacherAvailability,
+    toast,
+  ]);
 
   // Helper to detect time overlap
   const timesOverlap = (
@@ -507,6 +587,22 @@ const ScheduleManagement = () => {
     const bs = toMin(bStart);
     const be = toMin(bEnd);
     return as < be && bs < ae;
+  };
+
+  // Returns true if the given teacher has a conflicting class on the selected day/time
+  const teacherHasConflict = (teacherId: string) => {
+    const scheds = teacherAvailability[teacherId] || [];
+    if (!formData.day || !formData.startTime || !formData.endTime) return false;
+    return scheds.some(
+      (s) =>
+        s.day === formData.day &&
+        timesOverlap(
+          formData.startTime,
+          formData.endTime,
+          s.startTime,
+          s.endTime
+        )
+    );
   };
 
   const handleAddClassPeriod = async () => {
@@ -1162,11 +1258,25 @@ const ScheduleManagement = () => {
                               No teacher available
                             </SelectItem>
                           ) : (
-                            subjectTeachers.map((teacher) => (
-                              <SelectItem key={teacher._id} value={teacher._id}>
-                                {teacher.firstName} {teacher.lastName}
-                              </SelectItem>
-                            ))
+                            subjectTeachers.map((teacher) => {
+                              const busy = teacherHasConflict(teacher._id);
+                              return (
+                                <SelectItem
+                                  key={teacher._id}
+                                  value={teacher._id}
+                                  disabled={busy}
+                                >
+                                  <div className="flex justify-between items-center w-full">
+                                    <span>
+                                      {teacher.firstName} {teacher.lastName}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {busy ? "Busy" : "Available"}
+                                    </span>
+                                  </div>
+                                </SelectItem>
+                              );
+                            })
                           )}
                         </SelectContent>
                       </Select>

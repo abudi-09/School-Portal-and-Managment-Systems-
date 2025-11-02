@@ -28,6 +28,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -35,13 +42,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import TablePagination from "@/components/shared/TablePagination";
@@ -59,7 +59,7 @@ type Teacher = {
   status: "pending" | "approved" | "deactivated" | "rejected";
   isApproved?: boolean;
   isActive?: boolean;
-  academicInfo?: { subjects?: string[] };
+  academicInfo?: { subjects?: string[]; grade?: string; stream?: string };
   employmentInfo?: { position?: string };
   createdAt?: string;
 };
@@ -99,6 +99,12 @@ const TeacherManagement = () => {
 
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsTeacher, setDetailsTeacher] = useState<Teacher | null>(null);
+  const [gradeFilter, setGradeFilter] = useState<string>("all");
+  const [headAssignmentsByTeacher, setHeadAssignmentsByTeacher] = useState<
+    Record<string, string[]>
+  >({});
 
   // Data fetching
   const pendingQuery = useQuery({
@@ -144,9 +150,34 @@ const TeacherManagement = () => {
     [approvedQuery.data]
   );
 
+  // Filter helpers
+  const filterByGrade = (list: Teacher[]) => {
+    if (!list) return [] as Teacher[];
+    if (gradeFilter === "all") return list;
+    return list.filter((t) => {
+      const g = t.academicInfo?.grade;
+      return g !== undefined && String(g) === gradeFilter;
+    });
+  };
+  const filteredActiveTeachers = useMemo(
+    () => filterByGrade(activeTeachers),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeTeachers, gradeFilter]
+  );
+  const filteredPendingTeachers = useMemo(
+    () => filterByGrade(pendingTeachers),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pendingTeachers, gradeFilter]
+  );
+
   const handleApprove = (teacher: Teacher) => {
     setSelectedTeacher(teacher);
     setDialogOpen(true);
+  };
+
+  const handleViewDetails = (teacher: Teacher) => {
+    setDetailsTeacher(teacher);
+    setDetailsOpen(true);
   };
 
   const approveMutation = useMutation({
@@ -187,6 +218,39 @@ const TeacherManagement = () => {
       });
     },
   });
+
+  // Fetch head-of-class assignments to reflect current class head workload per teacher
+  useEffect(() => {
+    const loadAssignments = async () => {
+      try {
+        const token = getAuthToken();
+        if (!token) return;
+        const res = await fetch(`${apiBaseUrl}/api/head/class-assignments`, {
+          headers: authHeaders(),
+        });
+        const payload = (await res.json()) as {
+          success: boolean;
+          data?: {
+            assignments?: Array<{ classId?: string; headTeacherId?: string }>;
+          };
+          message?: string;
+        };
+        if (!res.ok || !payload.success) return;
+        const map: Record<string, string[]> = {};
+        for (const a of payload.data?.assignments ?? []) {
+          const tId = a.headTeacherId ?? "";
+          const cId = a.classId ?? "";
+          if (!tId || !cId) continue;
+          if (!map[tId]) map[tId] = [];
+          map[tId].push(cId);
+        }
+        setHeadAssignmentsByTeacher(map);
+      } catch {
+        // non-fatal
+      }
+    };
+    void loadAssignments();
+  }, []);
 
   const rejectMutation = useMutation({
     mutationFn: async (teacherId: string) => {
@@ -243,11 +307,11 @@ const TeacherManagement = () => {
   const [pendingPage, setPendingPage] = useState(1);
   const activeTotalPages = Math.max(
     1,
-    Math.ceil(activeTeachers.length / ROWS_PER_PAGE)
+    Math.ceil(filteredActiveTeachers.length / ROWS_PER_PAGE)
   );
   const pendingTotalPages = Math.max(
     1,
-    Math.ceil(pendingTeachers.length / ROWS_PER_PAGE)
+    Math.ceil(filteredPendingTeachers.length / ROWS_PER_PAGE)
   );
   useEffect(() => {
     if (activePage > activeTotalPages) setActivePage(activeTotalPages);
@@ -255,14 +319,19 @@ const TeacherManagement = () => {
   useEffect(() => {
     if (pendingPage > pendingTotalPages) setPendingPage(pendingTotalPages);
   }, [pendingPage, pendingTotalPages]);
-  const pagedActiveTeachers = activeTeachers.slice(
+  const pagedActiveTeachers = filteredActiveTeachers.slice(
     (activePage - 1) * ROWS_PER_PAGE,
     activePage * ROWS_PER_PAGE
   );
-  const pagedPendingTeachers = pendingTeachers.slice(
+  const pagedPendingTeachers = filteredPendingTeachers.slice(
     (pendingPage - 1) * ROWS_PER_PAGE,
     pendingPage * ROWS_PER_PAGE
   );
+  // Reset paging when filters change
+  useEffect(() => {
+    setActivePage(1);
+    setPendingPage(1);
+  }, [gradeFilter]);
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -325,6 +394,18 @@ const TeacherManagement = () => {
             <SelectItem value="history">History</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={gradeFilter} onValueChange={setGradeFilter}>
+          <SelectTrigger className="w-full md:w-48">
+            <SelectValue placeholder="Filter by grade" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Grades</SelectItem>
+            <SelectItem value="9">9</SelectItem>
+            <SelectItem value="10">10</SelectItem>
+            <SelectItem value="11">11</SelectItem>
+            <SelectItem value="12">12</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Tabs */}
@@ -356,14 +437,16 @@ const TeacherManagement = () => {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Subject(s)</TableHead>
+                      <TableHead>Grade</TableHead>
                       <TableHead>Contact</TableHead>
                       <TableHead>Date Joined</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Head Classes</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <TableSkeletonRows rows={6} cols={6} />
+                    <TableSkeletonRows rows={6} cols={8} />
                   </TableBody>
                 </Table>
               ) : approvedQuery.isError ? (
@@ -377,9 +460,11 @@ const TeacherManagement = () => {
                       <TableRow>
                         <TableHead>Name</TableHead>
                         <TableHead>Subject(s)</TableHead>
+                        <TableHead>Grade</TableHead>
                         <TableHead>Contact</TableHead>
                         <TableHead>Date Joined</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Head Classes</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -416,6 +501,17 @@ const TeacherManagement = () => {
                               </div>
                             </TableCell>
                             <TableCell>
+                              {t.academicInfo?.grade ? (
+                                <span className="text-sm">
+                                  {t.academicInfo.grade}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">
+                                  —
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>
                               <div className="text-sm">
                                 <p>{t.email}</p>
                               </div>
@@ -427,10 +523,25 @@ const TeacherManagement = () => {
                                 Active
                               </Badge>
                             </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {headAssignmentsByTeacher[id]?.length ?? 0}{" "}
+                                classes
+                              </Badge>
+                            </TableCell>
                             <TableCell className="text-right">
-                              <Button variant="outline" size="sm">
-                                Deactivate
-                              </Button>
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleViewDetails(t)}
+                                >
+                                  View Details
+                                </Button>
+                                <Button variant="outline" size="sm">
+                                  Deactivate
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
@@ -463,13 +574,14 @@ const TeacherManagement = () => {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Subject(s)</TableHead>
+                      <TableHead>Grade</TableHead>
                       <TableHead>Contact</TableHead>
                       <TableHead>Date Applied</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <TableSkeletonRows rows={6} cols={5} />
+                    <TableSkeletonRows rows={6} cols={6} />
                   </TableBody>
                 </Table>
               ) : pendingQuery.isError ? (
@@ -483,6 +595,7 @@ const TeacherManagement = () => {
                       <TableRow>
                         <TableHead>Name</TableHead>
                         <TableHead>Subject(s)</TableHead>
+                        <TableHead>Grade</TableHead>
                         <TableHead>Contact</TableHead>
                         <TableHead>Date Applied</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
@@ -521,6 +634,17 @@ const TeacherManagement = () => {
                               </div>
                             </TableCell>
                             <TableCell>
+                              {t.academicInfo?.grade ? (
+                                <span className="text-sm">
+                                  {t.academicInfo.grade}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">
+                                  —
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>
                               <div className="text-sm">
                                 <p>{t.email}</p>
                               </div>
@@ -528,6 +652,13 @@ const TeacherManagement = () => {
                             <TableCell>{dateApplied}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleViewDetails(t)}
+                                >
+                                  View Details
+                                </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -620,6 +751,96 @@ const TeacherManagement = () => {
               disabled={approveMutation.isPending}
             >
               {approveMutation.isPending ? "Approving..." : "Confirm Approval"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Details Dialog */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Teacher Details</DialogTitle>
+            <DialogDescription>
+              Overview for{" "}
+              {detailsTeacher
+                ? `${detailsTeacher.firstName} ${detailsTeacher.lastName}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Full name</p>
+                <p className="font-medium">
+                  {detailsTeacher
+                    ? `${detailsTeacher.firstName} ${detailsTeacher.lastName}`
+                    : ""}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Email</p>
+                <p className="font-medium break-all">
+                  {detailsTeacher?.email ?? "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Status</p>
+                <p className="font-medium capitalize">
+                  {detailsTeacher?.status ?? "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Joined</p>
+                <p className="font-medium">
+                  {detailsTeacher?.createdAt
+                    ? new Date(detailsTeacher.createdAt).toLocaleDateString()
+                    : "—"}
+                </p>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Subject(s)</p>
+              <div className="flex flex-wrap gap-1">
+                {(
+                  detailsTeacher?.academicInfo?.subjects ??
+                  (detailsTeacher?.employmentInfo?.position
+                    ? [detailsTeacher.employmentInfo.position]
+                    : [])
+                ).length === 0 ? (
+                  <span className="text-sm text-muted-foreground">—</span>
+                ) : (
+                  (
+                    detailsTeacher?.academicInfo?.subjects ??
+                    (detailsTeacher?.employmentInfo?.position
+                      ? [detailsTeacher.employmentInfo.position]
+                      : [])
+                  ).map((subject) => (
+                    <Badge key={subject} variant="secondary">
+                      {subject}
+                    </Badge>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Grade</p>
+                <p className="font-medium">
+                  {detailsTeacher?.academicInfo?.grade ?? "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Stream</p>
+                <p className="font-medium capitalize">
+                  {detailsTeacher?.academicInfo?.stream ?? "—"}
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailsOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

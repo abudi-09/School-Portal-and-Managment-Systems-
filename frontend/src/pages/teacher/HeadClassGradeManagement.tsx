@@ -175,11 +175,11 @@ const HeadClassGradeManagement = () => {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            Head of Class Grades
+            All Grades Management
           </h1>
           <p className="text-muted-foreground">
-            Review subject submissions, consolidate scores, and publish final
-            rankings.
+            Review subject submissions, consolidate scores, determine rankings,
+            and submit to the Head of School for approval.
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 md:flex-row md:items-center">
@@ -301,14 +301,14 @@ const HeadClassGradeManagement = () => {
                 className="min-w-[12rem]"
                 title={
                   approvalReady
-                    ? "Publish results"
+                    ? "Submit to Head for approval"
                     : isApproved
                     ? "Already approved"
                     : "Waiting on subject submissions"
                 }
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                {isApproved ? "Approved" : "Approve & Finalize"}
+                {isApproved ? "Approved" : "Submit to Head for Approval"}
               </Button>
               <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
                 <CalendarClock className="h-4 w-4" />

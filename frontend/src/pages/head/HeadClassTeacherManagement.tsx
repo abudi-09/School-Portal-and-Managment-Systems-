@@ -396,6 +396,20 @@ export default function HeadClassTeacherManagement() {
         .filter((entry) => entry.id),
     [teachers]
   );
+  // Build reverse lookup: teacherId -> class assignment (if any)
+  const headOfClassByTeacher = useMemo(() => {
+    const map = new Map<string, { classId: string; className: string }>();
+    const nameById = new Map(classRows.map((r) => [r.id, r.name] as const));
+    Object.entries(assignmentMap).forEach(([classId, val]) => {
+      if (val?.headTeacherId) {
+        map.set(val.headTeacherId, {
+          classId,
+          className: nameById.get(classId) ?? classId,
+        });
+      }
+    });
+    return map;
+  }, [assignmentMap, classRows]);
   const selectedTeacher = useMemo(
     () =>
       teachers.find(
@@ -405,12 +419,21 @@ export default function HeadClassTeacherManagement() {
   );
   const currentHeadId = activeClass?.headTeacherId ?? "";
   const currentHeadName = activeClass?.headTeacherName ?? "Unassigned";
+  const selectedTeacherAssignedElsewhere = useMemo(() => {
+    if (!selectedTeacherId) return false;
+    const assigned = headOfClassByTeacher.get(selectedTeacherId);
+    if (!assigned) return false;
+    // If assigned to this active class, it's fine (reselecting)
+    return assigned.classId !== activeClass?.id;
+  }, [selectedTeacherId, headOfClassByTeacher, activeClass]);
+
   const assignButtonDisabled =
     !isAuthorizedForAssignment ||
     !activeClass ||
     !selectedTeacherId ||
     selectedTeacherId === currentHeadId ||
-    assigning;
+    assigning ||
+    selectedTeacherAssignedElsewhere;
 
   const apiBaseUrl =
     import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
@@ -938,18 +961,46 @@ export default function HeadClassTeacherManagement() {
                               : "No teachers available"}
                           </div>
                         ) : (
-                          teacherOptions.map((teacher) => (
-                            <SelectItem key={teacher.id} value={teacher.id}>
-                              {teacher.name}
-                            </SelectItem>
-                          ))
+                          teacherOptions.map((teacher) => {
+                            const assigned = headOfClassByTeacher.get(
+                              teacher.id
+                            );
+                            const isAssignedElsewhere =
+                              !!assigned &&
+                              assigned.classId !== activeClass?.id;
+                            return (
+                              <SelectItem
+                                key={teacher.id}
+                                value={teacher.id}
+                                disabled={isAssignedElsewhere}
+                              >
+                                <div className="flex w-full items-center justify-between gap-3">
+                                  <span>{teacher.name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {assigned
+                                      ? assigned.classId === activeClass?.id
+                                        ? "Current head"
+                                        : `Assigned to ${assigned.className}`
+                                      : "Available"}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            );
+                          })
                         )}
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
                       {teachersLoading
                         ? "Fetching approved teachers..."
-                        : `${teacherOptions.length} approved teachers available`}
+                        : (() => {
+                            const total = teacherOptions.length;
+                            const assignedCount = teacherOptions.filter((t) =>
+                              headOfClassByTeacher.has(t.id)
+                            ).length;
+                            const available = total - assignedCount;
+                            return `${available} available · ${assignedCount} assigned · ${total} total`;
+                          })()}
                     </p>
                   </div>
                   <div className="space-y-2">

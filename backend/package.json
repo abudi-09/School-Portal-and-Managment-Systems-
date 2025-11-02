@@ -8,6 +8,8 @@
     "dev": "nodemon src/server.ts",
     "start": "node dist/server.js",
     "create-admin": "ts-node src/scripts/createSuperAdmin.ts",
+    "list-missing-streams": "ts-node src/scripts/listTeachersMissingStream.ts",
+    "set-teacher-stream": "ts-node src/scripts/setTeacherStream.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

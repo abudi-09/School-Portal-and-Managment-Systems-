@@ -66,6 +66,11 @@ type RankingEntry = {
 
 type ClassFinalResult = {
   classId: string;
+  // When the Head of Class finishes consolidation, they SUBMIT for approval.
+  submitted: boolean;
+  submittedAt?: string;
+  submittedBy?: string;
+  // Head of School (or authorized approver) sets the final APPROVED state.
   approved: boolean;
   approvedAt?: string;
   approvedBy?: string;
@@ -404,17 +409,19 @@ export type HeadClassSummary = {
   rows: RankingEntry[];
   missingSubjects: string[];
   canApprove: boolean;
+  // Head of Class has submitted the consolidated results to Head of School
+  submitted?: boolean;
+  submittedAt?: string;
   approved: boolean;
   approvedAt?: string;
 };
-
 export type HeadClassAssignment = {
   classId: string;
   className: string;
   totalStudents: number;
   totalSubjects: number;
   submittedSubjects: number;
-  status: "pending" | "ready" | "approved";
+  status: "pending" | "ready" | "submitted" | "approved";
   approvedAt?: string;
 };
 
@@ -431,11 +438,14 @@ export function getHeadTeacherClasses(
       ).length;
       const totalSubjects = cls.subjects.length;
       const final = store.finalResults[cls.id];
-      const status: "pending" | "ready" | "approved" = final?.approved
-        ? "approved"
-        : submittedSubjects === totalSubjects
-        ? "ready"
-        : "pending";
+      const status: "pending" | "ready" | "approved" | "submitted" =
+        final?.approved
+          ? "approved"
+          : final?.submitted
+          ? "submitted"
+          : submittedSubjects === totalSubjects
+          ? "ready"
+          : "pending";
       return {
         classId: cls.id,
         className: cls.name,
@@ -574,6 +584,8 @@ export function getHeadClassSummary(classId: string): HeadClassSummary | null {
     rows,
     missingSubjects,
     canApprove: missingSubjects.length === 0,
+    submitted: finalResult?.submitted ?? false,
+    submittedAt: finalResult?.submittedAt,
     approved: finalResult?.approved ?? false,
     approvedAt: finalResult?.approvedAt,
   };
@@ -656,11 +668,51 @@ export function approveClassResults(
   const rows = buildRankingRows(cls, sheets);
   store.finalResults[classId] = {
     classId,
+    submitted: true,
+    submittedAt: store.finalResults[classId]?.submittedAt ?? approvedAt,
+    submittedBy: store.finalResults[classId]?.submittedBy ?? headTeacherId,
     approved: true,
     approvedAt,
     approvedBy: headTeacherId,
     rankings: rows,
   };
+  persist(store);
+  return getHeadClassSummary(classId);
+}
+
+/**
+ * Submit consolidated class results to Head of School for approval.
+ * Does NOT mark individual subject sheets as approved; it only freezes a snapshot
+ * of rankings and sets the class finalResults to submitted=true, approved=false.
+ */
+export function submitClassFinal(
+  classId: string,
+  headTeacherId: string
+): HeadClassSummary | null {
+  const store = cloneStore();
+  const cls = store.classes.find((c) => c.id === classId);
+  if (!cls) return null;
+  if (cls.headTeacherId !== headTeacherId) return null;
+  const sheets = store.gradeSheets.filter((s) => s.classId === classId);
+  // All subjects must be at least submitted
+  const missing = cls.subjects.filter((subject) => {
+    const sheet = sheets.find((s) => s.subjectId === subject.id);
+    return !sheet || sheet.status !== "submitted";
+  });
+  if (missing.length > 0) {
+    // Not ready; return current summary without changing state
+    return getHeadClassSummary(classId);
+  }
+  const rows = buildRankingRows(cls, sheets);
+  const submittedAt = new Date().toISOString();
+  store.finalResults[classId] = {
+    classId,
+    submitted: true,
+    submittedAt,
+    submittedBy: headTeacherId,
+    approved: false,
+    rankings: rows,
+  } as ClassFinalResult;
   persist(store);
   return getHeadClassSummary(classId);
 }

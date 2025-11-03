@@ -37,19 +37,22 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/useAuth";
 import {
   approveClassResults,
+  submitClassFinal,
   getHeadClassSummary,
   getHeadTeacherClasses,
+  applyServerClasses,
+  applyHeadAssignments,
   type HeadClassAssignment,
   type HeadClassSummary,
 } from "@/lib/grades/workflowStore";
-
-const HEAD_TEACHER_ID = "teacher-head-11a";
+// Use the authenticated user's id as the Head Teacher identifier
 
 const HeadClassGradeManagement = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const headId = user?.id || "";
   const [classes, setClasses] = useState<HeadClassAssignment[]>(() =>
-    getHeadTeacherClasses(HEAD_TEACHER_ID)
+    headId ? getHeadTeacherClasses(String(headId)) : []
   );
   const [selectedClassId, setSelectedClassId] = useState(
     () => classes[0]?.classId ?? ""
@@ -80,15 +83,87 @@ const HeadClassGradeManagement = () => {
   }, [selectedClassId]);
 
   const refreshClasses = () => {
-    setClasses(getHeadTeacherClasses(HEAD_TEACHER_ID));
+    if (!headId) return;
+    setClasses(getHeadTeacherClasses(String(headId)));
   };
 
-  const handleApprove = () => {
+  // Bootstrap classes and head assignments from the server so the store
+  // reflects the canonical admin-managed data for the logged-in head teacher.
+  useEffect(() => {
+    if (!headId) return;
+    const apiBaseUrl =
+      import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    (async () => {
+      try {
+        // 1) Load all classes (grade/section identifiers)
+        const clsRes = await fetch(`${apiBaseUrl}/api/classes`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (clsRes.ok) {
+          const payload = (await clsRes.json()) as {
+            success: boolean;
+            data?: { classes?: Array<{ classId: string; name: string }> };
+          };
+          const entries = (payload.data?.classes ?? []).map((c) => ({
+            id: c.classId,
+            name: c.name,
+          }));
+          if (entries.length) applyServerClasses(entries);
+        }
+
+        // 2) Load head-of-class assignments and merge into the store
+        const asgRes = await fetch(`${apiBaseUrl}/api/head/class-assignments`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (asgRes.ok) {
+          const payload = (await asgRes.json()) as {
+            success: boolean;
+            data?: {
+              assignments?: Array<{
+                classId: string;
+                headTeacherId: string;
+                headTeacherName: string;
+              }>;
+            };
+          };
+          const mine = (payload.data?.assignments ?? []).filter(
+            (a) => a.headTeacherId === headId
+          );
+          if (mine.length) {
+            applyHeadAssignments(
+              mine.map((a) => ({
+                classId: a.classId,
+                headTeacherId: a.headTeacherId,
+                headTeacherName: a.headTeacherName,
+              }))
+            );
+          }
+        }
+      } catch (err) {
+        // Non-fatal: the UI will continue with whatever is in the store
+        console.error("Bootstrap head classes failed", err);
+      } finally {
+        refreshClasses();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headId]);
+
+  const handleSubmitForApproval = () => {
     if (!summary || summary.approved || !summary.canApprove) return;
-    const updated = approveClassResults(summary.classId, HEAD_TEACHER_ID);
+    if (!headId) return;
+    const updated = submitClassFinal(summary.classId, String(headId));
     if (!updated) {
       toast({
-        title: "Unable to finalize",
+        title: "Unable to submit",
         description: "Please refresh and try again.",
         variant: "destructive",
       });
@@ -97,8 +172,8 @@ const HeadClassGradeManagement = () => {
     setSummary(updated);
     refreshClasses();
     toast({
-      title: "Results published",
-      description: `${updated.className} rankings are now visible to students.`,
+      title: "Submitted for approval",
+      description: `${updated.className} final rankings sent to Head of School.`,
     });
   };
 
@@ -124,7 +199,8 @@ const HeadClassGradeManagement = () => {
   const topRank = rankings[0];
   const missingSubjects = summary?.missingSubjects ?? [];
   const isApproved = summary?.approved ?? false;
-  const approvalReady = summary?.canApprove && !isApproved;
+  const isSubmitted = summary?.submitted ?? false;
+  const approvalReady = summary?.canApprove && !isApproved && !isSubmitted;
   const lastUpdatedAt = useMemo(() => {
     if (!summary) return null;
     if (summary.approved && summary.approvedAt) return summary.approvedAt;
@@ -198,12 +274,20 @@ const HeadClassGradeManagement = () => {
           {summary && (
             <Badge
               variant={
-                isApproved ? "default" : approvalReady ? "secondary" : "outline"
+                isApproved
+                  ? "default"
+                  : isSubmitted
+                  ? "secondary"
+                  : approvalReady
+                  ? "secondary"
+                  : "outline"
               }
               className="capitalize"
             >
               {isApproved
                 ? "approved"
+                : isSubmitted
+                ? "submitted for approval"
                 : approvalReady
                 ? "ready for approval"
                 : "waiting on subjects"}
@@ -219,6 +303,17 @@ const HeadClassGradeManagement = () => {
           <AlertDescription>
             Published on {new Date(summary.approvedAt).toLocaleString()} —
             students can now view their standings.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!isApproved && isSubmitted && summary?.submittedAt && (
+        <Alert>
+          <CheckCircle2 className="h-4 w-4" />
+          <AlertTitle>Awaiting Head of School approval</AlertTitle>
+          <AlertDescription>
+            Submitted on {new Date(summary.submittedAt).toLocaleString()} — you
+            will be notified once a decision is made.
           </AlertDescription>
         </Alert>
       )}
@@ -296,7 +391,7 @@ const HeadClassGradeManagement = () => {
             </div>
             <div className="flex items-center gap-3">
               <Button
-                onClick={handleApprove}
+                onClick={handleSubmitForApproval}
                 disabled={!approvalReady}
                 className="min-w-[12rem]"
                 title={
@@ -304,11 +399,17 @@ const HeadClassGradeManagement = () => {
                     ? "Submit to Head for approval"
                     : isApproved
                     ? "Already approved"
+                    : isSubmitted
+                    ? "Already submitted"
                     : "Waiting on subject submissions"
                 }
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                {isApproved ? "Approved" : "Submit to Head for Approval"}
+                {isApproved
+                  ? "Approved"
+                  : isSubmitted
+                  ? "Submitted"
+                  : "Submit to Head for Approval"}
               </Button>
               <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
                 <CalendarClock className="h-4 w-4" />

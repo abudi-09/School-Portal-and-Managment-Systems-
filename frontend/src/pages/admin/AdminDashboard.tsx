@@ -254,7 +254,7 @@ const AdminDashboard = () => {
                       <div
                         key={notification.id}
                         className={`p-4 border-b border-border last:border-b-0 ${
-                          !notification.seen ? "bg-blue-50/30" : ""
+                          !notification.seen ? "bg-accent/10" : ""
                         }`}
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -275,7 +275,7 @@ const AdminDashboard = () => {
                             </p>
                           </div>
                           {!notification.seen && (
-                            <div className="h-2 w-2 bg-blue-500 rounded-full flex-shrink-0 mt-2" />
+                            <div className="h-2 w-2 bg-accent rounded-full flex-shrink-0 mt-2" />
                           )}
                         </div>
                         <div className="mt-4 flex justify-end">
@@ -316,14 +316,14 @@ const AdminDashboard = () => {
           )}
         </section>
         {/* Registration Status Alert */}
-        <Alert className="border-blue-200 bg-blue-50/50 rounded-xl shadow-sm">
-          <AlertCircle className="h-5 w-5 text-blue-600" />
-          <AlertDescription className="text-blue-900">
+        <Alert className="border-border bg-accent/10 rounded-xl shadow-sm">
+          <AlertCircle className="h-5 w-5 text-accent" />
+          <AlertDescription className="text-foreground">
             <span className="font-semibold">Registration Status:</span>{" "}
             Currently{" "}
             <Badge
               variant="default"
-              className="ml-2 bg-blue-100 text-blue-800 hover:bg-blue-200"
+              className="ml-2 bg-accent/10 text-foreground hover:bg-accent/20"
             >
               Open
             </Badge>
@@ -331,13 +331,13 @@ const AdminDashboard = () => {
         </Alert>
         {/* Head Signup Notification Alert */}
         {unreadCount > 0 && (
-          <Alert className="border-blue-200 bg-blue-50 rounded-xl shadow-sm">
-            <Bell className="h-5 w-5 text-blue-600" />
-            <AlertDescription className="text-blue-900">
+          <Alert className="border-border bg-accent/10 rounded-xl shadow-sm">
+            <Bell className="h-5 w-5 text-accent" />
+            <AlertDescription className="text-foreground">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="font-semibold text-lg">New Head Signup</span>
-                  <p className="text-sm mt-1 text-blue-700">
+                  <p className="text-sm mt-1 text-muted-foreground">
                     A new Head of School has registered. Review and approve
                     their account.
                   </p>
@@ -347,7 +347,7 @@ const AdminDashboard = () => {
                   onClick={() =>
                     handleViewNotification(notifications.find((n) => !n.seen)!)
                   }
-                  className="ml-6 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm hover:shadow-md transition-all"
+                  className="ml-6 bg-accent hover:bg-accent/90 text-accent-foreground px-4 py-2 rounded-lg font-medium shadow-sm hover:shadow-md transition-all"
                 >
                   View
                 </Button>
@@ -370,7 +370,7 @@ const AdminDashboard = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div
                 onClick={() => navigate("/admin/students")}
-                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-border hover:border-blue-300 hover:bg-muted/10 transition-all group cursor-pointer"
+                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-border hover:border-accent/30 hover:bg-muted/10 transition-all group cursor-pointer"
               >
                 <Users className="h-8 w-8 text-muted-foreground group-hover:text-foreground mb-3" />
                 <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
@@ -489,7 +489,7 @@ const AdminDashboard = () => {
                     index % 2 === 0 ? "bg-muted/50" : "bg-card"
                   }`}
                 >
-                  <div className="h-3 w-3 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
+                  <div className="h-3 w-3 rounded-full bg-accent mt-2 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-base font-medium text-foreground mb-1">
                       {activity.action}

@@ -112,22 +112,22 @@ const statusMeta: Record<
 > = {
   present: {
     label: "Present",
-    className: "border-emerald-500 bg-emerald-50 text-emerald-600",
+    className: "border-success bg-success/10 text-success",
     icon: CheckCircle,
   },
   absent: {
     label: "Absent",
-    className: "border-red-500 bg-red-50 text-red-600",
+    className: "border-destructive bg-destructive/10 text-destructive",
     icon: XCircle,
   },
   late: {
     label: "Late",
-    className: "border-amber-500 bg-amber-50 text-amber-600",
+    className: "border-warning bg-warning/10 text-warning",
     icon: Clock,
   },
   excused: {
     label: "Excused",
-    className: "border-sky-500 bg-sky-50 text-sky-600",
+    className: "border-accent bg-accent/10 text-accent",
     icon: Users,
   },
 };
@@ -142,30 +142,31 @@ const statusVisuals: Record<
   }
 > = {
   present: {
-    card: "border-emerald-200 bg-emerald-50/70",
-    badge: "bg-emerald-500/10 text-emerald-600",
-    button: "border-emerald-200 text-emerald-600 hover:bg-emerald-50",
+    card: "border-success/20 bg-success/10",
+    badge: "bg-success/10 text-success",
+    button: "border-success/20 text-success hover:bg-success/10",
     buttonActive:
-      "border-emerald-500 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-100",
+      "border-success bg-success/10 text-success hover:bg-success/20",
   },
   absent: {
-    card: "border-red-200 bg-red-50/70",
-    badge: "bg-red-500/10 text-red-600",
-    button: "border-red-200 text-red-600 hover:bg-red-50",
-    buttonActive: "border-red-500 bg-red-500/10 text-red-700 hover:bg-red-100",
+    card: "border-destructive/20 bg-destructive/10",
+    badge: "bg-destructive/10 text-destructive",
+    button: "border-destructive/20 text-destructive hover:bg-destructive/10",
+    buttonActive:
+      "border-destructive bg-destructive/10 text-destructive hover:bg-destructive/20",
   },
   late: {
-    card: "border-amber-200 bg-amber-50/70",
-    badge: "bg-amber-500/10 text-amber-600",
-    button: "border-amber-200 text-amber-600 hover:bg-amber-50",
+    card: "border-warning/20 bg-warning/10",
+    badge: "bg-warning/10 text-warning",
+    button: "border-warning/20 text-warning hover:bg-warning/10",
     buttonActive:
-      "border-amber-500 bg-amber-500/10 text-amber-700 hover:bg-amber-100",
+      "border-warning bg-warning/10 text-warning hover:bg-warning/20",
   },
   excused: {
-    card: "border-sky-200 bg-sky-50/70",
-    badge: "bg-sky-500/10 text-sky-600",
-    button: "border-sky-200 text-sky-600 hover:bg-sky-50",
-    buttonActive: "border-sky-500 bg-sky-500/10 text-sky-700 hover:bg-sky-100",
+    card: "border-accent/20 bg-accent/10",
+    badge: "bg-accent/10 text-accent",
+    button: "border-accent/20 text-accent hover:bg-accent/10",
+    buttonActive: "border-accent bg-accent/10 text-accent hover:bg-accent/20",
   },
 };
 
@@ -433,28 +434,28 @@ const TeacherAttendance = () => {
         label: "Present",
         value: statusSummary.present,
         icon: CheckCircle,
-        accent: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        accent: "bg-success/10 text-success border-success/20",
       },
       {
         key: "absent" as const,
         label: "Absent",
         value: statusSummary.absent,
         icon: XCircle,
-        accent: "bg-red-50 text-red-700 border-red-200",
+        accent: "bg-destructive/10 text-destructive border-destructive/20",
       },
       {
         key: "late" as const,
         label: "Late",
         value: statusSummary.late,
         icon: Clock,
-        accent: "bg-amber-50 text-amber-700 border-amber-200",
+        accent: "bg-warning/10 text-warning border-warning/20",
       },
       {
         key: "excused" as const,
         label: "Excused",
         value: statusSummary.excused,
         icon: Users,
-        accent: "bg-sky-50 text-sky-700 border-sky-200",
+        accent: "bg-accent/10 text-accent border-accent/20",
       },
     ],
     [
@@ -658,7 +659,7 @@ const TeacherAttendance = () => {
                         </p>
                       )}
                     </div>
-                    <div className="rounded-lg bg-white/60 p-2">
+                    <div className="rounded-lg bg-muted/10 p-2">
                       <card.icon className="h-5 w-5" />
                     </div>
                   </div>
@@ -689,7 +690,7 @@ const TeacherAttendance = () => {
                       {assignedClass.name} • Homeroom {assignedClass.homeroom}
                     </CardDescription>
                   </div>
-                  <div className="flex items-center gap-2 text-sm font-medium text-emerald-600">
+                  <div className="flex items-center gap-2 text-sm font-medium text-success">
                     <TrendingUp className="h-4 w-4" />
                     {dailyAttendanceRate}% present
                   </div>
@@ -1074,8 +1075,8 @@ const TeacherAttendance = () => {
                                     variant="outline"
                                     className={`text-xs ${
                                       entry.saved
-                                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                                        : "border-amber-500 bg-amber-50 text-amber-700"
+                                        ? "border-success bg-success/10 text-success"
+                                        : "border-warning bg-warning/10 text-warning"
                                     }`}
                                   >
                                     {entry.saved ? "Submitted" : "Pending save"}

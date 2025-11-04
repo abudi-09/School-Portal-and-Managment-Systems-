@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
@@ -35,6 +35,20 @@ const navigation = [
 const HeadLayout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { logout } = useAuth();
+  const navRef = useRef<HTMLElement | null>(null);
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!navRef.current) return;
+    try {
+      const active = navRef.current.querySelector(
+        '[aria-current="page"]'
+      ) as HTMLElement | null;
+      if (active) active.scrollIntoView({ block: "nearest" });
+    } catch (e) {
+      // ignore
+    }
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -64,7 +78,10 @@ const HeadLayout = () => {
       >
         <div className="flex flex-col h-full">
           {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-1">
+          <nav
+            ref={navRef}
+            className="flex-1 px-4 py-6 space-y-1 overflow-y-auto"
+          >
             {navigation.map((item) => (
               <NavLink
                 key={item.name}

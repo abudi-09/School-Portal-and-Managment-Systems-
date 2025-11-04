@@ -164,7 +164,11 @@ export default function AllScoreManagement() {
         setSelectedGrade(grade || "");
         setSelectedSection(section || "");
       } catch (e) {
-        toast({ title: "No assignment", description: "You are not assigned as head-of-class.", variant: "destructive" });
+        toast({
+          title: "No assignment",
+          description: "You are not assigned as head-of-class.",
+          variant: "destructive",
+        });
       }
     })();
   }, [user, apiBaseUrl, token, toast]);
@@ -202,7 +206,10 @@ export default function AllScoreManagement() {
 
           // Derive subjects from evaluations present for this class
           const scRes = await fetch(
-            `${apiBaseUrl}/api/teacher/class-scores?${new URLSearchParams({ grade: selectedGrade, section: selectedSection }).toString()}`,
+            `${apiBaseUrl}/api/teacher/class-scores?${new URLSearchParams({
+              grade: selectedGrade,
+              section: selectedSection,
+            }).toString()}`,
             { headers: { Authorization: `Bearer ${token}` } }
           );
           const scPayload = await scRes.json();
@@ -211,7 +218,10 @@ export default function AllScoreManagement() {
             courseName: string;
             scores: { studentId: string; score: number; maxScore: number }[];
           }> = scPayload?.data?.evaluations ?? [];
-          const crsList: Course[] = evalGroups.map((g) => ({ _id: g.courseId, name: g.courseName || g.courseId }));
+          const crsList: Course[] = evalGroups.map((g) => ({
+            _id: g.courseId,
+            name: g.courseName || g.courseId,
+          }));
           setCourses(crsList);
 
           // Build initial empty scores map
@@ -306,14 +316,19 @@ export default function AllScoreManagement() {
         subjectScores,
       });
     });
-    out.sort((a, b) => b.total - a.total);
-    // assign ranks with ties
+    // sort by average (descending). If averages tie, use total as tiebreaker.
+    out.sort((a, b) => {
+      if (b.average === a.average) return b.total - a.total;
+      return b.average - a.average;
+    });
+
+    // assign ranks with ties based on average (and total as tiebreaker already applied in sort)
     let currentRank = 0;
-    let lastScore = -1;
+    let lastAverage = Number.NEGATIVE_INFINITY;
     out.forEach((r, idx) => {
-      if (r.total !== lastScore) {
+      if (r.average !== lastAverage) {
         currentRank = idx + 1;
-        lastScore = r.total;
+        lastAverage = r.average;
       }
       r.rank = currentRank;
     });
@@ -468,6 +483,7 @@ export default function AllScoreManagement() {
                       {c.name}
                     </TableHead>
                   ))}
+                  <TableHead className="text-center">Average</TableHead>
                   <TableHead className="text-center">Total</TableHead>
                   <TableHead className="text-center">Rank</TableHead>
                 </TableRow>
@@ -497,6 +513,9 @@ export default function AllScoreManagement() {
                         </TableCell>
                       );
                     })}
+                    <TableCell className="text-center font-semibold">
+                      {r.average.toFixed(2)}%
+                    </TableCell>
                     <TableCell className="text-center font-semibold">
                       {r.total}
                     </TableCell>

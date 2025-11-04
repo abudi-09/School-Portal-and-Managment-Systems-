@@ -880,7 +880,13 @@ const AssignmentManagement = () => {
       </Card>
 
       {/* Assignment Panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/*
+        Stack the assignment panels vertically so Class Teacher Assignment
+        and Subject Teacher Assignment appear up/down instead of side-by-side.
+        Removing the `lg:grid-cols-2` breakpoint forces a single-column layout
+        on all screen sizes (keeps responsiveness while meeting the UX request).
+      */}
+      <div className="grid grid-cols-1 gap-6">
         {/* Class Teacher Assignment */}
         <Card>
           <CardHeader>

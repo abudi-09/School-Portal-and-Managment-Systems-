@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -26,6 +26,25 @@ const TeacherLayout = () => {
   // Check if teacher is also a Head Class Teacher
   const isHeadClassTeacher =
     user?.role === "teacher" && Boolean(user?.isHeadClassTeacher);
+
+  // Ref to the nav so we can scroll active item into view when routes change
+  const navRef = useRef<HTMLElement | null>(null);
+  const location = useLocation();
+  // Scroll the active nav item into view when the route changes
+  useEffect(() => {
+    if (!navRef.current) return;
+    try {
+      const active = navRef.current.querySelector(
+        '[aria-current="page"]'
+      ) as HTMLElement | null;
+      if (active) {
+        // scrollIntoView with 'nearest' keeps the least movement while ensuring visibility
+        active.scrollIntoView({ block: "nearest" });
+      }
+    } catch (e) {
+      // ignore DOM exceptions in SSR or non-DOM environments
+    }
+  }, [location.pathname]);
 
   // Build navigation based on role
   const baseNavigation = [
@@ -95,7 +114,10 @@ const TeacherLayout = () => {
       >
         <div className="flex flex-col h-full">
           {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-1">
+          <nav
+            ref={navRef}
+            className="flex-1 px-4 py-6 space-y-1 overflow-y-auto pb-6"
+          >
             {baseNavigation.map((item) => (
               <NavLink
                 key={item.name}

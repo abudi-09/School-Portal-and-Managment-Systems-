@@ -13,7 +13,7 @@ import {
   MessageCircle,
   BookOpen,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/contexts/useAuth";
 import { Navbar } from "./Navbar";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,19 @@ const AdminLayout = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { logout } = useAuth();
+  const navRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!navRef.current) return;
+    try {
+      const active = navRef.current.querySelector(
+        '[aria-current="page"]'
+      ) as HTMLElement | null;
+      if (active) active.scrollIntoView({ block: "nearest" });
+    } catch (e) {
+      // ignore
+    }
+  }, [location.pathname]);
 
   const navigation = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -79,7 +92,7 @@ const AdminLayout = () => {
       >
         <div className="flex flex-col h-full">
           {/* Navigation */}
-          <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
+          <nav ref={navRef} className="flex-1 p-6 space-y-2 overflow-y-auto">
             {navigation.map((item) => {
               const Icon = item.icon;
               return (
@@ -87,6 +100,7 @@ const AdminLayout = () => {
                   key={item.name}
                   to={item.href}
                   onClick={() => setMobileMenuOpen(false)}
+                  aria-current={isActive(item.href) ? "page" : undefined}
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                     isActive(item.href)
                       ? "bg-primary text-primary-foreground"

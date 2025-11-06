@@ -610,14 +610,11 @@ const HeadAnnouncements = () => {
                   Target Audience
                 </Label>
                 <Select
-                  defaultValue={
-                    selectedAnnouncement.audience.toLowerCase().includes("all")
-                      ? "all"
-                      : selectedAnnouncement.audience
-                          .toLowerCase()
-                          .includes("teacher")
-                      ? "teachers"
-                      : "students"
+                  value={editAudience}
+                  onValueChange={(v) =>
+                    setEditAudience(
+                      v as "all" | "teachers" | "students" | "class"
+                    )
                   }
                 >
                   <SelectTrigger className="border-gray-300">
@@ -633,6 +630,48 @@ const HeadAnnouncements = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {editAudience === "class" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-gray-700">
+                      Grade
+                    </Label>
+                    <Select
+                      value={editGrade ?? undefined}
+                      onValueChange={(v) => setEditGrade(v ?? null)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select grade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="11">11</SelectItem>
+                        <SelectItem value="12">12</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-gray-700">
+                      Section
+                    </Label>
+                    <Select
+                      value={editSection ?? undefined}
+                      onValueChange={(v) => setEditSection(v ?? null)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select section" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A">A</SelectItem>
+                        <SelectItem value="B">B</SelectItem>
+                        <SelectItem value="C">C</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label
                   htmlFor="edit-category"
@@ -640,7 +679,9 @@ const HeadAnnouncements = () => {
                 >
                   Category
                 </Label>
-                <Select defaultValue={selectedAnnouncement.category}>
+                <Select
+                  value={(selectedAnnouncement.category ?? "general") as string}
+                >
                   <SelectTrigger className="border-border">
                     <SelectValue />
                   </SelectTrigger>
@@ -653,6 +694,7 @@ const HeadAnnouncements = () => {
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
                 <Label
                   htmlFor="edit-title"
@@ -662,7 +704,8 @@ const HeadAnnouncements = () => {
                 </Label>
                 <Input
                   id="edit-title"
-                  defaultValue={selectedAnnouncement.title}
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
                   className="border-border"
                 />
               </div>
@@ -675,7 +718,8 @@ const HeadAnnouncements = () => {
                 </Label>
                 <Textarea
                   id="edit-content"
-                  defaultValue={selectedAnnouncement.content}
+                  value={editMessage}
+                  onChange={(e) => setEditMessage(e.target.value)}
                   rows={8}
                   className="border-border"
                 />
@@ -705,7 +749,9 @@ const HeadAnnouncements = () => {
               Cancel
             </Button>
             <Button
-              onClick={() => setEditOpen(false)}
+              onClick={async () => {
+                await handleSubmitUpdate();
+              }}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               Update Announcement
@@ -830,7 +876,25 @@ const HeadAnnouncements = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <p className="text-foreground">{announcement.content}</p>
+                <p className="text-foreground">
+                  {expandedIds.has(announcement.id)
+                    ? announcement.content
+                    : truncateWords(announcement.content || "", 50)}
+                </p>
+                {(announcement.content || "").split(/\s+/).filter(Boolean)
+                  .length > 50 && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(announcement.id)}
+                      className="text-sm text-primary underline"
+                    >
+                      {expandedIds.has(announcement.id)
+                        ? "Show Less"
+                        : "See More"}
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-center justify-between pt-2 border-t border-border">
                   <div className="flex items-center gap-4">
                     <Badge

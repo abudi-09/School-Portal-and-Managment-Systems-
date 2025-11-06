@@ -9,6 +9,23 @@ export interface IAnnouncementAttachment {
   size?: number;
 }
 
+export interface IAnnouncementEdit {
+  title?: string;
+  message?: string;
+  attachments?: IAnnouncementAttachment[];
+  audience?: {
+    scope?: "all" | "teachers" | "students" | "class";
+    classId?: string;
+  };
+  date?: Date;
+  editedBy?: {
+    user?: mongoose.Types.ObjectId;
+    name?: string;
+    role?: string;
+  };
+  editedAt?: Date;
+}
+
 export interface IAnnouncement extends Document {
   title: string;
   postedBy: {
@@ -25,6 +42,7 @@ export interface IAnnouncement extends Document {
     classId?: string; // optional class identifier/name for class-targeted posts
   };
   archived?: boolean;
+  edits?: IAnnouncementEdit[];
   createdAt: Date;
   updatedAt: Date;
 }

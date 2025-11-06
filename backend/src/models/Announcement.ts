@@ -64,32 +64,35 @@ const AnnouncementSchema = new Schema<IAnnouncement>(
       },
       classId: { type: String },
     },
-      archived: { type: Boolean, default: false },
-      // keep a history of edits for version integrity (who edited, when, and previous content)
-      edits: {
-        type: [
-          new Schema(
-            {
-              title: { type: String },
-              message: { type: String },
-              attachments: { type: [AttachmentSchema], default: [] },
-              audience: {
-                scope: { type: String, enum: ["all", "teachers", "students", "class"] },
-                classId: { type: String },
+    archived: { type: Boolean, default: false },
+    // keep a history of edits for version integrity (who edited, when, and previous content)
+    edits: {
+      type: [
+        new Schema(
+          {
+            title: { type: String },
+            message: { type: String },
+            attachments: { type: [AttachmentSchema], default: [] },
+            audience: {
+              scope: {
+                type: String,
+                enum: ["all", "teachers", "students", "class"],
               },
-              date: { type: Date },
-              editedBy: {
-                user: { type: Schema.Types.ObjectId, ref: "User" },
-                name: { type: String },
-                role: { type: String },
-              },
-              editedAt: { type: Date },
+              classId: { type: String },
             },
-            { _id: false }
-          ),
-        ],
-        default: [],
-      },
+            date: { type: Date },
+            editedBy: {
+              user: { type: Schema.Types.ObjectId, ref: "User" },
+              name: { type: String },
+              role: { type: String },
+            },
+            editedAt: { type: Date },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );

@@ -217,9 +217,10 @@ const TeacherAnnouncements = () => {
     // Fetch announcements for teacher audience from server
     let cancelled = false;
     let interval: number | undefined;
-    const bc = typeof window !== "undefined" && "BroadcastChannel" in window
-      ? new BroadcastChannel("announcements")
-      : null;
+    const bc =
+      typeof window !== "undefined" && "BroadcastChannel" in window
+        ? new BroadcastChannel("announcements")
+        : null;
 
     const doFetch = async () => {
       setLoading(true);
@@ -277,7 +278,7 @@ const TeacherAnnouncements = () => {
 
     return () => {
       cancelled = true;
-  if (intervalId) clearInterval(intervalId);
+      if (intervalId) clearInterval(intervalId);
       if (bc) bc.close();
     };
   }, [page, filter]);

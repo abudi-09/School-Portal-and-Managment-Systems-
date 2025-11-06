@@ -5,6 +5,7 @@ import {
   type AnnouncementItem,
   deleteAnnouncement as apiDelete,
   createAnnouncement,
+  updateAnnouncement,
 } from "@/lib/api/announcementsApi";
 import { Plus, Bell, Paperclip, Filter, Eye, TrendingUp } from "lucide-react";
 import {
@@ -68,10 +69,65 @@ const HeadAnnouncements = () => {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // UI: track expanded announcements (see more)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  // Edit form controlled fields
+  const [editTitle, setEditTitle] = useState("");
+  const [editMessage, setEditMessage] = useState("");
+  const [editAudience, setEditAudience] = useState<
+    "all" | "teachers" | "students" | "class"
+  >("all");
+  const [editGrade, setEditGrade] = useState<string | null>(null);
+  const [editSection, setEditSection] = useState<string | null>(null);
 
   const handleEdit = (announcement: Announcement) => {
     setSelectedAnnouncement(announcement);
     setEditOpen(true);
+  };
+
+  // populate edit form when selection changes
+  useEffect(() => {
+    if (!selectedAnnouncement) {
+      setEditTitle("");
+      setEditMessage("");
+      setEditAudience("all");
+      setEditGrade(null);
+      setEditSection(null);
+      return;
+    }
+    setEditTitle(selectedAnnouncement.title);
+    setEditMessage(selectedAnnouncement.content || "");
+    const aud = (selectedAnnouncement.audience || "").toLowerCase();
+    if (aud.includes("all")) setEditAudience("all");
+    else if (aud.includes("teacher")) setEditAudience("teachers");
+    else if (aud.includes("student")) setEditAudience("students");
+    else if (aud.includes("class")) {
+      setEditAudience("class");
+      // audience string is `Class ${classId}` in our mapping; try to parse grade/section
+      const m = selectedAnnouncement.audience.match(/Class\s+(.+)/i);
+      if (m && m[1]) {
+        const parts = m[1].split("-");
+        setEditGrade(parts[0] ?? null);
+        setEditSection(parts[1] ?? null);
+      }
+    } else setEditAudience("all");
+  }, [selectedAnnouncement]);
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const truncateWords = (text: string, n = 50) => {
+    if (!text) return "";
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length <= n) return text;
+    return words.slice(0, n).join(" ") + "...";
   };
 
   const handleCreateAnnouncement = (
@@ -115,6 +171,57 @@ const HeadAnnouncements = () => {
       }
     } catch (e) {
       // ignore
+    }
+  };
+
+  const handleSubmitUpdate = async () => {
+    if (!selectedAnnouncement) return;
+    try {
+      const classId =
+        editAudience === "class" && editGrade && editSection
+          ? `${editGrade}-${editSection}`
+          : undefined;
+      const audiencePayload: {
+        scope: "all" | "teachers" | "students" | "class";
+        classId?: string | undefined;
+      } = { scope: editAudience, classId };
+      const updated = await updateAnnouncement(selectedAnnouncement.id, {
+        title: editTitle,
+        message: editMessage,
+        audience: audiencePayload,
+      });
+      const item = updated as AnnouncementItem;
+      const itemAny = item as unknown as {
+        audience?: { scope?: string; classId?: string };
+        category?: string;
+        attachments?: unknown[];
+        postedBy?: { name?: string; user?: string; role?: string };
+        _id: string;
+        title: string;
+        date: string;
+        message: string;
+      };
+      const mapped = {
+        id: item._id,
+        title: item.title,
+        author: item.postedBy?.name || "You",
+        audience:
+          itemAny.audience?.scope === "all"
+            ? "All Users"
+            : itemAny.audience?.scope === "teachers"
+            ? "Teachers"
+            : itemAny.audience?.scope === "students"
+            ? "Students"
+            : `Class ${itemAny.audience?.classId}`,
+        date: new Date(item.date).toISOString().split("T")[0],
+        category: itemAny.category || "general",
+        content: item.message,
+        views: 0,
+        hasAttachment: (item.attachments || []).length > 0,
+      };
+      handleUpdateAnnouncement(mapped);
+    } catch (err) {
+      console.error("Failed to update announcement", err);
     }
   };
 
@@ -164,9 +271,10 @@ const HeadAnnouncements = () => {
   useEffect(() => {
     let cancelled = false;
     let interval: number | undefined;
-    const bc = typeof window !== "undefined" && "BroadcastChannel" in window
-      ? new BroadcastChannel("announcements")
-      : null;
+    const bc =
+      typeof window !== "undefined" && "BroadcastChannel" in window
+        ? new BroadcastChannel("announcements")
+        : null;
 
     const doFetch = async () => {
       setLoading(true);
@@ -219,7 +327,7 @@ const HeadAnnouncements = () => {
 
     return () => {
       cancelled = true;
-  if (intervalId) clearInterval(intervalId);
+      if (intervalId) clearInterval(intervalId);
       if (bc) bc.close();
     };
   }, [page, filter]);
@@ -268,7 +376,11 @@ const HeadAnnouncements = () => {
                 </Label>
                 <Select
                   value={createAudience}
-                  onValueChange={(v) => setCreateAudience(v as "all" | "teachers" | "students" | "class")}
+                  onValueChange={(v) =>
+                    setCreateAudience(
+                      v as "all" | "teachers" | "students" | "class"
+                    )
+                  }
                 >
                   <SelectTrigger className="border-border">
                     <SelectValue placeholder="Select audience" />
@@ -427,7 +539,11 @@ const HeadAnnouncements = () => {
                       audience?: { scope?: string; classId?: string };
                       category?: string;
                       attachments?: unknown[];
-                      postedBy?: { name?: string; user?: string; role?: string };
+                      postedBy?: {
+                        name?: string;
+                        user?: string;
+                        role?: string;
+                      };
                       _id: string;
                       title: string;
                       date: string;

@@ -239,6 +239,9 @@ const AssignmentManagement = () => {
 
   // Search state
   const [teacherSearch, setTeacherSearch] = useState("");
+  // Pagination for class teacher assignment (client-side)
+  const [teacherPage, setTeacherPage] = useState<number>(1);
+  const TEACHER_PAGE_LIMIT = 6;
   const [classSearch, setClassSearch] = useState("");
   const [subjectSearch, setSubjectSearch] = useState("");
   // Track per-teacher expanded assignment controls
@@ -903,7 +906,10 @@ const AssignmentManagement = () => {
               <Input
                 placeholder="Search teachers by name or subject"
                 value={teacherSearch}
-                onChange={(e) => setTeacherSearch(e.target.value)}
+                onChange={(e) => {
+                  setTeacherSearch(e.target.value);
+                  setTeacherPage(1);
+                }}
               />
             </div>
 
@@ -921,6 +927,18 @@ const AssignmentManagement = () => {
                 );
               });
 
+              // paginate client-side
+              const total = filteredTeachers.length;
+              const totalPages = Math.max(
+                1,
+                Math.ceil(total / TEACHER_PAGE_LIMIT)
+              );
+              const start = (teacherPage - 1) * TEACHER_PAGE_LIMIT;
+              const pagedTeachers = filteredTeachers.slice(
+                start,
+                start + TEACHER_PAGE_LIMIT
+              );
+
               if (filteredTeachers.length === 0) {
                 return (
                   <div className="text-sm text-muted-foreground py-6 text-center">
@@ -931,183 +949,213 @@ const AssignmentManagement = () => {
               }
 
               return (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Teacher</TableHead>
-                      <TableHead>Grade</TableHead>
-                      <TableHead>Subjects</TableHead>
-                      <TableHead className="text-right">Assign</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTeachers.map((t) => {
-                      const expanded = !!expandedByTeacher[t.id];
-                      const selGrade =
-                        gradeByTeacher[t.id] ??
-                        (t.grade ? String(t.grade) : "");
-                      const selStream = streamByTeacher[t.id] ?? "";
-                      const selSection = sectionByTeacher[t.id] ?? "";
-                      const sectionOpts = sectionOptsByTeacher[t.id] ?? [];
-                      const loadingSections = !!sectionsLoadingByTeacher[t.id];
-                      return (
-                        <>
-                          <TableRow key={t.id}>
-                            <TableCell className="font-medium">
-                              {t.name}
-                            </TableCell>
-                            <TableCell>{t.grade ?? "—"}</TableCell>
-                            <TableCell>
-                              <div className="flex flex-wrap gap-1">
-                                {(t.subjects ?? []).length === 0 ? (
-                                  <span className="text-sm text-muted-foreground">
-                                    —
-                                  </span>
-                                ) : (
-                                  (t.subjects ?? []).map((s) => (
-                                    <Badge key={s} variant="secondary">
-                                      {s}
-                                    </Badge>
-                                  ))
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                size="sm"
-                                onClick={() => toggleExpanded(t.id)}
-                              >
-                                {(t.assignedClasses ?? 0) > 0
-                                  ? "Reassign"
-                                  : "Assign as Head of Class"}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                          {expanded && (
-                            <TableRow>
-                              <TableCell colSpan={4}>
-                                <div className="p-4 bg-secondary rounded-md flex flex-col gap-3 items-start">
-                                  <div className="flex items-center gap-2">
-                                    <Label className="mr-1">Grade</Label>
-                                    <Select
-                                      value={selGrade || undefined}
-                                      onValueChange={(v) =>
-                                        onChangeGrade(t.id, v)
-                                      }
-                                    >
-                                      <SelectTrigger className="w-28">
-                                        <SelectValue placeholder="Select" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="9">9</SelectItem>
-                                        <SelectItem value="10">10</SelectItem>
-                                        <SelectItem value="11">11</SelectItem>
-                                        <SelectItem value="12">12</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  {(Number(selGrade) === 11 ||
-                                    Number(selGrade) === 12) && (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Teacher</TableHead>
+                        <TableHead>Grade</TableHead>
+                        <TableHead>Subjects</TableHead>
+                        <TableHead className="text-right">Assign</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedTeachers.map((t) => {
+                        const expanded = !!expandedByTeacher[t.id];
+                        const selGrade =
+                          gradeByTeacher[t.id] ??
+                          (t.grade ? String(t.grade) : "");
+                        const selStream = streamByTeacher[t.id] ?? "";
+                        const selSection = sectionByTeacher[t.id] ?? "";
+                        const sectionOpts = sectionOptsByTeacher[t.id] ?? [];
+                        const loadingSections =
+                          !!sectionsLoadingByTeacher[t.id];
+                        return (
+                          <>
+                            <TableRow key={t.id}>
+                              <TableCell className="font-medium">
+                                {t.name}
+                              </TableCell>
+                              <TableCell>{t.grade ?? "—"}</TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap gap-1">
+                                  {(t.subjects ?? []).length === 0 ? (
+                                    <span className="text-sm text-muted-foreground">
+                                      —
+                                    </span>
+                                  ) : (
+                                    (t.subjects ?? []).map((s) => (
+                                      <Badge key={s} variant="secondary">
+                                        {s}
+                                      </Badge>
+                                    ))
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  size="sm"
+                                  onClick={() => toggleExpanded(t.id)}
+                                >
+                                  {(t.assignedClasses ?? 0) > 0
+                                    ? "Reassign"
+                                    : "Assign as Head of Class"}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                            {expanded && (
+                              <TableRow>
+                                <TableCell colSpan={4}>
+                                  <div className="p-4 bg-secondary rounded-md flex flex-col gap-3 items-start">
                                     <div className="flex items-center gap-2">
-                                      <Label className="mr-1">Stream</Label>
+                                      <Label className="mr-1">Grade</Label>
                                       <Select
-                                        value={selStream || undefined}
+                                        value={selGrade || undefined}
                                         onValueChange={(v) =>
-                                          onChangeStream(
-                                            t.id,
-                                            v as "natural" | "social"
-                                          )
+                                          onChangeGrade(t.id, v)
                                         }
                                       >
-                                        <SelectTrigger className="w-36">
-                                          <SelectValue placeholder="Choose" />
+                                        <SelectTrigger className="w-28">
+                                          <SelectValue placeholder="Select" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          <SelectItem value="natural">
-                                            Natural
-                                          </SelectItem>
-                                          <SelectItem value="social">
-                                            Social
-                                          </SelectItem>
+                                          <SelectItem value="9">9</SelectItem>
+                                          <SelectItem value="10">10</SelectItem>
+                                          <SelectItem value="11">11</SelectItem>
+                                          <SelectItem value="12">12</SelectItem>
                                         </SelectContent>
                                       </Select>
                                     </div>
-                                  )}
-                                  <div className="flex items-center gap-2">
-                                    <Label className="mr-1">Section</Label>
-                                    <Select
-                                      value={selSection || undefined}
-                                      onValueChange={(v) =>
-                                        setSectionByTeacher((p) => ({
-                                          ...p,
-                                          [t.id]: v,
-                                        }))
-                                      }
-                                      disabled={
-                                        loadingSections ||
-                                        !selGrade ||
-                                        (Number(selGrade) >= 11 && !selStream)
-                                      }
-                                    >
-                                      <SelectTrigger className="w-36">
-                                        <SelectValue
-                                          placeholder={
-                                            loadingSections
-                                              ? "Loading..."
-                                              : "Choose"
+                                    {(Number(selGrade) === 11 ||
+                                      Number(selGrade) === 12) && (
+                                      <div className="flex items-center gap-2">
+                                        <Label className="mr-1">Stream</Label>
+                                        <Select
+                                          value={selStream || undefined}
+                                          onValueChange={(v) =>
+                                            onChangeStream(
+                                              t.id,
+                                              v as "natural" | "social"
+                                            )
                                           }
-                                        />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {sectionOpts.length === 0 &&
-                                        !loadingSections ? (
-                                          <div className="px-2 py-1 text-sm text-muted-foreground">
-                                            No sections
-                                          </div>
-                                        ) : (
-                                          sectionOpts.map((s) => (
-                                            <SelectItem
-                                              key={s.id}
-                                              value={s.label}
-                                            >
-                                              {s.label}
+                                        >
+                                          <SelectTrigger className="w-36">
+                                            <SelectValue placeholder="Choose" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="natural">
+                                              Natural
                                             </SelectItem>
-                                          ))
-                                        )}
-                                      </SelectContent>
-                                    </Select>
+                                            <SelectItem value="social">
+                                              Social
+                                            </SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                      <Label className="mr-1">Section</Label>
+                                      <Select
+                                        value={selSection || undefined}
+                                        onValueChange={(v) =>
+                                          setSectionByTeacher((p) => ({
+                                            ...p,
+                                            [t.id]: v,
+                                          }))
+                                        }
+                                        disabled={
+                                          loadingSections ||
+                                          !selGrade ||
+                                          (Number(selGrade) >= 11 && !selStream)
+                                        }
+                                      >
+                                        <SelectTrigger className="w-36">
+                                          <SelectValue
+                                            placeholder={
+                                              loadingSections
+                                                ? "Loading..."
+                                                : "Choose"
+                                            }
+                                          />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {sectionOpts.length === 0 &&
+                                          !loadingSections ? (
+                                            <div className="px-2 py-1 text-sm text-muted-foreground">
+                                              No sections
+                                            </div>
+                                          ) : (
+                                            sectionOpts.map((s) => (
+                                              <SelectItem
+                                                key={s.id}
+                                                value={s.label}
+                                              >
+                                                {s.label}
+                                              </SelectItem>
+                                            ))
+                                          )}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        size="sm"
+                                        disabled={
+                                          !selGrade ||
+                                          !selSection ||
+                                          (Number(selGrade) >= 11 && !selStream)
+                                        }
+                                        onClick={() =>
+                                          onAssignHeadFromExpanded(t.id)
+                                        }
+                                      >
+                                        Confirm Assign
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => toggleExpanded(t.id)}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      size="sm"
-                                      disabled={
-                                        !selGrade ||
-                                        !selSection ||
-                                        (Number(selGrade) >= 11 && !selStream)
-                                      }
-                                      onClick={() =>
-                                        onAssignHeadFromExpanded(t.id)
-                                      }
-                                    >
-                                      Confirm Assign
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => toggleExpanded(t.id)}
-                                    >
-                                      Cancel
-                                    </Button>
-                                  </div>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-muted-foreground">
+                      Page {teacherPage} of {totalPages}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={teacherPage <= 1}
+                        onClick={() =>
+                          setTeacherPage((p) => Math.max(1, p - 1))
+                        }
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={teacherPage >= totalPages}
+                        onClick={() =>
+                          setTeacherPage((p) => Math.min(totalPages, p + 1))
+                        }
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </>
               );
             })()}
           </CardContent>

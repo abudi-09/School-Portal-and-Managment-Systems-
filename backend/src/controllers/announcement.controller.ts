@@ -388,6 +388,32 @@ export const updateAnnouncement = async (req: Request, res: Response) => {
     if (date !== undefined) doc.date = new Date(date);
     if (archived !== undefined) doc.archived = !!archived;
 
+    // Push previous snapshot into edits array for version integrity
+    try {
+      const prevSnapshot = {
+        title: doc.title,
+        message: doc.message,
+        attachments: doc.attachments || [],
+        audience: doc.audience || { scope: "all" },
+        date: doc.date,
+        editedBy: {
+          user: req.user._id,
+          name: `${req.user.firstName} ${req.user.lastName}`.trim(),
+          role: req.user.role,
+        },
+        editedAt: new Date(),
+      } as any;
+      // Push onto edits array (schema will ignore if absent)
+      if ((doc as any).edits && Array.isArray((doc as any).edits)) {
+        (doc as any).edits.push(prevSnapshot);
+      } else {
+        (doc as any).edits = [prevSnapshot];
+      }
+    } catch (e) {
+      // non-fatal: continue to save even if we couldn't record edit metadata
+      console.warn("Failed to record edit snapshot", e);
+    }
+
     await doc.save();
     res.json({ success: true, data: doc });
   } catch (error) {

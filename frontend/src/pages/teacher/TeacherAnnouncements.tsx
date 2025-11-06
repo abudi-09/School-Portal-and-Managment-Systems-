@@ -164,6 +164,16 @@ const TeacherAnnouncements = () => {
       }));
       setAnnouncements(items);
       setTotal(res.total);
+      // Notify other tabs/pages that announcements updated
+      try {
+        if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+          const bc = new BroadcastChannel("announcements");
+          bc.postMessage({ type: "announcements:updated" });
+          bc.close();
+        }
+      } catch (e) {
+        // ignore
+      }
     } catch (e) {
       toast.error("Failed to save announcement");
     }
@@ -206,7 +216,12 @@ const TeacherAnnouncements = () => {
   useEffect(() => {
     // Fetch announcements for teacher audience from server
     let cancelled = false;
-    (async () => {
+    let interval: number | undefined;
+    const bc = typeof window !== "undefined" && "BroadcastChannel" in window
+      ? new BroadcastChannel("announcements")
+      : null;
+
+    const doFetch = async () => {
       setLoading(true);
       setError(null);
       try {
@@ -242,9 +257,28 @@ const TeacherAnnouncements = () => {
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    };
+
+    void doFetch();
+
+    // Poll for updates every 15s
+    const intervalId = window.setInterval(() => {
+      void doFetch();
+    }, 15000);
+
+    // Listen for inter-window updates via BroadcastChannel
+    if (bc) {
+      bc.addEventListener("message", (ev) => {
+        if (ev.data && ev.data.type === "announcements:updated") {
+          void doFetch();
+        }
+      });
+    }
+
     return () => {
       cancelled = true;
+  if (intervalId) clearInterval(intervalId);
+      if (bc) bc.close();
     };
   }, [page, filter]);
 

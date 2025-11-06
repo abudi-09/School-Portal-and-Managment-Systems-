@@ -84,6 +84,16 @@ const HeadAnnouncements = () => {
     };
     setAnnouncements([announcement, ...announcements]);
     setOpen(false);
+    // notify other tabs/pages
+    try {
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        const bc = new BroadcastChannel("announcements");
+        bc.postMessage({ type: "announcements:updated" });
+        bc.close();
+      }
+    } catch (e) {
+      // ignore
+    }
   };
 
   const handleUpdateAnnouncement = (updatedAnnouncement: Announcement) => {
@@ -96,6 +106,16 @@ const HeadAnnouncements = () => {
     );
     setEditOpen(false);
     setSelectedAnnouncement(null);
+    // notify other tabs/pages
+    try {
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        const bc = new BroadcastChannel("announcements");
+        bc.postMessage({ type: "announcements:updated" });
+        bc.close();
+      }
+    } catch (e) {
+      // ignore
+    }
   };
 
   const handleArchiveAnnouncement = async (id: string) => {
@@ -143,7 +163,12 @@ const HeadAnnouncements = () => {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let interval: number | undefined;
+    const bc = typeof window !== "undefined" && "BroadcastChannel" in window
+      ? new BroadcastChannel("announcements")
+      : null;
+
+    const doFetch = async () => {
       setLoading(true);
       setError(null);
       try {
@@ -178,9 +203,24 @@ const HeadAnnouncements = () => {
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    };
+
+    void doFetch();
+    const intervalId = window.setInterval(() => {
+      void doFetch();
+    }, 15000);
+    if (bc) {
+      bc.addEventListener("message", (ev) => {
+        if (ev.data && ev.data.type === "announcements:updated") {
+          void doFetch();
+        }
+      });
+    }
+
     return () => {
       cancelled = true;
+  if (intervalId) clearInterval(intervalId);
+      if (bc) bc.close();
     };
   }, [page, filter]);
 
@@ -228,7 +268,7 @@ const HeadAnnouncements = () => {
                 </Label>
                 <Select
                   value={createAudience}
-                  onValueChange={(v) => setCreateAudience(v as any)}
+                  onValueChange={(v) => setCreateAudience(v as "all" | "teachers" | "students" | "class")}
                 >
                   <SelectTrigger className="border-border">
                     <SelectValue placeholder="Select audience" />
@@ -370,29 +410,43 @@ const HeadAnnouncements = () => {
                       createAudience === "class"
                         ? `${createGrade}-${createSection}`
                         : undefined;
+                    const audiencePayload: {
+                      scope: "all" | "teachers" | "students" | "class";
+                      classId?: string | undefined;
+                    } = { scope: createAudience, classId };
                     const created = await createAnnouncement({
                       title: createTitle,
                       message: createMessage,
                       type: "school",
-                      audience: { scope: createAudience as any, classId },
+                      audience: audiencePayload,
                       attachments: [],
                     });
                     // Prepend to list
                     const item = created as AnnouncementItem;
+                    const itemAny = item as unknown as {
+                      audience?: { scope?: string; classId?: string };
+                      category?: string;
+                      attachments?: unknown[];
+                      postedBy?: { name?: string; user?: string; role?: string };
+                      _id: string;
+                      title: string;
+                      date: string;
+                      message: string;
+                    };
                     const mapped = {
                       id: item._id,
                       title: item.title,
                       author: item.postedBy?.name || "You",
                       audience:
-                        item.audience?.scope === "all"
+                        itemAny.audience?.scope === "all"
                           ? "All Users"
-                          : item.audience?.scope === "teachers"
+                          : itemAny.audience?.scope === "teachers"
                           ? "Teachers"
-                          : item.audience?.scope === "students"
+                          : itemAny.audience?.scope === "students"
                           ? "Students"
-                          : `Class ${item.audience?.classId}`,
+                          : `Class ${itemAny.audience?.classId}`,
                       date: new Date(item.date).toISOString().split("T")[0],
-                      category: (item as any).category || "general",
+                      category: itemAny.category || "general",
                       content: item.message,
                       views: 0,
                       hasAttachment: (item.attachments || []).length > 0,

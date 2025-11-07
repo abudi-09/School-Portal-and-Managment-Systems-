@@ -79,6 +79,26 @@ try { git ls-remote https://github.com/git/git 2>&1 | Out-File -FilePath $log -A
 Append-Section "route print (first 200 lines)"
 try { route print | Select-Object -First 200 | Out-File -FilePath $log -Append -Encoding utf8 } catch { $_ | Out-File -FilePath $log -Append -Encoding utf8 }
 
+# Extra diagnostics for flaky connectivity / TLS / proxy issues
+Append-Section "GIT_TRACE & GIT_CURL_VERBOSE fetch (origin)"
+try {
+    $env:GIT_TRACE = 1
+    $env:GIT_CURL_VERBOSE = 1
+    git fetch --dry-run 2>&1 | Out-File -FilePath $log -Append -Encoding utf8
+    Remove-Item Env:GIT_TRACE -ErrorAction SilentlyContinue
+    Remove-Item Env:GIT_CURL_VERBOSE -ErrorAction SilentlyContinue
+} catch { $_ | Out-File -FilePath $log -Append -Encoding utf8 }
+
+Append-Section "SSL verification test (ls-remote)"
+try { git -c http.sslVerify=true ls-remote https://github.com/git/git 2>&1 | Out-File -FilePath $log -Append -Encoding utf8 } catch { $_ | Out-File -FilePath $log -Append -Encoding utf8 }
+
+Append-Section "GitHub status API (https://www.githubstatus.com)"
+try { Invoke-WebRequest -Uri https://www.githubstatus.com/api/v2/status.json -UseBasicParsing -TimeoutSec 15 2>&1 | Out-File -FilePath $log -Append -Encoding utf8 } catch { $_ | Out-File -FilePath $log -Append -Encoding utf8 }
+
+Append-Section "Date/Time sanity check"
+Write-Output "Local Time: $(Get-Date)" | Out-File -FilePath $log -Append -Encoding utf8
+Write-Output "Time Zone: $(Get-TimeZone).Id" | Out-File -FilePath $log -Append -Encoding utf8
+
 Write-Output "\nDiagnostic complete. Log saved to: $log\n"
 Write-Output "Please paste the contents of the log file here or attach it so I can analyze the outputs and suggest next steps." | Out-File -FilePath $log -Append -Encoding utf8
 

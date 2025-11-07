@@ -276,6 +276,17 @@ const AssignmentManagement = () => {
   );
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [subjectOptions, setSubjectOptions] = useState<string[]>([]);
+  const [selectedGrade, setSelectedGrade] = useState<number | null>(null);
+  const [selectedStream, setSelectedStream] = useState<string | null>(null);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [subjectsError, setSubjectsError] = useState<string | null>(null);
+  const [loadingSubjectTeachers, setLoadingSubjectTeachers] = useState(false);
+  const [subjectTeacherOptions, setSubjectTeacherOptions] = useState<
+    { id: string; name: string; department?: string }[]
+  >([]);
+  const [subjectTeachersError, setSubjectTeachersError] = useState<
+    string | null
+  >(null);
   const [subjectAssignmentsServer, setSubjectAssignmentsServer] = useState<
     { class: string; subject: string; teacher: string }[]
   >([]);
@@ -305,7 +316,7 @@ const AssignmentManagement = () => {
         const cls = classes.find((c) => c.id === selectedClass);
         if (!cls || !cls.grade) return;
 
-        // fetch courses for grade
+        // fetch courses for grade (keep existing behavior for class-scoped subjects)
         const coursesRes = await fetch(
           `${apiBaseUrl}/api/head/courses?grade=${cls.grade}`,
           { headers }
@@ -359,6 +370,108 @@ const AssignmentManagement = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClass, classes]);
 
+  // --- Subject list for grade/stream cascade (used in subject-assignment flow) ---
+  useEffect(() => {
+    const loadSubjectsForGrade = async () => {
+      if (!selectedGrade) return;
+      // for grades 11/12 require stream
+      if ((selectedGrade === 11 || selectedGrade === 12) && !selectedStream)
+        return;
+      setLoadingSubjects(true);
+      setSubjectsError(null);
+      try {
+        const token = getAuthToken() || localStorage.getItem("token");
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const qs = new URLSearchParams({ grade: String(selectedGrade) });
+        if (selectedStream) qs.append("stream", String(selectedStream));
+        const res = await fetch(
+          `${apiBaseUrl}/api/head/courses?${qs.toString()}`,
+          { headers }
+        );
+        const payload = await res.json().catch(() => ({}));
+        if (res.ok && payload?.success) {
+          const courseArr = (payload.data?.courses ?? []) as Array<{
+            name: string;
+          }>;
+          setSubjectOptions(courseArr.map((c) => c.name));
+        } else {
+          setSubjectsError(payload?.message || "Failed to load subjects");
+          setSubjectOptions([]);
+        }
+      } catch (err) {
+        setSubjectsError(String(err));
+        setSubjectOptions([]);
+      } finally {
+        setLoadingSubjects(false);
+      }
+    };
+    void loadSubjectsForGrade();
+  }, [selectedGrade, selectedStream, apiBaseUrl]);
+
+  // fetch teachers filtered by grade/stream/subject
+  useEffect(() => {
+    const loadTeachersForSubject = async () => {
+      if (assignmentType !== "subject") return;
+      if (!selectedGrade || !selectedSubject) return;
+      if ((selectedGrade === 11 || selectedGrade === 12) && !selectedStream)
+        return;
+      setLoadingSubjectTeachers(true);
+      setSubjectTeachersError(null);
+      try {
+        const token = getAuthToken() || localStorage.getItem("token");
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const params = new URLSearchParams({
+          grade: String(selectedGrade),
+          subject: selectedSubject,
+        });
+        if (selectedStream) params.append("stream", String(selectedStream));
+        const res = await fetch(
+          `${apiBaseUrl}/api/head/teachers/by-subject?${params.toString()}`,
+          { headers }
+        );
+        const payload = await res.json().catch(() => ({}));
+        if (res.ok && payload?.success) {
+          const teacherArr = (payload.data?.teachers ?? []) as Array<{
+            _id?: string;
+            id?: string;
+            name: string;
+            department?: string;
+          }>;
+          setSubjectTeacherOptions(
+            teacherArr
+              .map((t) => ({
+                id: t._id ?? t.id ?? t.name,
+                name: t.name,
+                department: t.department,
+              }))
+              .filter(Boolean)
+          );
+        } else {
+          setSubjectTeachersError(payload?.message || "No teachers found");
+          setSubjectTeacherOptions([]);
+        }
+      } catch (err) {
+        setSubjectTeachersError(String(err));
+        setSubjectTeacherOptions([]);
+      } finally {
+        setLoadingSubjectTeachers(false);
+      }
+    };
+    void loadTeachersForSubject();
+  }, [
+    assignmentType,
+    selectedGrade,
+    selectedStream,
+    selectedSubject,
+    apiBaseUrl,
+  ]);
+
   const unassignedCount =
     classes.filter((c) => c.classTeacher === "Unassigned").length +
     subjectAssignments.filter((s) => s.teacher === "Unassigned").length;
@@ -366,6 +479,29 @@ const AssignmentManagement = () => {
   const openAssignmentDialog = (type: "teacher" | "subject") => {
     setAssignmentType(type);
     setSelectedTeacherId(null);
+    if (type === "subject") {
+      // Pre-fill grade from currently selected class if available
+      if (selectedClass) {
+        const cls = classes.find((c) => c.id === selectedClass);
+        const g =
+          typeof cls?.grade === "string"
+            ? parseInt(cls!.grade as string, 10)
+            : (cls?.grade as number | undefined);
+        setSelectedGrade(g ?? null);
+      } else {
+        setSelectedGrade(null);
+      }
+      // Reset downstream selections
+      setSelectedStream(null);
+      setSelectedSubject((prev) => prev); // keep if coming from subject row (already set before dialog open)
+      setSubjectTeacherOptions([]);
+    } else {
+      // Reset cascade when doing class teacher assignment
+      setSelectedGrade(null);
+      setSelectedStream(null);
+      setSelectedSubject(null);
+      setSubjectTeacherOptions([]);
+    }
     setDialogOpen(true);
   };
 
@@ -1266,35 +1402,94 @@ const AssignmentManagement = () => {
           </DialogHeader>
           <div className="space-y-4 py-4">
             {assignmentType === "subject" && (
-              <div className="space-y-2">
-                <Label>Select Subject</Label>
-                <Select
-                  value={selectedSubject ?? undefined}
-                  onValueChange={(v) => setSelectedSubject(v ?? null)}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        subjectOptions.length
-                          ? "Choose subject"
-                          : "No subjects available"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {subjectOptions.length === 0 ? (
-                      <div className="px-2 py-1 text-sm text-muted-foreground">
-                        No subjects available for this class
-                      </div>
-                    ) : (
-                      subjectOptions.map((s) => (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Grade</Label>
+                  <Select
+                    value={selectedGrade ? String(selectedGrade) : undefined}
+                    onValueChange={(v) => {
+                      const g = v ? parseInt(v) : null;
+                      setSelectedGrade(g);
+                      // reset downstream selections
+                      setSelectedStream(null);
+                      setSelectedSubject(null);
+                      setSubjectTeacherOptions([]);
+                      setSelectedTeacherId(null);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select grade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[9, 10, 11, 12].map((g) => (
+                        <SelectItem key={g} value={String(g)}>
+                          {g}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Stream</Label>
+                  <Select
+                    value={selectedStream ?? undefined}
+                    onValueChange={(v) => {
+                      setSelectedStream(v ?? null);
+                      setSelectedSubject(null);
+                      setSubjectTeacherOptions([]);
+                      setSelectedTeacherId(null);
+                    }}
+                    disabled={!(selectedGrade === 11 || selectedGrade === 12)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          selectedGrade === 11 || selectedGrade === 12
+                            ? "Select stream"
+                            : "N/A for this grade"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Natural">Natural</SelectItem>
+                      <SelectItem value="Social">Social</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Subject</Label>
+                  <Select
+                    value={selectedSubject ?? undefined}
+                    onValueChange={(v) => setSelectedSubject(v ?? null)}
+                    disabled={loadingSubjects || subjectOptions.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          loadingSubjects
+                            ? "Loading..."
+                            : subjectOptions.length
+                            ? "Choose subject"
+                            : subjectsError || "No subjects"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subjectsError && (
+                        <div className="px-2 py-1 text-sm text-destructive">
+                          {subjectsError}
+                        </div>
+                      )}
+                      {subjectOptions.map((s) => (
                         <SelectItem key={s} value={s}>
                           {s}
                         </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
             <div className="space-y-2">
@@ -1312,31 +1507,62 @@ const AssignmentManagement = () => {
                   <SelectValue placeholder="Choose a teacher" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(() => {
-                    const filtered = teachers.filter((t) => {
-                      if (!teacherSearch) return true;
-                      const q = teacherSearch.toLowerCase();
-                      return (
-                        t.name.toLowerCase().includes(q) ||
-                        t.department.toLowerCase().includes(q)
-                      );
-                    });
-                    if (filtered.length === 0) {
-                      return (
-                        <div className="px-2 py-1 text-sm text-muted-foreground">
-                          No teachers available. Approve teachers first.
-                        </div>
-                      );
-                    }
-                    return filtered.map((teacher) => (
-                      <SelectItem
-                        key={teacher.id}
-                        value={teacher.id.toString()}
-                      >
-                        {teacher.name} - {teacher.department}
-                      </SelectItem>
-                    ));
-                  })()}
+                  {assignmentType === "subject" ? (
+                    loadingSubjectTeachers ? (
+                      <div className="px-2 py-1 text-sm text-muted-foreground">
+                        Loading teachers...
+                      </div>
+                    ) : subjectTeachersError ? (
+                      <div className="px-2 py-1 text-sm text-destructive">
+                        {subjectTeachersError}
+                      </div>
+                    ) : subjectTeacherOptions.length === 0 ? (
+                      <div className="px-2 py-1 text-sm text-muted-foreground">
+                        No active teachers match this grade/stream/subject
+                      </div>
+                    ) : (
+                      subjectTeacherOptions
+                        .filter((t) => {
+                          if (!teacherSearch) return true;
+                          const q = teacherSearch.toLowerCase();
+                          return (
+                            t.name.toLowerCase().includes(q) ||
+                            (t.department ?? "").toLowerCase().includes(q)
+                          );
+                        })
+                        .map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name} - {t.department}
+                          </SelectItem>
+                        ))
+                    )
+                  ) : (
+                    (() => {
+                      const filtered = teachers.filter((t) => {
+                        if (!teacherSearch) return true;
+                        const q = teacherSearch.toLowerCase();
+                        return (
+                          t.name.toLowerCase().includes(q) ||
+                          t.department.toLowerCase().includes(q)
+                        );
+                      });
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="px-2 py-1 text-sm text-muted-foreground">
+                            No teachers available. Approve teachers first.
+                          </div>
+                        );
+                      }
+                      return filtered.map((teacher) => (
+                        <SelectItem
+                          key={teacher.id}
+                          value={teacher.id.toString()}
+                        >
+                          {teacher.name} - {teacher.department}
+                        </SelectItem>
+                      ));
+                    })()
+                  )}
                 </SelectContent>
               </Select>
             </div>

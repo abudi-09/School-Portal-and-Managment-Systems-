@@ -157,6 +157,45 @@ router.get(
   }
 );
 
+// @route   GET /api/head/activity
+// @desc    Recent class/subject assignment activity scoped for head role
+// @access  Private/Head
+router.get(
+  "/activity",
+  authMiddleware,
+  authorizeRoles("head"),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 25, 100);
+      // Heads can see recent assignment logs for visibility
+      const logs = await AuditLog.find()
+        .sort({ timestamp: -1 })
+        .limit(limit)
+        .lean();
+      return res.json({
+        success: true,
+        data: {
+          logs: logs.map((l) => ({
+            id: l._id?.toString?.(),
+            time: l.timestamp,
+            classId: l.classId,
+            subject: l.subject,
+            change: l.change,
+            fromTeacherName: l.fromTeacherName,
+            toTeacherName: l.toTeacherName,
+            actorName: l.actorName,
+          })),
+        },
+      });
+    } catch (error: any) {
+      console.error("Head activity error", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Server error retrieving activity" });
+    }
+  }
+);
+
 // @route   PATCH /api/head/teachers/:id/approve
 // @desc    Approve a pending teacher
 // @access  Private/Head

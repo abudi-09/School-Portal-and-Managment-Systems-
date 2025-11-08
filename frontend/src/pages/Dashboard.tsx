@@ -9,7 +9,8 @@ import {
   Users,
 } from "lucide-react";
 import StatCard from "@/components/StatCard";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import type { LucideIcon } from "lucide-react";
 import { StatCardSkeleton } from "@/components/shared/LoadingSkeletons";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,52 +22,207 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
+import { getAuthToken } from "@/lib/utils";
+
+type StatItem = {
+  key: string;
+  title: string;
+  value: string | number;
+  icon: LucideIcon;
+  description?: string;
+  variant?: "success" | "accent" | "warning" | "default";
+};
+
+type AssignmentItem = {
+  id: string | number;
+  title: string;
+  subject: string;
+  due: string;
+  status: string;
+};
+
+type AnnouncementItem = {
+  id: string | number;
+  title: string;
+  date: string;
+  type: string;
+};
+
+const apiBaseUrl =
+  (import.meta.env.VITE_API_BASE_URL as string) ?? "http://localhost:5000";
+
+const authHeaders = () => {
+  const token = getAuthToken();
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  } as HeadersInit;
+};
 
 const Dashboard = () => {
-  const [isDemoLoading, setIsDemoLoading] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setIsDemoLoading(false), 500);
-    return () => clearTimeout(t);
-  }, []);
-  const upcomingAssignments = [
-    {
-      id: 1,
-      title: "Physics Lab Report",
-      subject: "Physics",
-      due: "Tomorrow",
-      status: "pending",
-    },
-    {
-      id: 2,
-      title: "English Essay",
-      subject: "English",
-      due: "3 days",
-      status: "pending",
-    },
-    {
-      id: 3,
-      title: "Math Problem Set",
-      subject: "Mathematics",
-      due: "5 days",
-      status: "submitted",
-    },
-  ];
+  // Stats
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [stats, setStats] = useState<StatItem[]>([]);
 
-  const recentAnnouncements = [
-    { id: 1, title: "Midterm Schedule Released", date: "Today", type: "exam" },
-    {
-      id: 2,
-      title: "Science Fair Next Week",
-      date: "Yesterday",
-      type: "event",
-    },
-    {
-      id: 3,
-      title: "Library Hours Extended",
-      date: "2 days ago",
-      type: "info",
-    },
-  ];
+  // Assignments (placeholder until endpoint exists)
+  const [upcomingAssignments, setUpcomingAssignments] = useState<
+    AssignmentItem[]
+  >([]);
+  const [loadingAssignments, setLoadingAssignments] = useState(true);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
+
+  // Announcements
+  const [recentAnnouncements, setRecentAnnouncements] = useState<
+    AnnouncementItem[]
+  >([]);
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(true);
+  const [announcementsError, setAnnouncementsError] = useState<string | null>(
+    null
+  );
+
+  const fetchAssignments = useCallback(async () => {
+    setLoadingAssignments(true);
+    setAssignmentsError(null);
+    try {
+      // TODO: Replace with real endpoint for student assignments
+      setUpcomingAssignments([]);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to load assignments";
+      setAssignmentsError(msg);
+    } finally {
+      setLoadingAssignments(false);
+    }
+  }, []);
+
+  const fetchAnnouncements = useCallback(async () => {
+    setLoadingAnnouncements(true);
+    setAnnouncementsError(null);
+    try {
+      const res = await fetch(
+        `${apiBaseUrl}/api/announcements?page=1&pageSize=5`,
+        { headers: authHeaders() }
+      );
+      if (!res.ok) throw new Error("Failed to load announcements");
+      const json = await res.json();
+      const items: Array<{
+        _id: string;
+        title: string;
+        date: string;
+        type?: string;
+      }> = json?.data?.items || [];
+      setRecentAnnouncements(
+        items.map((i) => ({
+          id: i._id,
+          title: i.title,
+          date: new Date(i.date).toLocaleDateString(),
+          type: i.type || "info",
+        }))
+      );
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to load announcements";
+      setAnnouncementsError(msg);
+    } finally {
+      setLoadingAnnouncements(false);
+    }
+  }, []);
+
+  const fetchStats = useCallback(async () => {
+    setLoadingStats(true);
+    setStatsError(null);
+    try {
+      // GPA from evaluations (approximate)
+      const evalRes = await fetch(`${apiBaseUrl}/api/evaluations`, {
+        headers: authHeaders(),
+      });
+      let gpaValue: string | number = "—";
+      if (evalRes.ok) {
+        const evalJson = await evalRes.json();
+        const evaluations: Array<{ score: number; maxScore: number }> =
+          evalJson?.data?.evaluations || [];
+        if (evaluations.length) {
+          const avgPercent =
+            evaluations.reduce(
+              (sum, e) => sum + e.score / (e.maxScore || 100),
+              0
+            ) / evaluations.length;
+          const pct = avgPercent * 100;
+          const gpa =
+            pct >= 90 ? 4 : pct >= 80 ? 3 : pct >= 70 ? 2 : pct >= 60 ? 1 : 0;
+          gpaValue = gpa.toFixed(2);
+        }
+      }
+
+      // Unread announcements
+      const unreadRes = await fetch(
+        `${apiBaseUrl}/api/announcements/unread-count`,
+        { headers: authHeaders() }
+      );
+      const unreadJson = unreadRes.ok ? await unreadRes.json() : null;
+      const unread = unreadJson?.data?.unreadCount ?? 0;
+
+      const pendingAssignmentsCount = upcomingAssignments.filter(
+        (a) => a.status !== "submitted"
+      ).length;
+
+      setStats([
+        {
+          key: "gpa",
+          title: "Current GPA",
+          value: gpaValue,
+          icon: Award,
+          description:
+            gpaValue === "—" ? "No scores yet" : "From recent evaluations",
+          variant: "success",
+        },
+        {
+          key: "rank",
+          title: "Class Rank",
+          value: "—",
+          icon: Trophy,
+          description: "Coming soon",
+          variant: "accent",
+        },
+        {
+          key: "assignments",
+          title: "Pending Assignments",
+          value: pendingAssignmentsCount,
+          icon: ClipboardList,
+          description: `${pendingAssignmentsCount} due`,
+          variant: "warning",
+        },
+        {
+          key: "unread",
+          title: "Unread Announcements",
+          value: unread,
+          icon: Bell,
+          description: "Latest school updates",
+          variant: "accent",
+        },
+      ]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to load stats";
+      setStatsError(msg);
+    } finally {
+      setLoadingStats(false);
+    }
+  }, [upcomingAssignments]);
+
+  useEffect(() => {
+    fetchAssignments();
+  }, [fetchAssignments]);
+
+  useEffect(() => {
+    fetchStats();
+    fetchAnnouncements();
+  }, [fetchStats, fetchAnnouncements]);
+
+  const handleRefresh = () => {
+    fetchStats();
+    fetchAnnouncements();
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20">
@@ -103,8 +259,19 @@ const Dashboard = () => {
         </div>
 
         {/* Enhanced Stats Grid */}
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xl font-semibold">Overview</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={loadingStats}
+          >
+            Refresh
+          </Button>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {isDemoLoading ? (
+          {loadingStats && stats.length === 0 ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div
                 className="transform hover:scale-105 transition-all duration-300"
@@ -113,46 +280,23 @@ const Dashboard = () => {
                 <StatCardSkeleton />
               </div>
             ))
+          ) : statsError ? (
+            <p className="text-sm text-destructive">{statsError}</p>
           ) : (
-            <>
-              <div className="transform hover:scale-105 transition-all duration-300">
+            stats.slice(0, 4).map((s) => (
+              <div
+                key={s.key}
+                className="transform hover:scale-105 transition-all duration-300"
+              >
                 <StatCard
-                  title="Current GPA"
-                  value="3.85"
-                  icon={Award}
-                  trend={{ value: "+0.15", isPositive: true }}
-                  description="Above average"
-                  variant="success"
+                  title={s.title}
+                  value={String(s.value)}
+                  icon={s.icon}
+                  description={s.description}
+                  variant={s.variant || "default"}
                 />
               </div>
-              <div className="transform hover:scale-105 transition-all duration-300">
-                <StatCard
-                  title="Class Rank"
-                  value="#8"
-                  icon={Trophy}
-                  description="Out of 120 students"
-                  variant="accent"
-                />
-              </div>
-              <div className="transform hover:scale-105 transition-all duration-300">
-                <StatCard
-                  title="Pending Assignments"
-                  value="5"
-                  icon={ClipboardList}
-                  description="2 due this week"
-                  variant="warning"
-                />
-              </div>
-              <div className="transform hover:scale-105 transition-all duration-300">
-                <StatCard
-                  title="Attendance Rate"
-                  value="96%"
-                  icon={TrendingUp}
-                  description="Excellent record"
-                  variant="success"
-                />
-              </div>
-            </>
+            ))
           )}
         </div>
 
@@ -239,6 +383,21 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
+                {loadingAssignments && (
+                  <p className="text-sm text-muted-foreground">
+                    Loading assignments…
+                  </p>
+                )}
+                {assignmentsError && (
+                  <p className="text-sm text-destructive">{assignmentsError}</p>
+                )}
+                {!loadingAssignments &&
+                  !assignmentsError &&
+                  upcomingAssignments.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No pending assignments
+                    </p>
+                  )}
                 {upcomingAssignments.map((assignment) => (
                   <div
                     key={assignment.id}
@@ -298,6 +457,23 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
+                {loadingAnnouncements && (
+                  <p className="text-sm text-muted-foreground">
+                    Loading announcements…
+                  </p>
+                )}
+                {announcementsError && (
+                  <p className="text-sm text-destructive">
+                    {announcementsError}
+                  </p>
+                )}
+                {!loadingAnnouncements &&
+                  !announcementsError &&
+                  recentAnnouncements.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No announcements
+                    </p>
+                  )}
                 {recentAnnouncements.map((announcement) => (
                   <div
                     key={announcement.id}

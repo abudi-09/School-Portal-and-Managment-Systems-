@@ -5,6 +5,7 @@ import Course from "../models/Course";
 import Section from "../models/Section";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
 import { ApprovalService } from "../services/approval.service";
+import AuditLog from "../models/AuditLog";
 
 const router = express.Router();
 
@@ -845,6 +846,86 @@ router.delete(
         error:
           process.env.NODE_ENV === "development" ? error.message : undefined,
       });
+    }
+  }
+);
+
+// @route   GET /api/admin/activity
+// @desc    Recent assignment-related audit logs (limited to last 25)
+// @access  Private/Admin
+router.get(
+  "/activity",
+  authMiddleware,
+  authorizeRoles("admin"),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 25, 100);
+      const logs = await AuditLog.find()
+        .sort({ timestamp: -1 })
+        .limit(limit)
+        .lean();
+      res.json({
+        success: true,
+        data: {
+          logs: logs.map((l) => ({
+            id: l._id?.toString?.(),
+            time: l.timestamp,
+            classId: l.classId,
+            subject: l.subject,
+            change: l.change,
+            fromTeacherName: l.fromTeacherName,
+            toTeacherName: l.toTeacherName,
+            actorName: l.actorName,
+          })),
+        },
+      });
+    } catch (error: any) {
+      console.error("Admin activity error", error);
+      res
+        .status(500)
+        .json({ success: false, message: "Server error retrieving activity" });
+    }
+  }
+);
+
+// @route   GET /api/admin/system-status
+// @desc    Basic heuristic academic term status until dedicated config exists
+// @access  Private/Admin
+router.get(
+  "/system-status",
+  authMiddleware,
+  authorizeRoles("admin"),
+  async (_req: express.Request, res: express.Response) => {
+    try {
+      const today = new Date();
+      const month = today.getMonth();
+      const term = month < 4 ? "Spring" : month < 8 ? "Summer" : "Fall";
+      const termEnd = new Date(
+        today.getFullYear(),
+        month < 4 ? 4 : month < 8 ? 8 : 11,
+        month < 4 ? 30 : month < 8 ? 31 : 31
+      );
+      const msPerDay = 1000 * 60 * 60 * 24;
+      const daysRemaining = Math.max(
+        0,
+        Math.ceil((termEnd.getTime() - today.getTime()) / msPerDay)
+      );
+      res.json({
+        success: true,
+        data: {
+          term: `${term} ${today.getFullYear()}`,
+          endsOn: termEnd,
+          daysRemaining,
+        },
+      });
+    } catch (error: any) {
+      console.error("System status error", error);
+      res
+        .status(500)
+        .json({
+          success: false,
+          message: "Server error retrieving system status",
+        });
     }
   }
 );

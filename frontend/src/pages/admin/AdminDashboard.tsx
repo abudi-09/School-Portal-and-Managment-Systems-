@@ -26,11 +26,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { StatCardSkeleton } from "@/components/shared/LoadingSkeletons";
 import { useNavigate } from "react-router-dom";
 import StatCard from "@/components/StatCard";
 import StatsGrid from "@/components/admin/StatsGrid";
+import { getAuthToken } from "@/lib/utils";
+
+import type { ComponentType } from "react";
+import type { SVGProps } from "react";
+type StatItem = {
+  title: string;
+  value: string;
+  change?: string;
+  icon?: ComponentType<SVGProps<SVGSVGElement>>;
+  color?: string;
+};
 
 type Notification = {
   id: number;
@@ -41,38 +52,47 @@ type Notification = {
   timestamp: string;
 };
 
+const apiBaseUrl =
+  (import.meta.env.VITE_API_BASE_URL as string) ?? "http://localhost:5000";
+
+const authHeaders = () => {
+  const token = getAuthToken();
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  } as HeadersInit;
+};
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
 
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: 1,
-      title: "New Head Signup",
-      message:
-        "A new Head of School has registered. Review and approve their account.",
-      user: "Abdurahman Suali",
-      seen: false,
-      timestamp: new Date().toISOString(),
-    },
-    {
-      id: 2,
-      title: "New Head Signup",
-      message:
-        "A new Head of School has registered. Review and approve their account.",
-      user: "Sarah Johnson",
-      seen: false,
-      timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-    },
-  ]);
-
+  // Notifications
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const unreadCount = notifications.filter((n) => !n.seen).length;
+  const [loadingNotifications, setLoadingNotifications] = useState(true);
+  const [notificationsError, setNotificationsError] = useState<string | null>(
+    null
+  );
 
-  const [isDemoLoading, setIsDemoLoading] = useState(true);
+  // Stats
+  const [stats, setStats] = useState<StatItem[]>([]);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => setIsDemoLoading(false), 500);
-    return () => clearTimeout(t);
-  }, []);
+  // Activity
+  const [activity, setActivity] = useState<
+    { action: string; user: string; time: string }[]
+  >([]);
+  const [loadingActivity, setLoadingActivity] = useState(true);
+  const [activityError, setActivityError] = useState<string | null>(null);
+
+  // System status
+  const [systemStatus, setSystemStatus] = useState<{
+    term?: string;
+    daysRemaining?: number;
+  }>({});
+  const [loadingSystem, setLoadingSystem] = useState(true);
+  const [systemError, setSystemError] = useState<string | null>(null);
 
   const markAsSeen = (id: number) => {
     setNotifications((prev) =>
@@ -90,106 +110,263 @@ const AdminDashboard = () => {
 
   const handleViewNotification = (notification: Notification) => {
     markAsSeen(notification.id);
-
-    {
-      /* Enhanced Stats Grid */
-    }
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <div className="transform hover:scale-105 transition-all duration-300">
-        <StatCard
-          title="Current GPA"
-          value="3.85"
-          icon={Award}
-          trend={{ value: "+0.15", isPositive: true }}
-          description="Above average"
-          variant="success"
-        />
-      </div>
-      <div className="transform hover:scale-105 transition-all duration-300">
-        <StatCard
-          title="Class Rank"
-          value="#8"
-          icon={Trophy}
-          description="Out of 120 students"
-          variant="accent"
-        />
-      </div>
-      <div className="transform hover:scale-105 transition-all duration-300">
-        <StatCard
-          title="Pending Assignments"
-          value="5"
-          icon={ClipboardList}
-          description="2 due this week"
-          variant="warning"
-        />
-      </div>
-      <div className="transform hover:scale-105 transition-all duration-300">
-        <StatCard
-          title="Attendance Rate"
-          value="96%"
-          icon={TrendingUp}
-          description="Excellent record"
-          variant="success"
-        />
-      </div>
-    </div>;
     navigate("/admin/head-management");
   };
-  const stats = [
-    {
-      title: "Total Students",
-      value: "1,247",
-      change: "+12%",
-      icon: Users,
-      color: "text-primary",
-    },
-    {
-      title: "Total Teachers",
-      value: "89",
-      change: "+3%",
-      icon: Users,
-      color: "text-primary",
-    },
-    {
-      title: "Active Accounts",
-      value: "1,298",
-      change: "+5%",
-      icon: UserCheck,
-      color: "text-success",
-    },
-    {
-      title: "Inactive Accounts",
-      value: "38",
-      change: "-8%",
-      icon: UserX,
-      color: "text-muted-foreground",
-    },
-  ];
 
-  const recentActivity = [
-    {
-      action: "New student registered",
-      user: "John Doe",
-      time: "2 minutes ago",
-    },
-    {
-      action: "Teacher account activated",
-      user: "Sarah Smith",
-      time: "15 minutes ago",
-    },
-    { action: "Student ID generated", user: "Emma Wilson", time: "1 hour ago" },
-    {
-      action: "Registration approved",
-      user: "Michael Brown",
-      time: "2 hours ago",
-    },
-  ];
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [pendingActivationCount, setPendingActivationCount] = useState(0);
 
   const pendingActions = [
-    { type: "Registration Approval", count: 12, priority: "high" },
-    { type: "Account Activation", count: 5, priority: "medium" },
-    { type: "ID Generation", count: 8, priority: "low" },
+    {
+      type: "Registration Approval",
+      count: pendingApprovalsCount,
+      priority: "high" as const,
+    },
+    {
+      type: "Account Activation",
+      count: pendingActivationCount,
+      priority: "medium" as const,
+    },
+    { type: "ID Generation", count: 0, priority: "low" as const },
   ];
+
+  const fetchStats = useCallback(async () => {
+    setLoadingStats(true);
+    setStatsError(null);
+    try {
+      // Use admin users endpoint with minimal page size to read totals
+      const qs = (q: Record<string, string | number>) =>
+        new URLSearchParams({
+          ...Object.fromEntries(
+            Object.entries(q).map(([k, v]) => [k, String(v)])
+          ),
+        }).toString();
+
+      const [studentsRes, teachersRes, activeRes, inactiveRes] =
+        await Promise.all([
+          fetch(
+            `${apiBaseUrl}/api/admin/users?${qs({
+              role: "student",
+              page: 1,
+              limit: 1,
+            })}`,
+            { headers: authHeaders() }
+          ),
+          fetch(
+            `${apiBaseUrl}/api/admin/users?${qs({
+              role: "teacher",
+              page: 1,
+              limit: 1,
+            })}`,
+            { headers: authHeaders() }
+          ),
+          fetch(
+            `${apiBaseUrl}/api/admin/users?${qs({
+              status: "approved",
+              page: 1,
+              limit: 1,
+            })}`,
+            { headers: authHeaders() }
+          ),
+          fetch(
+            `${apiBaseUrl}/api/admin/users?${qs({
+              status: "deactivated",
+              page: 1,
+              limit: 1,
+            })}`,
+            { headers: authHeaders() }
+          ),
+        ]);
+
+      const pluckTotal = async (res: Response) => {
+        if (!res.ok) return 0;
+        const json = await res.json();
+        return json?.data?.pagination?.total ?? 0;
+      };
+
+      const [studentsTotal, teachersTotal, activeTotal, inactiveTotal] =
+        await Promise.all([
+          pluckTotal(studentsRes),
+          pluckTotal(teachersRes),
+          pluckTotal(activeRes),
+          pluckTotal(inactiveRes),
+        ]);
+
+      setStats([
+        {
+          title: "Total Students",
+          value: String(studentsTotal),
+          icon: Users,
+          color: "text-primary",
+        },
+        {
+          title: "Total Teachers",
+          value: String(teachersTotal),
+          icon: Users,
+          color: "text-primary",
+        },
+        {
+          title: "Active Accounts",
+          value: String(activeTotal),
+          icon: UserCheck,
+          color: "text-success",
+        },
+        {
+          title: "Inactive Accounts",
+          value: String(inactiveTotal),
+          icon: UserX,
+          color: "text-muted-foreground",
+        },
+      ]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to load stats";
+      setStatsError(msg);
+    } finally {
+      setLoadingStats(false);
+    }
+  }, []);
+
+  const fetchNotifications = useCallback(async () => {
+    setLoadingNotifications(true);
+    setNotificationsError(null);
+    try {
+      // Pending approvals (heads + teachers)
+      const res = await fetch(`${apiBaseUrl}/api/admin/users/pending`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to load pending approvals");
+      const json = await res.json();
+      const heads = json?.data?.heads || [];
+      const teachers = json?.data?.teachers || [];
+      const totalPending = Number(json?.data?.totalPending ?? 0);
+      setPendingApprovalsCount(totalPending);
+
+      // Pending activations (status=pending)
+      const pendingRes = await fetch(
+        `${apiBaseUrl}/api/admin/users?status=pending&page=1&limit=1`,
+        { headers: authHeaders() }
+      );
+      let pendingActivation = 0;
+      if (pendingRes.ok) {
+        const pjson = await pendingRes.json();
+        pendingActivation = pjson?.data?.pagination?.total ?? 0;
+      }
+      setPendingActivationCount(pendingActivation);
+
+      const notifs: Notification[] = [];
+      if (heads.length) {
+        notifs.push({
+          id: 1,
+          title: "Pending Head Approvals",
+          message: `${heads.length} head${
+            heads.length > 1 ? "s" : ""
+          } awaiting review`,
+          user: "System",
+          seen: false,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (teachers.length) {
+        notifs.push({
+          id: 2,
+          title: "Pending Teacher Approvals",
+          message: `${teachers.length} teacher${
+            teachers.length > 1 ? "s" : ""
+          } awaiting review`,
+          user: "System",
+          seen: false,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (!heads.length && !teachers.length) {
+        notifs.push({
+          id: 3,
+          title: "No pending approvals",
+          message: "You're all caught up",
+          user: "System",
+          seen: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      setNotifications(notifs);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to load notifications";
+      setNotificationsError(msg);
+      setNotifications([]);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }, []);
+
+  const fetchActivity = useCallback(async () => {
+    setLoadingActivity(true);
+    setActivityError(null);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/admin/activity?limit=6`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to load activity");
+      const json = await res.json();
+      const logs: Array<{
+        time?: string;
+        classId?: string;
+        subject?: string;
+        change?: string;
+        actorName?: string;
+        toTeacherName?: string;
+        fromTeacherName?: string;
+      }> = json?.data?.logs || [];
+      const items = logs.map((l) => ({
+        action:
+          l.change === "assign"
+            ? `Assigned ${l.subject || "Subject"} (${l.classId || "-"})`
+            : l.change === "reassign"
+            ? `Reassigned ${l.subject || "Subject"} (${l.classId || "-"})`
+            : l.change === "unassign"
+            ? `Unassigned ${l.subject || "Subject"} (${l.classId || "-"})`
+            : `Update for ${l.subject || "Subject"} (${l.classId || "-"})`,
+        user: l.actorName || "System",
+        time: l.time ? new Date(l.time).toLocaleString() : "",
+      }));
+      setActivity(items);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to load activity";
+      setActivityError(msg);
+    } finally {
+      setLoadingActivity(false);
+    }
+  }, []);
+
+  const fetchSystemStatus = useCallback(async () => {
+    setLoadingSystem(true);
+    setSystemError(null);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/admin/system-status`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to load system status");
+      const json = await res.json();
+      setSystemStatus({
+        term: json?.data?.term,
+        daysRemaining: json?.data?.daysRemaining,
+      });
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to load system status";
+      setSystemError(msg);
+    } finally {
+      setLoadingSystem(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+    fetchNotifications();
+    fetchActivity();
+    fetchSystemStatus();
+  }, [fetchStats, fetchNotifications, fetchActivity, fetchSystemStatus]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -297,22 +474,25 @@ const AdminDashboard = () => {
           </div>
 
           {/* Stats Grid */}
-          {isDemoLoading ? (
+          {loadingStats ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               {Array.from({ length: 4 }).map((_, i) => (
                 <StatCardSkeleton key={i} />
               ))}
             </div>
           ) : (
-            <StatsGrid
-              stats={stats.map((s) => ({
-                title: s.title,
-                value: s.value,
-                change: s.change,
-                icon: s.icon,
-                color: s.color,
-              }))}
-            />
+            <>
+              {statsError ? (
+                <Alert className="border-destructive/30 bg-destructive/5 rounded-xl">
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                  <AlertDescription className="text-destructive">
+                    {statsError}
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <StatsGrid stats={stats} />
+              )}
+            </>
           )}
         </section>
         {/* Registration Status Alert */}
@@ -344,9 +524,7 @@ const AdminDashboard = () => {
                 </div>
                 <Button
                   size="sm"
-                  onClick={() =>
-                    handleViewNotification(notifications.find((n) => !n.seen)!)
-                  }
+                  onClick={() => handleViewNotification(notifications[0])}
                   className="ml-6 bg-accent hover:bg-accent/90 text-accent-foreground px-4 py-2 rounded-lg font-medium shadow-sm hover:shadow-md transition-all"
                 >
                   View
@@ -420,7 +598,7 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {isDemoLoading
+              {loadingNotifications
                 ? Array.from({ length: 3 }).map((_, i) => (
                     <div
                       key={i}
@@ -482,7 +660,20 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {recentActivity.map((activity, index) => (
+              {loadingActivity && (
+                <p className="text-sm text-muted-foreground">
+                  Loading activity…
+                </p>
+              )}
+              {activityError && (
+                <p className="text-sm text-destructive">{activityError}</p>
+              )}
+              {!loadingActivity && !activityError && activity.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No recent activity
+                </p>
+              )}
+              {activity.map((act, index) => (
                 <div
                   key={index}
                   className={`flex items-start gap-4 p-3 rounded-xl ${
@@ -492,14 +683,12 @@ const AdminDashboard = () => {
                   <div className="h-3 w-3 rounded-full bg-accent mt-2 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-base font-medium text-foreground mb-1">
-                      {activity.action}
+                      {act.action}
                     </p>
                     <p className="text-sm text-muted-foreground mb-1">
-                      {activity.user}
+                      {act.user}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {activity.time}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{act.time}</p>
                   </div>
                 </div>
               ))}
@@ -517,20 +706,36 @@ const AdminDashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-muted-foreground">
-                  Current Term
-                </p>
-                <p className="text-2xl font-bold text-foreground">Fall 2024</p>
+            {loadingSystem && (
+              <p className="text-sm text-muted-foreground">
+                Loading system status…
+              </p>
+            )}
+            {systemError && (
+              <p className="text-sm text-destructive">{systemError}</p>
+            )}
+            {!loadingSystem && !systemError && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Current Term
+                  </p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {systemStatus.term || "—"}
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Days Remaining
+                  </p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {systemStatus.daysRemaining !== undefined
+                      ? `${systemStatus.daysRemaining} days`
+                      : "—"}
+                  </p>
+                </div>
               </div>
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-muted-foreground">
-                  Days Remaining
-                </p>
-                <p className="text-2xl font-bold text-foreground">42 days</p>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

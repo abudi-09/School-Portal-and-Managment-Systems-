@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import path from "path";
 import morgan from "morgan";
+import http from "http";
 import connectDB from "./config/database";
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
@@ -18,12 +19,15 @@ import examScheduleRoutes from "./routes/examSchedules";
 import roomRoutes from "./routes/rooms";
 import announcementRoutes from "./routes/announcements";
 import contactRoutes from "./routes/contact";
+import messageRoutes from "./routes/messages";
 import { errorHandler } from "./middleware/errorHandler";
 import { env } from "./config/env";
 import { seedSuperAdmin } from "./utils/seedSuperAdmin";
+import { initSocket } from "./socket";
 
 const app = express();
 const PORT = env.port;
+const server = http.createServer(app);
 
 // Security middleware
 app.use(helmet());
@@ -74,6 +78,7 @@ app.use("/api/rooms", roomRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/classes", classesRoutes);
 app.use("/api/contact", contactRoutes);
+app.use("/api/messages", messageRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -90,8 +95,9 @@ const startServer = async () => {
   try {
     await connectDB();
     await seedSuperAdmin();
+    initSocket(server);
 
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
     });
   } catch (error) {

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Send, Paperclip, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Send, Paperclip, Search, Plus } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -16,19 +16,22 @@ import { cn } from "@/lib/utils";
 export type MessageSender = "self" | "contact";
 
 export interface MessageItem {
-  id: number;
+  id: string;
   sender: MessageSender;
   text: string;
   timestamp: string;
+  status?: "read" | "unread";
+  isPending?: boolean;
 }
 
 export interface ContactItem {
-  id: number;
+  id: string;
   name: string;
   role: string;
   avatarUrl?: string;
   unreadCount?: number;
   messages: MessageItem[];
+  lastMessageAt?: string;
 }
 
 interface MessagingCenterProps {
@@ -36,7 +39,15 @@ interface MessagingCenterProps {
   description?: string;
   listTitle: string;
   listDescription?: string;
-  initialContacts: ContactItem[];
+  contacts: ContactItem[];
+  selectedContactId?: string | null;
+  onSelectContact?: (contactId: string) => void;
+  onSendMessage?: (contactId: string, message: string) => Promise<void> | void;
+  loadingContacts?: boolean;
+  loadingThread?: boolean;
+  onCompose?: () => void;
+  composeDisabled?: boolean;
+  composeLabel?: string;
   emptyStateMessage?: string;
 }
 
@@ -53,15 +64,45 @@ const MessagingCenter = ({
   description,
   listTitle,
   listDescription,
-  initialContacts,
+  contacts,
+  selectedContactId,
+  onSelectContact,
+  onSendMessage,
+  loadingContacts = false,
+  loadingThread = false,
+  onCompose,
+  composeDisabled = false,
+  composeLabel = "New Message",
   emptyStateMessage = "No conversations yet. Start by selecting a contact.",
 }: MessagingCenterProps) => {
-  const [contacts, setContacts] = useState<ContactItem[]>(initialContacts);
-  const [selectedId, setSelectedId] = useState<number | null>(
-    initialContacts[0]?.id ?? null
+  const [localSelectedId, setLocalSelectedId] = useState<string | null>(
+    selectedContactId ?? contacts[0]?.id ?? null
   );
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
+  const [isSending, setIsSending] = useState(false);
+
+  useEffect(() => {
+    if (typeof selectedContactId === "string") {
+      setLocalSelectedId(selectedContactId);
+    } else if (selectedContactId === null) {
+      setLocalSelectedId(null);
+    }
+  }, [selectedContactId]);
+
+  useEffect(() => {
+    if (!localSelectedId && contacts.length > 0) {
+      setLocalSelectedId(contacts[0].id);
+      return;
+    }
+    if (
+      localSelectedId &&
+      contacts.length > 0 &&
+      !contacts.some((contact) => contact.id === localSelectedId)
+    ) {
+      setLocalSelectedId(contacts[0]?.id ?? null);
+    }
+  }, [contacts, localSelectedId]);
 
   const filteredContacts = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -73,55 +114,50 @@ const MessagingCenter = ({
     );
   }, [contacts, search]);
 
-  const selectedContact = useMemo(
-    () => contacts.find((contact) => contact.id === selectedId) ?? null,
-    [contacts, selectedId]
-  );
+  const selectedContact = useMemo(() => {
+    if (!localSelectedId) return null;
+    return contacts.find((contact) => contact.id === localSelectedId) ?? null;
+  }, [contacts, localSelectedId]);
 
-  const handleSelectContact = (contactId: number) => {
-    setSelectedId(contactId);
-    setContacts((previous) =>
-      previous.map((contact) =>
-        contact.id === contactId ? { ...contact, unreadCount: 0 } : contact
-      )
-    );
+  const handleSelectContact = (contactId: string) => {
+    setLocalSelectedId(contactId);
+    onSelectContact?.(contactId);
   };
 
-  const handleSendMessage = () => {
-    if (!selectedContact || !draft.trim()) {
+  const handleSendMessage = async () => {
+    if (!selectedContact || !draft.trim() || !onSendMessage) {
       return;
     }
-
-    const timestamp = new Date().toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-
-    const nextMessage: MessageItem = {
-      id: Date.now(),
-      sender: "self",
-      text: draft.trim(),
-      timestamp,
-    };
-
-    setContacts((previous) =>
-      previous.map((contact) =>
-        contact.id === selectedContact.id
-          ? { ...contact, messages: [...contact.messages, nextMessage] }
-          : contact
-      )
-    );
-
-    setDraft("");
+    try {
+      setIsSending(true);
+      await onSendMessage(selectedContact.id, draft.trim());
+      setDraft("");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-background py-6">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4">
-        <header className="space-y-1">
-          <h1 className="text-3xl font-bold text-foreground">{title}</h1>
-          {description ? (
-            <p className="text-muted-foreground">{description}</p>
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold text-foreground">{title}</h1>
+            {description ? (
+              <p className="text-muted-foreground">{description}</p>
+            ) : null}
+          </div>
+          {onCompose ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={onCompose}
+              disabled={composeDisabled}
+            >
+              <Plus className="h-4 w-4" />
+              {composeLabel}
+            </Button>
           ) : null}
         </header>
 
@@ -146,7 +182,12 @@ const MessagingCenter = ({
 
               <ScrollArea className="h-[480px] pr-2">
                 <div className="space-y-2">
-                  {filteredContacts.length === 0 ? (
+                  {loadingContacts && contacts.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Loading conversations…
+                    </p>
+                  ) : null}
+                  {!loadingContacts && filteredContacts.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       No matching contacts.
                     </p>
@@ -161,7 +202,7 @@ const MessagingCenter = ({
                         onClick={() => handleSelectContact(contact.id)}
                         className={cn(
                           "w-full rounded-2xl border border-transparent bg-card p-4 text-left transition-colors hover:border-border hover:bg-primary/5",
-                          selectedId === contact.id
+                          localSelectedId === contact.id
                             ? "border-primary bg-primary/5"
                             : undefined
                         )}
@@ -238,7 +279,11 @@ const MessagingCenter = ({
                 <CardContent className="flex flex-1 flex-col gap-4 pt-6">
                   <ScrollArea className="h-[420px] pr-4">
                     <div className="space-y-3">
-                      {selectedContact.messages.length === 0 ? (
+                      {loadingThread ? (
+                        <p className="text-sm text-muted-foreground">
+                          Loading messages…
+                        </p>
+                      ) : selectedContact.messages.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
                           {emptyStateMessage}
                         </p>
@@ -288,16 +333,17 @@ const MessagingCenter = ({
                           onChange={(event) => setDraft(event.target.value)}
                           placeholder={`Message ${selectedContact.name}`}
                           className="border-none px-0 shadow-none focus-visible:ring-0"
+                          disabled={!onSendMessage}
                         />
                       </div>
                       <Button
                         type="button"
                         onClick={handleSendMessage}
-                        disabled={!draft.trim()}
+                        disabled={!onSendMessage || !draft.trim() || isSending}
                         className="gap-2"
                       >
                         <Send className="h-4 w-4" />
-                        Send
+                        {isSending ? "Sending" : "Send"}
                       </Button>
                     </div>
                   </div>

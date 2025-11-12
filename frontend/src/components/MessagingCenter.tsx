@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Send, Paperclip, Search, Plus } from "lucide-react";
 import {
   Card,
@@ -13,13 +13,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
-export type MessageSender = "self" | "contact";
+export type UserRole = "admin" | "head" | "teacher";
 
 export interface MessageItem {
   id: string;
-  sender: MessageSender;
-  text: string;
+  senderId: string;
+  senderRole: UserRole;
+  receiverId: string;
+  receiverRole: UserRole;
+  content: string;
   timestamp: string;
+  timestampIso: string;
   status?: "read" | "unread";
   isPending?: boolean;
 }
@@ -27,10 +31,16 @@ export interface MessageItem {
 export interface ContactItem {
   id: string;
   name: string;
-  role: string;
+  role: UserRole;
   avatarUrl?: string;
+  email?: string;
   unreadCount?: number;
-  messages: MessageItem[];
+  lastMessage?: {
+    content: string;
+    timestamp: string;
+     timestampIso: string;
+    senderRole: UserRole;
+  };
   lastMessageAt?: string;
 }
 
@@ -40,15 +50,26 @@ interface MessagingCenterProps {
   listTitle: string;
   listDescription?: string;
   contacts: ContactItem[];
-  selectedContactId?: string | null;
-  onSelectContact?: (contactId: string) => void;
-  onSendMessage?: (contactId: string, message: string) => Promise<void> | void;
-  loadingContacts?: boolean;
-  loadingThread?: boolean;
+  selectedConversationId: string | null;
+  messages: MessageItem[];
+  currentUserRole: UserRole;
+  currentUserId?: string;
+  onSelectConversation: (conversationId: string) => void;
+  onSendMessage?: (
+    conversationId: string,
+    message: string
+  ) => Promise<void> | void;
+  messageDraft: string;
+  onChangeDraft: (value: string) => void;
+  isLoadingContacts?: boolean;
+  isLoadingThread?: boolean;
+  isSendingMessage?: boolean;
   onCompose?: () => void;
   composeDisabled?: boolean;
   composeLabel?: string;
   emptyStateMessage?: string;
+  disallowedRecipientMessage?: string;
+  validateRecipient?: (contact: ContactItem) => boolean;
 }
 
 const getInitials = (value: string) =>
@@ -59,81 +80,123 @@ const getInitials = (value: string) =>
     .slice(0, 2)
     .toUpperCase();
 
+const formatRoleLabel = (role: UserRole) => {
+  switch (role) {
+    case "admin":
+      return "Administrator";
+    case "head":
+      return "Head of School";
+    case "teacher":
+      return "Teacher";
+    default:
+      return role;
+  }
+};
+
 const MessagingCenter = ({
   title,
   description,
   listTitle,
   listDescription,
   contacts,
-  selectedContactId,
-  onSelectContact,
+  selectedConversationId,
+  messages,
+  currentUserRole,
+  currentUserId,
+  onSelectConversation,
   onSendMessage,
-  loadingContacts = false,
-  loadingThread = false,
+  messageDraft,
+  onChangeDraft,
+  isLoadingContacts = false,
+  isLoadingThread = false,
+  isSendingMessage,
   onCompose,
   composeDisabled = false,
   composeLabel = "New Message",
   emptyStateMessage = "No conversations yet. Start by selecting a contact.",
+  disallowedRecipientMessage = "You cannot message this recipient due to role restrictions.",
+  validateRecipient,
 }: MessagingCenterProps) => {
-  const [localSelectedId, setLocalSelectedId] = useState<string | null>(
-    selectedContactId ?? contacts[0]?.id ?? null
-  );
   const [search, setSearch] = useState("");
-  const [draft, setDraft] = useState("");
-  const [isSending, setIsSending] = useState(false);
+  const [internalIsSending, setInternalIsSending] = useState(false);
 
-  useEffect(() => {
-    if (typeof selectedContactId === "string") {
-      setLocalSelectedId(selectedContactId);
-    } else if (selectedContactId === null) {
-      setLocalSelectedId(null);
-    }
-  }, [selectedContactId]);
+  const sending = isSendingMessage ?? internalIsSending;
 
-  useEffect(() => {
-    if (!localSelectedId && contacts.length > 0) {
-      setLocalSelectedId(contacts[0].id);
-      return;
-    }
-    if (
-      localSelectedId &&
-      contacts.length > 0 &&
-      !contacts.some((contact) => contact.id === localSelectedId)
-    ) {
-      setLocalSelectedId(contacts[0]?.id ?? null);
-    }
-  }, [contacts, localSelectedId]);
+  const hierarchyAllows = useCallback(
+    (contactRole: UserRole) => {
+      switch (currentUserRole) {
+        case "teacher":
+          return contactRole === "head";
+        case "head":
+          return contactRole === "admin" || contactRole === "teacher";
+        case "admin":
+          return contactRole === "head";
+        default:
+          return false;
+      }
+    },
+    [currentUserRole]
+  );
+
+  const isSelectable = useCallback(
+    (contact: ContactItem) => {
+      const hierarchyValid = hierarchyAllows(contact.role);
+      if (!hierarchyValid) {
+        return false;
+      }
+      if (validateRecipient) {
+        return validateRecipient(contact);
+      }
+      return true;
+    },
+    [hierarchyAllows, validateRecipient]
+  );
 
   const filteredContacts = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) {
       return contacts;
     }
-    return contacts.filter((contact) =>
-      `${contact.name} ${contact.role}`.toLowerCase().includes(term)
-    );
+    return contacts.filter((contact) => {
+      const haystack = [contact.name, contact.role, contact.email]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(term);
+    });
   }, [contacts, search]);
 
   const selectedContact = useMemo(() => {
-    if (!localSelectedId) return null;
-    return contacts.find((contact) => contact.id === localSelectedId) ?? null;
-  }, [contacts, localSelectedId]);
+    if (!selectedConversationId) return null;
+    return contacts.find((contact) => contact.id === selectedConversationId) ?? null;
+  }, [contacts, selectedConversationId]);
 
-  const handleSelectContact = (contactId: string) => {
-    setLocalSelectedId(contactId);
-    onSelectContact?.(contactId);
+  const handleSelectContact = (contact: ContactItem) => {
+    if (!isSelectable(contact)) {
+      return;
+    }
+    onSelectConversation(contact.id);
   };
 
   const handleSendMessage = async () => {
-    if (!selectedContact || !draft.trim() || !onSendMessage) {
+    if (
+      !selectedConversationId ||
+      !messageDraft.trim() ||
+      !onSendMessage ||
+      sending
+    ) {
       return;
     }
     try {
-      setIsSending(true);
-      await onSendMessage(selectedContact.id, draft.trim());
-      setDraft("");
+      if (isSendingMessage === undefined) {
+        setInternalIsSending(true);
+      }
+      await onSendMessage(selectedConversationId, messageDraft.trim());
+      onChangeDraft("");
     } finally {
-      setIsSending(false);
+      if (isSendingMessage === undefined) {
+        setInternalIsSending(false);
+      }
     }
   };
 
@@ -182,29 +245,31 @@ const MessagingCenter = ({
 
               <ScrollArea className="h-[480px] pr-2">
                 <div className="space-y-2">
-                  {loadingContacts && contacts.length === 0 ? (
+                  {isLoadingContacts && contacts.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       Loading conversations…
                     </p>
                   ) : null}
-                  {!loadingContacts && filteredContacts.length === 0 ? (
+                  {!isLoadingContacts && filteredContacts.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       No matching contacts.
                     </p>
                   ) : null}
                   {filteredContacts.map((contact) => {
-                    const lastMessage =
-                      contact.messages[contact.messages.length - 1];
+                    const lastMessage = contact.lastMessage;
+                    const allowed = isSelectable(contact);
                     return (
                       <button
                         key={contact.id}
                         type="button"
-                        onClick={() => handleSelectContact(contact.id)}
+                        onClick={() => handleSelectContact(contact)}
+                        disabled={!allowed}
                         className={cn(
                           "w-full rounded-2xl border border-transparent bg-card p-4 text-left transition-colors hover:border-border hover:bg-primary/5",
-                          localSelectedId === contact.id
+                          selectedConversationId === contact.id
                             ? "border-primary bg-primary/5"
-                            : undefined
+                            : undefined,
+                          !allowed ? "cursor-not-allowed opacity-60" : undefined
                         )}
                       >
                         <div className="flex items-start gap-3">
@@ -231,17 +296,32 @@ const MessagingCenter = ({
                               ) : null}
                             </div>
                             <p className="text-xs font-medium text-muted-foreground">
-                              {contact.role}
+                              {formatRoleLabel(contact.role)}
                             </p>
-                            {lastMessage ? (
-                              <p className="line-clamp-2 text-sm text-muted-foreground">
-                                {lastMessage.text}
+                            {contact.email ? (
+                              <p className="text-xs text-muted-foreground">
+                                {contact.email}
                               </p>
+                            ) : null}
+                            {lastMessage ? (
+                              <div className="space-y-1">
+                                <p className="line-clamp-2 text-sm text-muted-foreground">
+                                  {lastMessage.content}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {lastMessage.timestamp}
+                                </p>
+                              </div>
                             ) : (
                               <p className="text-sm text-muted-foreground">
                                 No messages yet
                               </p>
                             )}
+                            {!allowed ? (
+                              <p className="text-xs italic text-muted-foreground">
+                                {disallowedRecipientMessage}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </button>
@@ -272,54 +352,70 @@ const MessagingCenter = ({
                       <CardTitle className="text-2xl">
                         {selectedContact.name}
                       </CardTitle>
-                      <CardDescription>{selectedContact.role}</CardDescription>
+                      <CardDescription>
+                        {formatRoleLabel(selectedContact.role)}
+                      </CardDescription>
+                      {selectedContact.email ? (
+                        <p className="text-xs text-muted-foreground">
+                          {selectedContact.email}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="flex flex-1 flex-col gap-4 pt-6">
                   <ScrollArea className="h-[420px] pr-4">
                     <div className="space-y-3">
-                      {loadingThread ? (
+                      {isLoadingThread ? (
                         <p className="text-sm text-muted-foreground">
                           Loading messages…
                         </p>
-                      ) : selectedContact.messages.length === 0 ? (
+                      ) : messages.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
                           {emptyStateMessage}
                         </p>
                       ) : (
-                        selectedContact.messages.map((message) => (
-                          <div
-                            key={message.id}
-                            className={cn(
-                              "flex",
-                              message.sender === "self"
-                                ? "justify-end"
-                                : "justify-start"
-                            )}
-                          >
+                        messages.map((message) => {
+                          const isSelf =
+                            message.senderId === currentUserId ||
+                            (!currentUserId &&
+                              message.senderRole === currentUserRole);
+                          return (
                             <div
+                              key={message.id}
                               className={cn(
-                                "max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm",
-                                message.sender === "self"
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-foreground"
+                                "flex",
+                                isSelf ? "justify-end" : "justify-start"
                               )}
                             >
-                              <p>{message.text}</p>
-                              <span
+                              <div
                                 className={cn(
-                                  "mt-2 block text-xs",
-                                  message.sender === "self"
-                                    ? "text-primary-foreground/80"
-                                    : "text-muted-foreground"
+                                  "max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm",
+                                  isSelf
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted text-foreground"
                                 )}
                               >
-                                {message.timestamp}
-                              </span>
+                                <p>{message.content}</p>
+                                <div
+                                  className={cn(
+                                    "mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs",
+                                    isSelf
+                                      ? "text-primary-foreground/80"
+                                      : "text-muted-foreground"
+                                  )}
+                                >
+                                  <span>{message.timestamp}</span>
+                                  {message.status ? (
+                                    <span className="font-medium capitalize">
+                                      {message.status}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </ScrollArea>
@@ -329,21 +425,30 @@ const MessagingCenter = ({
                       <div className="flex flex-1 items-center gap-3 rounded-full border border-border bg-background px-4 py-2">
                         <Paperclip className="h-4 w-4 text-muted-foreground" />
                         <Input
-                          value={draft}
-                          onChange={(event) => setDraft(event.target.value)}
-                          placeholder={`Message ${selectedContact.name}`}
+                          value={messageDraft}
+                          onChange={(event) => onChangeDraft(event.target.value)}
+                          placeholder={
+                            selectedContact
+                              ? `Message ${selectedContact.name}`
+                              : "Write a message"
+                          }
                           className="border-none px-0 shadow-none focus-visible:ring-0"
-                          disabled={!onSendMessage}
+                          disabled={!onSendMessage || !selectedConversationId}
                         />
                       </div>
                       <Button
                         type="button"
                         onClick={handleSendMessage}
-                        disabled={!onSendMessage || !draft.trim() || isSending}
+                        disabled={
+                          !onSendMessage ||
+                          !selectedConversationId ||
+                          !messageDraft.trim() ||
+                          sending
+                        }
                         className="gap-2"
                       >
                         <Send className="h-4 w-4" />
-                        {isSending ? "Sending" : "Send"}
+                        {sending ? "Sending" : "Send"}
                       </Button>
                     </div>
                   </div>

@@ -3,6 +3,7 @@ import { getAuthToken } from "@/lib/utils";
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
 
 type MessageResponse = {
+  _id: string;
   id: string;
   senderId: string;
   receiverId: string;
@@ -11,6 +12,8 @@ type MessageResponse = {
   timestamp: string;
   readAt?: string;
   threadKey: string;
+  senderRole: "admin" | "head" | "teacher";
+  receiverRole: "admin" | "head" | "teacher";
 };
 
 export interface RecipientDto {

@@ -2,13 +2,14 @@ import express from "express";
 import { body, param, validationResult } from "express-validator";
 import mongoose, { Types } from "mongoose";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
-import Message, {
-  IMessage,
-  MessageRole,
-  getThreadKey,
-} from "../models/Message";
+import Message, { MessageRole, getThreadKey } from "../models/Message";
 import User, { IUser } from "../models/User";
 import { emitToUser } from "../socket";
+import {
+  MessageLike,
+  normalizeMessage,
+  normalizeMessageIds,
+} from "../utils/messages";
 
 const router = express.Router();
 
@@ -67,17 +68,6 @@ const ensureUsersExist = async (
     receiver: receiver as unknown as IUser,
   };
 };
-
-const mapMessage = (message: IMessage) => ({
-  id: message._id.toString(),
-  senderId: message.sender.toString(),
-  receiverId: message.receiver.toString(),
-  content: message.content,
-  status: message.status,
-  timestamp: message.createdAt.toISOString(),
-  readAt: message.readAt ? message.readAt.toISOString() : undefined,
-  threadKey: message.threadKey,
-});
 
 router.post(
   "/",
@@ -145,7 +135,7 @@ router.post(
       });
 
       const payload = {
-        message: mapMessage(message),
+        message: normalizeMessage(message),
         sender: {
           id: sender._id.toString(),
           name: formatUserName(senderDoc),
@@ -240,7 +230,7 @@ router.get("/inbox", async (req: express.Request, res: express.Response) => {
   try {
     const grouped = await Message.aggregate<{
       _id: string;
-      lastMessage: IMessage;
+      lastMessage: MessageLike;
       participants: Types.ObjectId[];
       unreadCount: number;
     }>([
@@ -295,7 +285,7 @@ router.get("/inbox", async (req: express.Request, res: express.Response) => {
             email: userDoc.email,
           },
           unreadCount: group.unreadCount,
-          lastMessage: mapMessage(group.lastMessage as IMessage),
+          lastMessage: normalizeMessage(group.lastMessage),
         };
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
@@ -337,12 +327,10 @@ router.get(
     const participantId = new mongoose.Types.ObjectId(req.params.participantId);
 
     if (participantId.equals(currentId)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Cannot open a thread with yourself",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Cannot open a thread with yourself",
+      });
     }
 
     try {
@@ -362,13 +350,11 @@ router.get(
 
       const threadKey = getThreadKey(currentId, participantId);
 
-      const messages = await Message.find({ threadKey })
+      const messages = await Message.find<MessageLike>({ threadKey })
         .sort({ createdAt: 1 })
-        .lean();
+        .lean<MessageLike[]>();
 
-      const mappedMessages = messages.map((message) =>
-        mapMessage(message as unknown as IMessage)
-      );
+      const mappedMessages = normalizeMessageIds(messages);
 
       const unreadIds = messages
         .filter(
@@ -441,18 +427,16 @@ router.patch(
       }
 
       if (message.receiver.toString() !== currentUser._id.toString()) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "Only the receiver can mark as read",
-          });
+        return res.status(403).json({
+          success: false,
+          message: "Only the receiver can mark as read",
+        });
       }
 
       if (message.status === "read") {
         return res.json({
           success: true,
-          data: { message: mapMessage(message) },
+          data: { message: normalizeMessage(message) },
         });
       }
 
@@ -461,14 +445,14 @@ router.patch(
       await message.save();
 
       emitToUser(message.sender.toString(), "message:read", {
-        messageIds: [message._id.toString()],
+        messageIds: [String(message._id)],
         readerId: currentUser._id.toString(),
         threadKey: message.threadKey,
       });
 
       return res.json({
         success: true,
-        data: { message: mapMessage(message) },
+        data: { message: normalizeMessage(message) },
       });
     } catch (error) {
       console.error("Failed to update message status", error);

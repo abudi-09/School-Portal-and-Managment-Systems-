@@ -6,6 +6,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
 
 export interface MessageSocketEvent {
   message: {
+    _id: string;
     id: string;
     senderId: string;
     receiverId: string;
@@ -14,6 +15,8 @@ export interface MessageSocketEvent {
     timestamp: string;
     readAt?: string;
     threadKey: string;
+    senderRole: "admin" | "head" | "teacher";
+    receiverRole: "admin" | "head" | "teacher";
   };
   sender: {
     id: string;

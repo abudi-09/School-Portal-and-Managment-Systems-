@@ -1,73 +1,83 @@
-import { useMemo } from "react";
-import MessagingCenter, { ContactItem } from "@/components/MessagingCenter";
+import { useEffect, useState } from "react";
+import MessagingCenter from "@/components/MessagingCenter";
+import NewConversationDialog from "@/components/messaging/NewConversationDialog";
+import { useMessagingController } from "@/hooks/useMessagingController";
+import { useAuth } from "@/contexts/useAuth";
 
 const HeadMessages = () => {
-  const contacts = useMemo<ContactItem[]>(
-    () => [
-      {
-        id: 1,
-        name: "John Smith",
-        role: "Mathematics Teacher",
-        unreadCount: 2,
-        messages: [
-          {
-            id: 401,
-            sender: "contact",
-            text: "Good afternoon, could we review the exam schedule together?",
-            timestamp: "1:05 PM",
-          },
-          {
-            id: 402,
-            sender: "self",
-            text: "Absolutely, let's meet right after lunch in my office.",
-            timestamp: "1:07 PM",
-          },
-          {
-            id: 403,
-            sender: "contact",
-            text: "Perfect, I'll bring the draft copy with me.",
-            timestamp: "1:09 PM",
-          },
-        ],
-      },
-      {
-        id: 2,
-        name: "Emily Chen",
-        role: "Science Teacher",
-        messages: [
-          {
-            id: 404,
-            sender: "contact",
-            text: "Field trip permission slips are starting to come in.",
-            timestamp: "Today",
-          },
-        ],
-      },
-      {
-        id: 3,
-        name: "Michael Brown",
-        role: "History Teacher",
-        messages: [],
-      },
-      {
-        id: 4,
-        name: "Sofia Martinez",
-        role: "English Teacher",
-        messages: [],
-      },
-    ],
-    []
+  const { user } = useAuth();
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(
+    null
   );
 
+  const controller = useMessagingController({
+    currentUserId: user?.id,
+    currentUserRole: "head",
+  });
+
+  const handleOpenCompose = async () => {
+    setComposeOpen(true);
+    await controller.loadRecipients();
+  };
+
+  const handleConfirmCompose = async () => {
+    if (!selectedRecipientId) {
+      return;
+    }
+    const recipient = controller.recipients.find(
+      (item) => item.id === selectedRecipientId
+    );
+    if (!recipient) {
+      return;
+    }
+    await controller.startConversationWith(recipient);
+    setComposeOpen(false);
+    setSelectedRecipientId(null);
+  };
+
+  useEffect(() => {
+    if (!composeOpen) {
+      setSelectedRecipientId(null);
+    }
+  }, [composeOpen]);
+
   return (
-    <MessagingCenter
-      title="Staff Messages"
-      description="Stay connected with your teaching staff. View ongoing conversations and respond instantly."
-      listTitle="Faculty"
-      listDescription="Browse staff members to review recent conversations."
-      initialContacts={contacts}
-      emptyStateMessage="Choose a faculty member to start the discussion."
-    />
+    <>
+      <MessagingCenter
+        title="Staff Messages"
+        description="Stay connected with your admin team and teachers. View ongoing conversations and respond instantly."
+        listTitle="Staff & Departments"
+        listDescription="Select a staff member or department to review recent conversations."
+        contacts={controller.contacts}
+        selectedConversationId={controller.selectedConversationId}
+        messages={controller.messages}
+        currentUserRole="head"
+        currentUserId={controller.currentUserId}
+        onSelectConversation={controller.onSelectConversation}
+        onSendMessage={controller.onSendMessage}
+        messageDraft={controller.messageDraft}
+        onChangeDraft={controller.onChangeDraft}
+        isLoadingContacts={controller.isLoadingContacts}
+        isLoadingThread={controller.isLoadingThread}
+        isSendingMessage={controller.isSendingMessage}
+        onCompose={handleOpenCompose}
+        composeDisabled={controller.isRecipientsLoading}
+        emptyStateMessage="Choose a staff member to start the discussion."
+        validateRecipient={controller.validateContact}
+      />
+      <NewConversationDialog
+        open={composeOpen}
+        onOpenChange={setComposeOpen}
+        recipients={controller.recipients}
+        isLoading={controller.isRecipientsLoading}
+        selectedRecipientId={selectedRecipientId}
+        onSelectRecipient={setSelectedRecipientId}
+        onConfirm={handleConfirmCompose}
+        description="Heads can message administrators and teachers in their school."
+        confirmLabel="Start conversation"
+      />
+    </>
   );
 };
 

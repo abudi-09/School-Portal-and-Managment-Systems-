@@ -14,6 +14,13 @@ type MessageResponse = {
   threadKey: string;
   senderRole: "admin" | "head" | "teacher";
   receiverRole: "admin" | "head" | "teacher";
+  type: "text" | "image" | "file" | "doc";
+  fileUrl?: string;
+  fileName?: string;
+  deleted: boolean;
+  editedAt?: string;
+  deliveredTo: string[];
+  seenBy: string[];
 };
 
 export interface RecipientDto {
@@ -21,6 +28,7 @@ export interface RecipientDto {
   name: string;
   role: "admin" | "head" | "teacher";
   email?: string;
+  online?: boolean;
 }
 
 export interface ContactSummaryDto {
@@ -118,3 +126,33 @@ export const markMessageRead = async (messageId: string) => {
 };
 
 export type MessageDto = MessageResponse;
+
+export const uploadMessageFile = async (
+  file: File
+): Promise<{
+  fileUrl: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+}> => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${apiBaseUrl}/api/messages/upload`, {
+    method: "POST",
+    headers: (() => {
+      const token = getAuthToken();
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    })(),
+    body: formData,
+  });
+
+  const data = await handleResponse<{
+    fileUrl: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+  }>(response);
+
+  return data;
+};

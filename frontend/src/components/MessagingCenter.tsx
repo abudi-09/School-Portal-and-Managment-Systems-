@@ -1,5 +1,18 @@
 import { useCallback, useMemo, useState } from "react";
-import { Send, Paperclip, Search, Plus } from "lucide-react";
+import {
+  Send,
+  Paperclip,
+  Search,
+  Plus,
+  Check,
+  CheckSquare,
+  Pin,
+  Reply,
+  Forward,
+  Clipboard,
+  Edit,
+  Trash,
+} from "lucide-react";
 import {
   Card,
   CardContent,
@@ -11,6 +24,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 
 export type UserRole = "admin" | "head" | "teacher";
@@ -24,7 +44,16 @@ export interface MessageItem {
   content: string;
   timestamp: string;
   timestampIso: string;
-  status?: "read" | "unread";
+  status: "read" | "unread";
+  type: "text" | "image" | "file" | "doc";
+  fileUrl?: string;
+  fileName?: string;
+  deleted: boolean;
+  editedAt?: string;
+  deliveredTo: string[];
+  seenBy: string[];
+  threadKey?: string;
+  preview?: string;
   isPending?: boolean;
 }
 
@@ -34,11 +63,12 @@ export interface ContactItem {
   role: UserRole;
   avatarUrl?: string;
   email?: string;
+  online?: boolean;
   unreadCount?: number;
   lastMessage?: {
     content: string;
     timestamp: string;
-     timestampIso: string;
+    timestampIso: string;
     senderRole: UserRole;
   };
   lastMessageAt?: string;
@@ -57,8 +87,25 @@ interface MessagingCenterProps {
   onSelectConversation: (conversationId: string) => void;
   onSendMessage?: (
     conversationId: string,
-    message: string
+    payload: {
+      content?: string;
+      type?: MessageItem["type"];
+      file?: File;
+      fileUrl?: string;
+      fileName?: string;
+    }
   ) => Promise<void> | void;
+  onEditMessage?: (
+    conversationId: string,
+    messageId: string,
+    content: string
+  ) => Promise<void> | void;
+  onDeleteMessage?: (
+    conversationId: string,
+    messageId: string,
+    options?: { forEveryone?: boolean }
+  ) => Promise<void> | void;
+  isUploadingAttachment?: boolean;
   messageDraft: string;
   onChangeDraft: (value: string) => void;
   isLoadingContacts?: boolean;
@@ -105,8 +152,11 @@ const MessagingCenter = ({
   currentUserId,
   onSelectConversation,
   onSendMessage,
+  onEditMessage,
+  onDeleteMessage,
   messageDraft,
   onChangeDraft,
+  isUploadingAttachment,
   isLoadingContacts = false,
   isLoadingThread = false,
   isSendingMessage,
@@ -119,6 +169,9 @@ const MessagingCenter = ({
 }: MessagingCenterProps) => {
   const [search, setSearch] = useState("");
   const [internalIsSending, setInternalIsSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<MessageItem | null>(null);
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const sending = isSendingMessage ?? internalIsSending;
 
@@ -168,7 +221,9 @@ const MessagingCenter = ({
 
   const selectedContact = useMemo(() => {
     if (!selectedConversationId) return null;
-    return contacts.find((contact) => contact.id === selectedConversationId) ?? null;
+    return (
+      contacts.find((contact) => contact.id === selectedConversationId) ?? null
+    );
   }, [contacts, selectedConversationId]);
 
   const handleSelectContact = (contact: ContactItem) => {
@@ -191,7 +246,9 @@ const MessagingCenter = ({
       if (isSendingMessage === undefined) {
         setInternalIsSending(true);
       }
-      await onSendMessage(selectedConversationId, messageDraft.trim());
+      await onSendMessage(selectedConversationId, {
+        content: messageDraft.trim(),
+      });
       onChangeDraft("");
     } finally {
       if (isSendingMessage === undefined) {
@@ -199,6 +256,83 @@ const MessagingCenter = ({
       }
     }
   };
+
+  const handleEditMessage = async (message: MessageItem) => {
+    if (!onEditMessage || !selectedConversationId) return;
+    const next = window.prompt("Edit message", message.content ?? "");
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (trimmed.length === 0) {
+      window.alert("Message content cannot be empty");
+      return;
+    }
+    await onEditMessage(selectedConversationId, message.id, trimmed);
+  };
+
+  const handleDeleteMessage = async (message: MessageItem) => {
+    if (!onDeleteMessage || !selectedConversationId) return;
+    const confirmed = window.confirm(
+      "Delete this message? Choose OK to delete for everyone, Cancel to delete locally."
+    );
+    try {
+      if (confirmed) {
+        await onDeleteMessage(selectedConversationId, message.id, {
+          forEveryone: true,
+        });
+      } else {
+        await onDeleteMessage(selectedConversationId, message.id, {
+          forEveryone: false,
+        });
+      }
+    } catch (err) {
+      // swallow — controller will surface errors via toast
+    }
+  };
+
+  const handleCopyMessage = async (message: MessageItem) => {
+    try {
+      if (message.content) {
+        await navigator.clipboard.writeText(message.content);
+      }
+    } catch {}
+  };
+
+  const handlePinMessage = (message: MessageItem) => {
+    setPinnedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(message.id)) {
+        next.delete(message.id);
+      } else {
+        next.add(message.id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectMessage = (message: MessageItem) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(message.id)) {
+        next.delete(message.id);
+      } else {
+        next.add(message.id);
+      }
+      return next;
+    });
+  };
+
+  const handleReplyMessage = (message: MessageItem) => {
+    setReplyTo(message);
+  };
+
+  const handleForwardMessage = async (message: MessageItem) => {
+    // Simple forward: prompt for recipient ID from existing contacts
+    const recipientId = window.prompt("Enter recipient ID to forward message:");
+    if (!recipientId || !onSendMessage) return;
+    await onSendMessage(recipientId, { content: message.content });
+  };
+
+  const clearReply = () => setReplyTo(null);
 
   return (
     <div className="min-h-screen bg-background py-6">
@@ -218,12 +352,10 @@ const MessagingCenter = ({
               onClick={onCompose}
               disabled={composeDisabled}
             >
-              <Plus className="h-4 w-4" />
-              {composeLabel}
+              <Plus className="h-4 w-4" /> {composeLabel}
             </Button>
           ) : null}
         </header>
-
         <div className="grid gap-6 md:grid-cols-[320px,1fr]">
           <Card className="h-fit md:sticky md:top-24">
             <CardHeader>
@@ -284,36 +416,29 @@ const MessagingCenter = ({
                               {getInitials(contact.name)}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex-1 space-y-1">
+                          <div className="flex-1">
                             <div className="flex items-center justify-between">
-                              <p className="font-semibold text-foreground">
-                                {contact.name}
-                              </p>
-                              {contact.unreadCount ? (
-                                <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
-                                  {contact.unreadCount}
-                                </span>
-                              ) : null}
+                              <p className="font-medium">{contact.name}</p>
+                              {contact.online ? (
+                                <span className="h-2 w-2 rounded-full bg-green-500" />
+                              ) : (
+                                <span className="h-2 w-2 rounded-full bg-gray-400" />
+                              )}
                             </div>
-                            <p className="text-xs font-medium text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               {formatRoleLabel(contact.role)}
                             </p>
-                            {contact.email ? (
-                              <p className="text-xs text-muted-foreground">
-                                {contact.email}
-                              </p>
-                            ) : null}
                             {lastMessage ? (
-                              <div className="space-y-1">
-                                <p className="line-clamp-2 text-sm text-muted-foreground">
+                              <div className="mt-1 text-xs">
+                                <p className="truncate">
                                   {lastMessage.content}
                                 </p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-muted-foreground">
                                   {lastMessage.timestamp}
                                 </p>
                               </div>
                             ) : (
-                              <p className="text-sm text-muted-foreground">
+                              <p className="text-xs text-muted-foreground">
                                 No messages yet
                               </p>
                             )}
@@ -380,53 +505,171 @@ const MessagingCenter = ({
                             message.senderId === currentUserId ||
                             (!currentUserId &&
                               message.senderRole === currentUserRole);
+                          const isPinned = pinnedIds.has(message.id);
+                          const isSelected = selectedIds.has(message.id);
                           return (
-                            <div
-                              key={message.id}
-                              className={cn(
-                                "flex",
-                                isSelf ? "justify-end" : "justify-start"
-                              )}
-                            >
-                              <div
-                                className={cn(
-                                  "max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm",
-                                  isSelf
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-muted text-foreground"
-                                )}
-                              >
-                                <p>{message.content}</p>
+                            <ContextMenu key={message.id}>
+                              <ContextMenuTrigger asChild>
                                 <div
                                   className={cn(
-                                    "mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs",
-                                    isSelf
-                                      ? "text-primary-foreground/80"
-                                      : "text-muted-foreground"
+                                    "flex",
+                                    isSelf ? "justify-end" : "justify-start"
                                   )}
                                 >
-                                  <span>{message.timestamp}</span>
-                                  {message.status ? (
-                                    <span className="font-medium capitalize">
-                                      {message.status}
-                                    </span>
-                                  ) : null}
+                                  <div
+                                    className={cn(
+                                      "group relative max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm",
+                                      isSelf
+                                        ? "bg-primary text-primary-foreground"
+                                        : "bg-muted text-foreground",
+                                      isSelected && "ring-2 ring-ring",
+                                      isPinned && "border-2 border-yellow-500"
+                                    )}
+                                  >
+                                    {isPinned ? (
+                                      <Pin className="absolute -top-2 -right-2 h-4 w-4 rotate-12 text-yellow-500" />
+                                    ) : null}
+                                    <div className="space-y-2">
+                                      {message.type === "image" &&
+                                      message.fileUrl ? (
+                                        <img
+                                          src={message.fileUrl}
+                                          alt={message.fileName ?? "image"}
+                                          className="max-h-48 w-auto rounded-md"
+                                        />
+                                      ) : null}
+                                      {(message.type === "file" ||
+                                        message.type === "doc") &&
+                                      message.fileUrl ? (
+                                        <a
+                                          href={message.fileUrl}
+                                          target="_blank"
+                                          rel="noreferrer noopener"
+                                          className="inline-block rounded-md bg-background/50 px-3 py-1 text-sm"
+                                        >
+                                          {message.fileName ?? "Download file"}
+                                        </a>
+                                      ) : null}
+                                      <p>{message.content}</p>
+                                    </div>
+                                    <div
+                                      className={cn(
+                                        "mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs",
+                                        isSelf
+                                          ? "text-primary-foreground/80"
+                                          : "text-muted-foreground"
+                                      )}
+                                    >
+                                      <span>{message.timestamp}</span>
+                                      {message.status ? (
+                                        <span className="font-medium capitalize">
+                                          {message.status}
+                                        </span>
+                                      ) : null}
+                                      {isSelf && selectedContact ? (
+                                        <span className="ml-2 flex items-center gap-1">
+                                          {message.seenBy?.includes(
+                                            selectedContact.id
+                                          ) ? (
+                                            <>
+                                              <CheckSquare className="h-3 w-3" />
+                                              <span className="text-xs">
+                                                Seen
+                                              </span>
+                                            </>
+                                          ) : message.deliveredTo?.includes(
+                                              selectedContact.id
+                                            ) ? (
+                                            <>
+                                              <Check className="h-3 w-3" />
+                                              <span className="text-xs">
+                                                Delivered
+                                              </span>
+                                            </>
+                                          ) : null}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
+                              </ContextMenuTrigger>
+                              <ContextMenuContent>
+                                <ContextMenuItem
+                                  onClick={() => handleReplyMessage(message)}
+                                >
+                                  <Reply className="mr-2 h-4 w-4" /> Reply
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                  onClick={() => handlePinMessage(message)}
+                                >
+                                  <Pin className="mr-2 h-4 w-4" />{" "}
+                                  {isPinned ? "Unpin" : "Pin"}
+                                </ContextMenuItem>
+                                {message.content ? (
+                                  <ContextMenuItem
+                                    onClick={() => handleCopyMessage(message)}
+                                  >
+                                    <Clipboard className="mr-2 h-4 w-4" /> Copy
+                                    Text
+                                  </ContextMenuItem>
+                                ) : null}
+                                <ContextMenuItem
+                                  onClick={() => handleForwardMessage(message)}
+                                >
+                                  <Forward className="mr-2 h-4 w-4" /> Forward
+                                </ContextMenuItem>
+                                {isSelf && onEditMessage ? (
+                                  <ContextMenuItem
+                                    onClick={() => handleEditMessage(message)}
+                                  >
+                                    <Edit className="mr-2 h-4 w-4" /> Edit
+                                  </ContextMenuItem>
+                                ) : null}
+                                <ContextMenuItem
+                                  onClick={() => handleDeleteMessage(message)}
+                                >
+                                  <Trash className="mr-2 h-4 w-4" /> Delete
+                                </ContextMenuItem>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem
+                                  onClick={() => handleSelectMessage(message)}
+                                >
+                                  {isSelected ? "Unselect" : "Select"}
+                                </ContextMenuItem>
+                              </ContextMenuContent>
+                            </ContextMenu>
                           );
                         })
                       )}
                     </div>
                   </ScrollArea>
 
-                  <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                  <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-2">
+                    {replyTo ? (
+                      <div className="flex items-start justify-between rounded-lg border border-border bg-background/60 p-2 text-xs">
+                        <div className="max-w-[80%]">
+                          <p className="font-semibold">Replying to</p>
+                          <p className="truncate opacity-80">
+                            {replyTo.content}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={clearReply}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : null}
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                       <div className="flex flex-1 items-center gap-3 rounded-full border border-border bg-background px-4 py-2">
                         <Paperclip className="h-4 w-4 text-muted-foreground" />
                         <Input
                           value={messageDraft}
-                          onChange={(event) => onChangeDraft(event.target.value)}
+                          onChange={(event) =>
+                            onChangeDraft(event.target.value)
+                          }
                           placeholder={
                             selectedContact
                               ? `Message ${selectedContact.name}`

@@ -1,0 +1,27 @@
+[
+  {
+    "id": 1,
+    "title": "Draft API contracts for message edit/delete/reply/forward/copy",
+    "status": "not-started"
+  },
+  {
+    "id": 2,
+    "title": "Update Message schema with edit/delete/forward/reply metadata",
+    "status": "not-started"
+  },
+  {
+    "id": 3,
+    "title": "Update normalization to include new fields",
+    "status": "not-started"
+  },
+  {
+    "id": 4,
+    "title": "Implement backend routes: edit, delete, forward (basic)",
+    "status": "not-started"
+  },
+  {
+    "id": 5,
+    "title": "Emit Socket.IO events for edit/delete/forward and update tests",
+    "status": "not-started"
+  }
+]

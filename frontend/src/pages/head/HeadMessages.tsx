@@ -56,6 +56,9 @@ const HeadMessages = () => {
         currentUserId={controller.currentUserId}
         onSelectConversation={controller.onSelectConversation}
         onSendMessage={controller.onSendMessage}
+        onEditMessage={controller.onEditMessage}
+        onDeleteMessage={controller.onDeleteMessage}
+        isUploadingAttachment={controller.isUploadingAttachment}
         messageDraft={controller.messageDraft}
         onChangeDraft={controller.onChangeDraft}
         isLoadingContacts={controller.isLoadingContacts}

@@ -3,6 +3,20 @@ import mongoose, { Document, Schema, Types } from "mongoose";
 export type MessageStatus = "read" | "unread";
 export type MessageRole = "admin" | "head" | "teacher";
 
+export type MessageType = "text" | "image" | "file" | "doc";
+
+export interface MessageDeliveryStatus {
+  deliveredTo: string[];
+  seenBy: string[];
+}
+
+export interface ForwardedFrom {
+  originalMessageId: Types.ObjectId;
+  originalSenderId: Types.ObjectId | string;
+  originalSenderName?: string;
+  originalSentAt?: Date;
+}
+
 export interface IMessage extends Document {
   sender: Types.ObjectId;
   receiver: Types.ObjectId;
@@ -11,8 +25,22 @@ export interface IMessage extends Document {
   receiverRole: MessageRole;
   content: string;
   status: MessageStatus;
+  type: MessageType;
+  fileUrl?: string;
+  fileName?: string;
+  deleted: boolean;
+  editedAt?: Date;
+  isEdited?: boolean;
+  deliveredTo: string[];
+  seenBy: string[];
   readAt?: Date;
   threadKey: string;
+  replyToMessageId?: Types.ObjectId;
+  forwardedFrom?: ForwardedFrom;
+  forwardedAt?: Date;
+  isDeletedForEveryone?: boolean;
+  hiddenFor?: string[];
+  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -52,7 +80,6 @@ const MessageSchema = new Schema<IMessage>(
     },
     content: {
       type: String,
-      required: true,
       trim: true,
       maxlength: 4000,
     },
@@ -61,6 +88,60 @@ const MessageSchema = new Schema<IMessage>(
       enum: ["read", "unread"],
       default: "unread",
       required: true,
+    },
+    type: {
+      type: String,
+      enum: ["text", "image", "file", "doc"],
+      default: "text",
+    },
+    fileUrl: {
+      type: String,
+    },
+    fileName: {
+      type: String,
+    },
+    deleted: {
+      type: Boolean,
+      default: false,
+    },
+    editedAt: {
+      type: Date,
+    },
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    replyToMessageId: {
+      type: Schema.Types.ObjectId,
+      ref: "Message",
+    },
+    forwardedFrom: {
+      originalMessageId: { type: Schema.Types.ObjectId, ref: "Message" },
+      originalSenderId: { type: Schema.Types.ObjectId, ref: "User" },
+      originalSenderName: { type: String },
+      originalSentAt: { type: Date },
+    },
+    forwardedAt: {
+      type: Date,
+    },
+    isDeletedForEveryone: {
+      type: Boolean,
+      default: false,
+    },
+    hiddenFor: {
+      type: [String],
+      default: [],
+    },
+    deletedAt: {
+      type: Date,
+    },
+    deliveredTo: {
+      type: [String],
+      default: [],
+    },
+    seenBy: {
+      type: [String],
+      default: [],
     },
     readAt: {
       type: Date,

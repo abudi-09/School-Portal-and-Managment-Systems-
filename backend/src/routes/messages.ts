@@ -1,8 +1,16 @@
 import express from "express";
 import { body, param, validationResult } from "express-validator";
 import mongoose, { Types } from "mongoose";
+import fs from "fs";
+import path from "path";
+import multer from "multer";
+import { randomBytes } from "crypto";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
-import Message, { MessageRole, getThreadKey } from "../models/Message";
+import Message, {
+  MessageRole,
+  MessageType,
+  getThreadKey,
+} from "../models/Message";
 import User, { IUser } from "../models/User";
 import { emitToUser } from "../socket";
 import {
@@ -10,64 +18,56 @@ import {
   normalizeMessage,
   normalizeMessageIds,
 } from "../utils/messages";
+import {
+  ensureUsersExist,
+  formatUserName,
+  hierarchyAllows,
+} from "../services/messaging.utils";
+import { isOnline } from "../services/presence.service";
 
 const router = express.Router();
 
 router.use(authMiddleware, authorizeRoles("admin", "head", "teacher"));
 
-const formatUserName = (
-  user: Pick<IUser, "firstName" | "lastName" | "email">
-): string => {
-  const fullName = `${user.firstName ?? ""} ${user.lastName ?? ""}`
-    .trim()
-    .replace(/\s+/g, " ");
-  return fullName || user.email || "User";
-};
+const uploadsDir = path.join(__dirname, "..", "..", "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
-const hierarchyAllows = (
-  senderRole: MessageRole,
-  receiverRole: MessageRole
-) => {
-  if (senderRole === "admin") {
-    return receiverRole === "head";
-  }
-  if (senderRole === "head") {
-    return receiverRole === "admin" || receiverRole === "teacher";
-  }
-  if (senderRole === "teacher") {
-    return receiverRole === "head";
-  }
-  return false;
-};
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (_req, file, cb) => {
+    const unique = randomBytes(8).toString("hex");
+    const extension = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${unique}${extension}`);
+  },
+});
 
-const ensureUsersExist = async (
-  senderId: Types.ObjectId,
-  receiverId: Types.ObjectId
-): Promise<{ sender: IUser; receiver: IUser }> => {
-  const users = await User.find({ _id: { $in: [senderId, receiverId] } })
-    .select("firstName lastName email role status isActive")
-    .lean();
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/zip",
+  "text/csv",
+]);
 
-  const sender = users.find((item) => item._id?.equals(senderId));
-  const receiver = users.find((item) => item._id?.equals(receiverId));
-
-  if (!sender || !receiver) {
-    throw new Error("Sender or receiver not found");
-  }
-
-  if (!sender.isActive || sender.status !== "approved") {
-    throw new Error("Sender is not active");
-  }
-
-  if (!receiver.isActive || receiver.status !== "approved") {
-    throw new Error("Receiver is not active");
-  }
-
-  return {
-    sender: sender as unknown as IUser,
-    receiver: receiver as unknown as IUser,
-  };
-};
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 15 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Unsupported file type"));
+  },
+});
 
 router.post(
   "/",
@@ -75,11 +75,19 @@ router.post(
     body("receiverId")
       .isMongoId()
       .withMessage("receiverId must be a valid identifier"),
+    body("type")
+      .optional()
+      .isIn(["text", "image", "file", "doc"])
+      .withMessage("Invalid message type"),
     body("content")
+      .optional()
       .isString()
       .trim()
       .isLength({ min: 1, max: 4000 })
       .withMessage("content must be between 1 and 4000 characters"),
+    body("fileUrl").optional().isString(),
+    body("fileName").optional().isString(),
+    body("replyToMessageId").optional().isMongoId(),
   ],
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
@@ -126,12 +134,55 @@ router.post(
           .json({ success: false, message: "Messaging hierarchy violation" });
       }
 
+      const type = (req.body.type as MessageType | undefined) ?? "text";
+      const contentValue = req.body.content?.trim() ?? "";
+      if (type === "text" && contentValue.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Content is required for text messages",
+        });
+      }
+
+      if (type !== "text" && !req.body.fileUrl) {
+        return res.status(400).json({
+          success: false,
+          message: "File URL is required for file messages",
+        });
+      }
+
+      // If replying, validate referenced message exists and belongs to same thread
+      let replyToId: mongoose.Types.ObjectId | undefined;
+      if (req.body.replyToMessageId) {
+        replyToId = new mongoose.Types.ObjectId(req.body.replyToMessageId);
+        const referenced = await Message.findById(replyToId).lean();
+        if (!referenced) {
+          return res
+            .status(404)
+            .json({ success: false, message: "Referenced message not found" });
+        }
+        const expectedThread = getThreadKey(sender._id, receiverId);
+        if (referenced.threadKey !== expectedThread) {
+          return res
+            .status(400)
+            .json({
+              success: false,
+              message: "Reply must reference a message from the same thread",
+            });
+        }
+      }
+
       const message = await Message.create({
         sender: sender._id,
         receiver: receiverId,
         senderRole,
         receiverRole,
-        content: req.body.content.trim(),
+        content: contentValue,
+        type,
+        fileUrl: req.body.fileUrl,
+        fileName: req.body.fileName,
+        replyToMessageId: replyToId,
+        deliveredTo: [sender._id.toString()],
+        seenBy: [sender._id.toString()],
       });
 
       const payload = {
@@ -151,6 +202,11 @@ router.post(
       emitToUser(receiver._id.toString(), "message:new", payload);
       emitToUser(sender._id.toString(), "message:sent", payload);
 
+      await Message.updateOne(
+        { _id: message._id },
+        { $addToSet: { deliveredTo: receiver._id.toString() } }
+      );
+
       return res.status(201).json({
         success: true,
         data: payload,
@@ -162,6 +218,168 @@ router.post(
         message: "Failed to send message",
       });
     }
+  }
+);
+
+// Forward a message to another recipient
+router.post(
+  "/:id/forward",
+  [
+    param("id").isMongoId().withMessage("Invalid message identifier"),
+    body("receiverId")
+      .isMongoId()
+      .withMessage("receiverId must be a valid identifier"),
+  ],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+    }
+
+    const currentUser = req.user as IUser;
+    if (!currentUser) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
+    }
+
+    try {
+      const original = await Message.findById(req.params.id).lean();
+      if (!original) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Original message not found" });
+      }
+
+      if ((original as any).isDeletedForEveryone) {
+        return res
+          .status(409)
+          .json({
+            success: false,
+            message: "Cannot forward a message deleted for everyone",
+          });
+      }
+
+      const receiverId = new mongoose.Types.ObjectId(req.body.receiverId);
+      if (receiverId.equals(currentUser._id)) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Cannot forward a message to yourself",
+          });
+      }
+
+      const { sender: senderDoc, receiver } = await ensureUsersExist(
+        currentUser._id,
+        receiverId
+      );
+      const senderRole = currentUser.role as MessageRole;
+      const receiverRole = receiver.role as MessageRole;
+      if (!hierarchyAllows(senderRole, receiverRole)) {
+        return res
+          .status(403)
+          .json({ success: false, message: "Messaging hierarchy violation" });
+      }
+
+      // Build forwardedFrom metadata
+      let originalSenderName: string | undefined;
+      try {
+        const originalSenderDoc = await User.findById(
+          (original as any).sender
+        ).lean();
+        if (originalSenderDoc) {
+          originalSenderName = formatUserName(originalSenderDoc as any);
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      const newMessage = await Message.create({
+        sender: currentUser._id,
+        receiver: receiverId,
+        senderRole,
+        receiverRole,
+        content: original.content,
+        type: original.type ?? "text",
+        fileUrl: (original as any).fileUrl,
+        fileName: (original as any).fileName,
+        forwardedFrom: {
+          originalMessageId: original._id,
+          originalSenderId: (original as any).sender,
+          originalSenderName,
+          originalSentAt: (original as any).createdAt,
+        },
+        forwardedAt: new Date(),
+        deliveredTo: [currentUser._id.toString()],
+        seenBy: [currentUser._id.toString()],
+      });
+
+      const payload = {
+        message: normalizeMessage(newMessage as MessageLike),
+        sender: {
+          id: currentUser._id.toString(),
+          name: formatUserName(currentUser as any),
+          role: senderRole,
+        },
+        receiver: {
+          id: receiver._id.toString(),
+          name: formatUserName(receiver),
+          role: receiverRole,
+        },
+      };
+
+      emitToUser(receiver._id.toString(), "message:new", payload);
+      emitToUser(currentUser._id.toString(), "message:sent", payload);
+
+      await Message.updateOne(
+        { _id: newMessage._id },
+        { $addToSet: { deliveredTo: receiver._id.toString() } }
+      );
+
+      return res.status(201).json({ success: true, data: payload });
+    } catch (error) {
+      console.error("Failed to forward message", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Failed to forward message" });
+    }
+  }
+);
+
+router.post(
+  "/upload",
+  upload.single("file"),
+  async (req: express.Request, res: express.Response) => {
+    const currentUser = req.user as IUser;
+    if (!currentUser) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
+    }
+
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No file uploaded" });
+    }
+
+    const fileUrl = `/uploads/${req.file.filename}`;
+    return res.status(201).json({
+      success: true,
+      data: {
+        fileUrl,
+        fileName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+      },
+    });
   }
 );
 
@@ -204,6 +422,7 @@ router.get(
           name: formatUserName(user),
           role: user.role,
           email: user.email,
+          online: isOnline(user._id?.toString() ?? ""),
         }));
 
       return res.json({ success: true, data: { recipients: formatted } });
@@ -283,6 +502,7 @@ router.get("/inbox", async (req: express.Request, res: express.Response) => {
             name: formatUserName(userDoc),
             role: userDoc.role,
             email: userDoc.email,
+            online: isOnline(otherId.toString()),
           },
           unreadCount: group.unreadCount,
           lastMessage: normalizeMessage(group.lastMessage),
@@ -350,41 +570,86 @@ router.get(
 
       const threadKey = getThreadKey(currentId, participantId);
 
+      const currentIdString = currentId.toString();
+      const participantIdString = participantId.toString();
+
       const messages = await Message.find<MessageLike>({ threadKey })
         .sort({ createdAt: 1 })
         .lean<MessageLike[]>();
 
-      const mappedMessages = normalizeMessageIds(messages);
+      await Message.updateMany(
+        {
+          threadKey,
+          deliveredTo: { $ne: currentIdString },
+          sender: { $ne: currentId },
+        },
+        { $addToSet: { deliveredTo: currentIdString } }
+      );
 
       const unreadIds = messages
         .filter(
           (message) =>
-            message.receiver?.toString() === currentId.toString() &&
+            message.receiver?.toString() === currentIdString &&
             message.status === "unread"
         )
         .map((message) => message._id);
 
       if (unreadIds.length > 0) {
         await Message.updateMany(
-          { _id: { $in: unreadIds } },
-          { status: "read", readAt: new Date() }
+          { _id: { $in: unreadIds }, receiver: currentId },
+          {
+            $set: { status: "read", readAt: new Date() },
+            $addToSet: { seenBy: currentIdString },
+          }
         );
 
-        emitToUser(participantId.toString(), "message:read", {
+        const seenPayload = {
           messageIds: unreadIds.map((id) => id.toString()),
-          readerId: currentId.toString(),
+          seenBy: currentIdString,
+          readerId: currentIdString,
           threadKey,
-        });
+        };
+
+        emitToUser(participantIdString, "message:seen:update", seenPayload);
+        emitToUser(participantIdString, "message:read", seenPayload);
       }
+
+      const updatedMessages = messages.map((message) => {
+        const clone = { ...message } as MessageLike;
+        const delivered = new Set(
+          (clone.deliveredTo as string[] | undefined)?.map((id) =>
+            id.toString()
+          ) ?? []
+        );
+        delivered.add(currentIdString);
+        clone.deliveredTo = Array.from(delivered);
+
+        if (unreadIds.some((id) => id?.toString() === clone._id?.toString())) {
+          clone.status = "read";
+          clone.readAt = new Date();
+          const seenBy = new Set(
+            (clone.seenBy as string[] | undefined)?.map((id) =>
+              id.toString()
+            ) ?? []
+          );
+          seenBy.add(currentIdString);
+          clone.seenBy = Array.from(seenBy);
+        }
+
+        return clone;
+      });
+
+      const mappedMessages = normalizeMessageIds(updatedMessages);
 
       return res.json({
         success: true,
         data: {
           participant: {
-            id: participantId.toString(),
+            id: participantIdString,
             name: formatUserName(participantDoc),
             role: participantDoc.role,
             email: participantDoc.email,
+            online: isOnline(participantIdString),
           },
           messages: mappedMessages,
         },
@@ -433,6 +698,29 @@ router.patch(
         });
       }
 
+      await Message.updateOne(
+        { _id: message._id },
+        {
+          $addToSet: {
+            deliveredTo: currentUser._id.toString(),
+            seenBy: currentUser._id.toString(),
+          },
+        }
+      );
+
+      const currentIdString = currentUser._id.toString();
+      const deliveredSet = new Set<string>(
+        (message.deliveredTo ?? []).map((value) => value.toString())
+      );
+      deliveredSet.add(currentIdString);
+      message.deliveredTo = Array.from(deliveredSet);
+
+      const seenSet = new Set<string>(
+        (message.seenBy ?? []).map((value) => value.toString())
+      );
+      seenSet.add(currentIdString);
+      message.seenBy = Array.from(seenSet);
+
       if (message.status === "read") {
         return res.json({
           success: true,
@@ -449,6 +737,11 @@ router.patch(
         readerId: currentUser._id.toString(),
         threadKey: message.threadKey,
       });
+      emitToUser(message.sender.toString(), "message:seen:update", {
+        messageIds: [String(message._id)],
+        seenBy: currentUser._id.toString(),
+        threadKey: message.threadKey,
+      });
 
       return res.json({
         success: true,
@@ -459,6 +752,169 @@ router.patch(
       return res
         .status(500)
         .json({ success: false, message: "Failed to update message" });
+    }
+  }
+);
+
+// Edit message (only sender)
+router.patch(
+  "/:id/edit",
+  [
+    param("id").isMongoId().withMessage("Invalid message identifier"),
+    body("content").isString().trim().isLength({ min: 1, max: 4000 }),
+  ],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+    }
+
+    const currentUser = req.user as IUser;
+    if (!currentUser) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
+    }
+
+    try {
+      const message = await Message.findById(req.params.id);
+      if (!message) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Message not found" });
+      }
+
+      if (message.sender.toString() !== currentUser._id.toString()) {
+        return res
+          .status(403)
+          .json({
+            success: false,
+            message: "Only the sender can edit this message",
+          });
+      }
+
+      if (message.isDeletedForEveryone) {
+        return res
+          .status(409)
+          .json({
+            success: false,
+            message: "Cannot edit a message deleted for everyone",
+          });
+      }
+
+      message.content = req.body.content.trim();
+      message.isEdited = true;
+      message.editedAt = new Date();
+
+      await message.save();
+
+      const normalized = normalizeMessage(message as MessageLike);
+
+      const participants =
+        message.participants?.map((p: any) => p.toString()) ?? [];
+      participants.forEach((id) =>
+        emitToUser(id, "message:edited", { message: normalized })
+      );
+
+      return res.json({ success: true, data: { message: normalized } });
+    } catch (error) {
+      console.error("Failed to edit message", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Failed to edit message" });
+    }
+  }
+);
+
+// Delete message: mode=me|everyone (default me)
+router.delete(
+  "/:id",
+  [param("id").isMongoId().withMessage("Invalid message identifier")],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+    }
+
+    const currentUser = req.user as IUser;
+    if (!currentUser) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
+    }
+
+    const mode = (req.query.mode as string) ?? "me";
+
+    try {
+      const message = await Message.findById(req.params.id);
+      if (!message) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Message not found" });
+      }
+
+      const currentId = currentUser._id.toString();
+
+      if (mode === "me") {
+        // add current user to hiddenFor
+        await Message.updateOne(
+          { _id: message._id },
+          { $addToSet: { hiddenFor: currentId } }
+        );
+        return res.json({ success: true, message: "Deleted for me" });
+      }
+
+      // mode=everyone
+      if (message.sender.toString() !== currentId) {
+        return res
+          .status(403)
+          .json({
+            success: false,
+            message: "Only the sender can delete for everyone",
+          });
+      }
+
+      message.isDeletedForEveryone = true;
+      message.deletedAt = new Date();
+      message.content = "This message was deleted.";
+      message.fileUrl = undefined as any;
+      message.fileName = undefined as any;
+
+      await message.save();
+
+      const payload = {
+        messageId: message._id.toString(),
+        threadKey: message.threadKey,
+        mode: "everyone",
+        placeholder: message.content,
+        deletedAt: message.deletedAt,
+      };
+
+      const participants =
+        message.participants?.map((p: any) => p.toString()) ?? [];
+      participants.forEach((id) => emitToUser(id, "message:deleted", payload));
+
+      return res.json({
+        success: true,
+        data: { message: normalizeMessage(message as MessageLike) },
+      });
+    } catch (error) {
+      console.error("Failed to delete message", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Failed to delete message" });
     }
   }
 );

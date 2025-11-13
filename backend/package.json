@@ -10,6 +10,7 @@
     "create-admin": "ts-node src/scripts/createSuperAdmin.ts",
     "list-missing-streams": "ts-node src/scripts/listTeachersMissingStream.ts",
     "set-teacher-stream": "ts-node src/scripts/setTeacherStream.ts",
+    "exercise:messages": "ts-node scripts/exerciseMessages.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -40,6 +41,8 @@
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "@types/multer": "^1.4.12",
+    "axios": "^1.7.7",
+    "socket.io-client": "^4.8.1",
     "typescript": "^5.9.3"
   }
 }

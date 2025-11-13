@@ -20,6 +20,10 @@ export const env = {
   mongoUri: getEnv("MONGODB_URI", "mongodb://localhost:27017/pathways_db"),
   jwtSecret: getEnv("JWT_SECRET", "change-me"),
   jwtExpiresIn: getEnv("JWT_EXPIRES_IN", "7d"),
+  messaging: {
+    maxEditCount: Number(getEnv("MESSAGE_MAX_EDIT_COUNT", "0")),
+    editWindowMs: Number(getEnv("MESSAGE_EDIT_WINDOW_MS", "0")),
+  },
   policy: {
     allowMultiClassHead:
       getEnv("ALLOW_MULTI_CLASS_HEAD", "true").toLowerCase() === "true",

@@ -35,6 +35,7 @@ export interface MessageLike {
     originalSenderName?: string;
     originalSentAt?: DateLike;
   };
+  editCount?: number;
   deliveredTo?: MaybeObjectIdLike[];
   seenBy?: MaybeObjectIdLike[];
   threadKey: string;
@@ -72,10 +73,10 @@ export interface NormalizedMessage {
   deliveredTo: string[];
   seenBy: string[];
   threadKey: string;
+  editCount?: number;
 }
 
-const toStringId = (value: ObjectIdLike): string =>
-  typeof value === "string" ? value : value.toString();
+const toStringId = (value: ObjectIdLike): string => String(value);
 
 const normalizeIdentifiers = (values?: MaybeObjectIdLike[]): string[] =>
   (values ?? [])
@@ -83,7 +84,7 @@ const normalizeIdentifiers = (values?: MaybeObjectIdLike[]): string[] =>
       if (!value) {
         return undefined;
       }
-      return typeof value === "string" ? value : value.toString();
+      return String(value);
     })
     .filter((value): value is string => Boolean(value));
 
@@ -123,7 +124,6 @@ export const normalizeMessage = (
     deleted: Boolean(message.deleted),
     isEdited: Boolean((message as any).isEdited),
     isDeletedForEveryone: Boolean((message as any).isDeletedForEveryone),
-    deletedAt: toOptionalIsoString((message as any).deletedAt as DateLike),
     deliveredTo: normalizeIdentifiers(message.deliveredTo),
     seenBy: normalizeIdentifiers(message.seenBy),
     threadKey: message.threadKey,
@@ -139,6 +139,11 @@ export const normalizeMessage = (
     normalized.editedAt = editedAt;
   }
 
+  const deletedAt = toOptionalIsoString((message as any).deletedAt as DateLike);
+  if (deletedAt) {
+    normalized.deletedAt = deletedAt;
+  }
+
   if ((message as any).replyToMessageId) {
     normalized.replyToMessageId = toStringId(
       (message as any).replyToMessageId as ObjectIdLike
@@ -147,16 +152,32 @@ export const normalizeMessage = (
 
   if ((message as any).forwardedFrom) {
     const f = (message as any).forwardedFrom;
-    normalized.forwardedFrom = {
-      originalMessageId: f.originalMessageId
-        ? toStringId(f.originalMessageId as ObjectIdLike)
-        : undefined,
-      originalSenderId: f.originalSenderId
-        ? toStringId(f.originalSenderId as ObjectIdLike)
-        : undefined,
-      originalSenderName: f.originalSenderName,
-      originalSentAt: toOptionalIsoString(f.originalSentAt as DateLike),
-    };
+    const forwarded: NonNullable<NormalizedMessage["forwardedFrom"]> = {};
+
+    if (f.originalMessageId) {
+      forwarded.originalMessageId = toStringId(
+        f.originalMessageId as ObjectIdLike
+      );
+    }
+
+    if (f.originalSenderId) {
+      forwarded.originalSenderId = toStringId(
+        f.originalSenderId as ObjectIdLike
+      );
+    }
+
+    if (typeof f.originalSenderName === "string") {
+      forwarded.originalSenderName = f.originalSenderName;
+    }
+
+    const originalSentAt = toOptionalIsoString(f.originalSentAt as DateLike);
+    if (originalSentAt) {
+      forwarded.originalSentAt = originalSentAt;
+    }
+
+    if (Object.keys(forwarded).length > 0) {
+      normalized.forwardedFrom = forwarded;
+    }
   }
 
   if (message.fileUrl) {
@@ -165,6 +186,11 @@ export const normalizeMessage = (
 
   if (message.fileName) {
     normalized.fileName = message.fileName as string;
+  }
+
+  const editCount = (message as any).editCount;
+  if (typeof editCount === "number" && !Number.isNaN(editCount)) {
+    normalized.editCount = editCount;
   }
 
   return normalized;

@@ -27,7 +27,8 @@ type AuthenticatedSocket = Socket & { user?: SocketUser };
 let ioInstance: Server | null = null;
 
 const roomForUser = (userId: string) => `user:${userId}`;
-const MESSAGE_EDIT_WINDOW_MS = 10 * 60 * 1000;
+// If env.messaging.editWindowMs is 0 or not set, treat as unlimited (no time limit).
+const MESSAGE_EDIT_WINDOW_MS = env.messaging?.editWindowMs ?? 0;
 
 const participantsToStrings = (
   participants: Array<string | mongoose.Types.ObjectId>
@@ -232,11 +233,16 @@ export const initSocket = (server: http.Server): Server => {
             return;
           }
 
-          const withinWindow =
-            Date.now() - message.createdAt.getTime() < MESSAGE_EDIT_WINDOW_MS;
-          if (!withinWindow) {
-            callback?.({ success: false, message: "Edit window expired" });
-            return;
+          if (
+            typeof MESSAGE_EDIT_WINDOW_MS === "number" &&
+            MESSAGE_EDIT_WINDOW_MS > 0
+          ) {
+            const withinWindow =
+              Date.now() - message.createdAt.getTime() < MESSAGE_EDIT_WINDOW_MS;
+            if (!withinWindow) {
+              callback?.({ success: false, message: "Edit window expired" });
+              return;
+            }
           }
 
           const trimmed = payload.newText.trim();
@@ -289,24 +295,52 @@ export const initSocket = (server: http.Server): Server => {
           }
 
           if (!forEveryone) {
+            await Message.updateOne(
+              { _id: message._id },
+              { $addToSet: { hiddenFor: requesterId } }
+            );
             callback?.({ success: true });
             return;
           }
 
-          if (message.deleted) {
-            callback?.({ success: true });
+          const receiverId = message.receiver.toString();
+          const seenBy = (message.seenBy ?? []).map((id) => String(id));
+          const receiverHasSeen =
+            seenBy.includes(receiverId) || message.status === "read";
+
+          if (receiverHasSeen) {
+            callback?.({
+              success: false,
+              message:
+                "You can't delete this message because it has already been seen.",
+            });
             return;
           }
 
-          message.deleted = true;
+          const participants = participantsToStrings(
+            message.participants?.length
+              ? message.participants
+              : [message.sender, message.receiver]
+          );
+
+          if (!message.deleted) {
+            message.deleted = true;
+          }
+          message.isDeletedForEveryone = true;
+          message.deletedAt = new Date();
           message.content = "";
           message.set({ fileUrl: undefined, fileName: undefined });
+          const hidden = new Set([
+            ...(message.hiddenFor ?? []),
+            ...participants,
+          ]);
+          message.hiddenFor = Array.from(hidden);
           await message.save();
 
           emitToParticipants(message.participants, "message:deleted", {
             messageId: payload.messageId,
-            deletedBy: requesterId,
-            forEveryone: true,
+            threadKey: message.threadKey,
+            mode: "everyone",
           });
 
           callback?.({ success: true });

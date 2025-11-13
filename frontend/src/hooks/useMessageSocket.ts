@@ -50,8 +50,12 @@ export type MessageUpdateEvent = SocketMessagePayload;
 
 export interface MessageDeletedEvent {
   messageId: string;
-  deletedBy: string;
+  deletedBy?: string;
   forEveryone?: boolean;
+  mode?: "me" | "everyone";
+  threadKey?: string;
+  placeholder?: string;
+  deletedAt?: string;
 }
 
 export interface MessageSeenUpdateEvent {

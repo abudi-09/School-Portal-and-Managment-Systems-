@@ -19,7 +19,7 @@ import examScheduleRoutes from "./routes/examSchedules";
 import roomRoutes from "./routes/rooms";
 import announcementRoutes from "./routes/announcements";
 import contactRoutes from "./routes/contact";
-import messageRoutes from "./routes/messages";
+import { messageRouter } from "./routes/messages";
 import { errorHandler } from "./middleware/errorHandler";
 import { env } from "./config/env";
 import { seedSuperAdmin } from "./utils/seedSuperAdmin";
@@ -78,7 +78,7 @@ app.use("/api/rooms", roomRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/classes", classesRoutes);
 app.use("/api/contact", contactRoutes);
-app.use("/api/messages", messageRoutes);
+app.use("/api/messages", messageRouter);
 
 // 404 handler
 app.use((req, res) => {

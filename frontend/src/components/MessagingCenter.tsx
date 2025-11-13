@@ -31,6 +31,16 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
 export type UserRole = "admin" | "head" | "teacher";
@@ -172,6 +182,10 @@ const MessagingCenter = ({
   const [replyTo, setReplyTo] = useState<MessageItem | null>(null);
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingDeleteMessage, setPendingDeleteMessage] =
+    useState<MessageItem | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingOriginal, setEditingOriginal] = useState<string | null>(null);
 
   const sending = isSendingMessage ?? internalIsSending;
 
@@ -246,10 +260,20 @@ const MessagingCenter = ({
       if (isSendingMessage === undefined) {
         setInternalIsSending(true);
       }
-      await onSendMessage(selectedConversationId, {
-        content: messageDraft.trim(),
-      });
-      onChangeDraft("");
+      // If we are editing, call edit handler instead of send
+      if (editingMessageId && onEditMessage) {
+        const trimmed = messageDraft.trim();
+        await onEditMessage(selectedConversationId, editingMessageId, trimmed);
+        // clear editing state
+        setEditingMessageId(null);
+        setEditingOriginal(null);
+        onChangeDraft("");
+      } else {
+        await onSendMessage(selectedConversationId, {
+          content: messageDraft.trim(),
+        });
+        onChangeDraft("");
+      }
     } finally {
       if (isSendingMessage === undefined) {
         setInternalIsSending(false);
@@ -257,36 +281,17 @@ const MessagingCenter = ({
     }
   };
 
-  const handleEditMessage = async (message: MessageItem) => {
+  const handleEditMessage = (message: MessageItem) => {
+    // Open inline editor: populate input with current message content
     if (!onEditMessage || !selectedConversationId) return;
-    const next = window.prompt("Edit message", message.content ?? "");
-    if (next === null) return;
-    const trimmed = next.trim();
-    if (trimmed.length === 0) {
-      window.alert("Message content cannot be empty");
-      return;
-    }
-    await onEditMessage(selectedConversationId, message.id, trimmed);
+    setEditingMessageId(message.id);
+    setEditingOriginal(message.content ?? "");
+    onChangeDraft(message.content ?? "");
   };
 
-  const handleDeleteMessage = async (message: MessageItem) => {
+  const handleDeleteMessage = (message: MessageItem) => {
     if (!onDeleteMessage || !selectedConversationId) return;
-    const confirmed = window.confirm(
-      "Delete this message? Choose OK to delete for everyone, Cancel to delete locally."
-    );
-    try {
-      if (confirmed) {
-        await onDeleteMessage(selectedConversationId, message.id, {
-          forEveryone: true,
-        });
-      } else {
-        await onDeleteMessage(selectedConversationId, message.id, {
-          forEveryone: false,
-        });
-      }
-    } catch (err) {
-      // swallow — controller will surface errors via toast
-    }
+    setPendingDeleteMessage(message);
   };
 
   const handleCopyMessage = async (message: MessageItem) => {
@@ -320,6 +325,33 @@ const MessagingCenter = ({
       return next;
     });
   };
+
+  const handleCancelDelete = useCallback(() => {
+    setPendingDeleteMessage(null);
+  }, []);
+
+  const handleConfirmDelete = useCallback(
+    async (forEveryone: boolean) => {
+      if (
+        !pendingDeleteMessage ||
+        !onDeleteMessage ||
+        !selectedConversationId
+      ) {
+        setPendingDeleteMessage(null);
+        return;
+      }
+      const message = pendingDeleteMessage;
+      setPendingDeleteMessage(null);
+      try {
+        await onDeleteMessage(selectedConversationId, message.id, {
+          forEveryone,
+        });
+      } catch {
+        // controller handles surface errors (toast, etc.)
+      }
+    },
+    [pendingDeleteMessage, onDeleteMessage, selectedConversationId]
+  );
 
   const handleReplyMessage = (message: MessageItem) => {
     setReplyTo(message);
@@ -679,20 +711,47 @@ const MessagingCenter = ({
                           disabled={!onSendMessage || !selectedConversationId}
                         />
                       </div>
-                      <Button
-                        type="button"
-                        onClick={handleSendMessage}
-                        disabled={
-                          !onSendMessage ||
-                          !selectedConversationId ||
-                          !messageDraft.trim() ||
-                          sending
-                        }
-                        className="gap-2"
-                      >
-                        <Send className="h-4 w-4" />
-                        {sending ? "Sending" : "Send"}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {editingMessageId ? (
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              // Cancel editing
+                              setEditingMessageId(null);
+                              if (editingOriginal !== null) {
+                                onChangeDraft("");
+                              }
+                            }}
+                            variant="outline"
+                            className="gap-2"
+                          >
+                            Cancel
+                          </Button>
+                        ) : null}
+
+                        <Button
+                          type="button"
+                          onClick={handleSendMessage}
+                          disabled={
+                            !(editingMessageId
+                              ? onEditMessage
+                              : onSendMessage) ||
+                            !selectedConversationId ||
+                            !messageDraft.trim() ||
+                            sending
+                          }
+                          className="gap-2"
+                        >
+                          <Send className="h-4 w-4" />
+                          {sending
+                            ? editingMessageId
+                              ? "Saving"
+                              : "Sending"
+                            : editingMessageId
+                            ? "Save"
+                            : "Send"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -705,6 +764,49 @@ const MessagingCenter = ({
           </Card>
         </div>
       </div>
+      <AlertDialog
+        open={Boolean(pendingDeleteMessage)}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCancelDelete();
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose how you would like to remove this message. Deleting for
+              everyone replaces the content with a removal notice for all
+              participants. Deleting for yourself only hides it from your own
+              view.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel onClick={handleCancelDelete}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => handleConfirmDelete(false)}
+              >
+                Delete for me
+              </Button>
+            </AlertDialogAction>
+            <AlertDialogAction asChild>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => handleConfirmDelete(true)}
+              >
+                Delete for everyone
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -5,8 +5,10 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import { randomBytes } from "crypto";
+import { env } from "../config/env";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
 import Message, {
+  IMessage,
   MessageRole,
   MessageType,
   getThreadKey,
@@ -35,10 +37,18 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
+  destination: (
+    _req: express.Request,
+    _file: Express.Multer.File,
+    cb: (error: Error | null, destination: string) => void
+  ) => {
     cb(null, uploadsDir);
   },
-  filename: (_req, file, cb) => {
+  filename: (
+    _req: express.Request,
+    file: Express.Multer.File,
+    cb: (error: Error | null, fileName: string) => void
+  ) => {
     const unique = randomBytes(8).toString("hex");
     const extension = path.extname(file.originalname);
     cb(null, `${Date.now()}-${unique}${extension}`);
@@ -60,7 +70,11 @@ const upload = multer({
   limits: {
     fileSize: 15 * 1024 * 1024,
   },
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (
+    _req: express.Request,
+    file: Express.Multer.File,
+    cb: (error: Error | null, acceptFile?: boolean) => void
+  ) => {
     if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
       cb(null, true);
       return;
@@ -162,12 +176,10 @@ router.post(
         }
         const expectedThread = getThreadKey(sender._id, receiverId);
         if (referenced.threadKey !== expectedThread) {
-          return res
-            .status(400)
-            .json({
-              success: false,
-              message: "Reply must reference a message from the same thread",
-            });
+          return res.status(400).json({
+            success: false,
+            message: "Reply must reference a message from the same thread",
+          });
         }
       }
 
@@ -233,13 +245,11 @@ router.post(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Validation failed",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
     }
 
     const currentUser = req.user as IUser;
@@ -258,22 +268,18 @@ router.post(
       }
 
       if ((original as any).isDeletedForEveryone) {
-        return res
-          .status(409)
-          .json({
-            success: false,
-            message: "Cannot forward a message deleted for everyone",
-          });
+        return res.status(409).json({
+          success: false,
+          message: "Cannot forward a message deleted for everyone",
+        });
       }
 
       const receiverId = new mongoose.Types.ObjectId(req.body.receiverId);
       if (receiverId.equals(currentUser._id)) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Cannot forward a message to yourself",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Cannot forward a message to yourself",
+        });
       }
 
       const { sender: senderDoc, receiver } = await ensureUsersExist(
@@ -370,14 +376,15 @@ router.post(
         .json({ success: false, message: "No file uploaded" });
     }
 
-    const fileUrl = `/uploads/${req.file.filename}`;
+    const uploadedFile = req.file as Express.Multer.File;
+    const fileUrl = `/uploads/${uploadedFile.filename}`;
     return res.status(201).json({
       success: true,
       data: {
         fileUrl,
-        fileName: req.file.originalname,
-        mimeType: req.file.mimetype,
-        size: req.file.size,
+        fileName: uploadedFile.originalname,
+        mimeType: uploadedFile.mimetype,
+        size: uploadedFile.size,
       },
     });
   }
@@ -639,7 +646,12 @@ router.get(
         return clone;
       });
 
-      const mappedMessages = normalizeMessageIds(updatedMessages);
+      const filteredMessages = updatedMessages.filter((message) => {
+        const hiddenFor = (message.hiddenFor ?? []).map((id) => id?.toString());
+        return !hiddenFor.includes(currentIdString);
+      });
+
+      const mappedMessages = normalizeMessageIds(filteredMessages);
 
       return res.json({
         success: true,
@@ -684,7 +696,7 @@ router.patch(
     }
 
     try {
-      const message = await Message.findById(req.params.id);
+      const message = await Message.findById<IMessage>(req.params.id);
       if (!message) {
         return res
           .status(404)
@@ -766,13 +778,11 @@ router.patch(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Validation failed",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
     }
 
     const currentUser = req.user as IUser;
@@ -783,7 +793,7 @@ router.patch(
     }
 
     try {
-      const message = await Message.findById(req.params.id);
+      const message = await Message.findById<IMessage>(req.params.id);
       if (!message) {
         return res
           .status(404)
@@ -791,26 +801,53 @@ router.patch(
       }
 
       if (message.sender.toString() !== currentUser._id.toString()) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "Only the sender can edit this message",
-          });
+        return res.status(403).json({
+          success: false,
+          message: "Only the sender can edit this message",
+        });
       }
 
       if (message.isDeletedForEveryone) {
-        return res
-          .status(409)
-          .json({
-            success: false,
-            message: "Cannot edit a message deleted for everyone",
-          });
+        return res.status(409).json({
+          success: false,
+          message: "Cannot edit a message deleted for everyone",
+        });
       }
 
-      message.content = req.body.content.trim();
+      const trimmedContent = req.body.content.trim();
+      const previousContent = message.content;
+
+      if (trimmedContent === previousContent) {
+        return res.status(400).json({
+          success: false,
+          message: "New content must be different from the current content",
+        });
+      }
+
+      const hiddenFor = (message.hiddenFor ?? []).map((id) => id.toString());
+      if (hiddenFor.includes(currentUser._id.toString())) {
+        return res.status(409).json({
+          success: false,
+          message: "Cannot edit a message that was deleted",
+        });
+      }
+
+      const maxEditCount = env.messaging?.maxEditCount ?? 0;
+      const currentEditCount =
+        typeof message.editCount === "number" ? message.editCount : 0;
+
+      if (maxEditCount > 0 && currentEditCount >= maxEditCount) {
+        return res.status(409).json({
+          success: false,
+          message: "Message edit limit reached",
+        });
+      }
+
+      // Persist the new content and track edit metadata for transparency.
+      message.content = trimmedContent;
       message.isEdited = true;
       message.editedAt = new Date();
+      message.editCount = currentEditCount + 1;
 
       await message.save();
 
@@ -819,7 +856,9 @@ router.patch(
       const participants =
         message.participants?.map((p: any) => p.toString()) ?? [];
       participants.forEach((id) =>
-        emitToUser(id, "message:edited", { message: normalized })
+        emitToUser(id, "message:edited", {
+          message: normalized,
+        })
       );
 
       return res.json({ success: true, data: { message: normalized } });
@@ -839,13 +878,11 @@ router.delete(
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Validation failed",
-          errors: errors.array(),
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
     }
 
     const currentUser = req.user as IUser;
@@ -858,7 +895,7 @@ router.delete(
     const mode = (req.query.mode as string) ?? "me";
 
     try {
-      const message = await Message.findById(req.params.id);
+      const message = await Message.findById<IMessage>(req.params.id);
       if (!message) {
         return res
           .status(404)
@@ -868,7 +905,6 @@ router.delete(
       const currentId = currentUser._id.toString();
 
       if (mode === "me") {
-        // add current user to hiddenFor
         await Message.updateOne(
           { _id: message._id },
           { $addToSet: { hiddenFor: currentId } }
@@ -876,39 +912,55 @@ router.delete(
         return res.json({ success: true, message: "Deleted for me" });
       }
 
-      // mode=everyone
       if (message.sender.toString() !== currentId) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "Only the sender can delete for everyone",
-          });
+        return res.status(403).json({
+          success: false,
+          message: "Only the sender can delete for everyone",
+        });
       }
 
+      const receiverId = message.receiver.toString();
+      const seenBy = (message.seenBy ?? []).map((id) => String(id));
+      const receiverHasSeen =
+        seenBy.includes(receiverId) || message.status === "read";
+
+      if (receiverHasSeen) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "You can't delete this message because it has already been seen.",
+        });
+      }
+
+      const messageId = (
+        message._id as Types.ObjectId | string | number
+      ).toString();
+      const participants = message.participants?.map((p: any) =>
+        p.toString()
+      ) ?? [message.sender.toString(), message.receiver.toString()];
+
+      message.deleted = true;
       message.isDeletedForEveryone = true;
       message.deletedAt = new Date();
-      message.content = "This message was deleted.";
+      message.content = "";
       message.fileUrl = undefined as any;
       message.fileName = undefined as any;
+      const hidden = new Set([...(message.hiddenFor ?? []), ...participants]);
+      message.hiddenFor = Array.from(hidden);
 
       await message.save();
 
       const payload = {
-        messageId: message._id.toString(),
+        messageId,
         threadKey: message.threadKey,
         mode: "everyone",
-        placeholder: message.content,
-        deletedAt: message.deletedAt,
       };
 
-      const participants =
-        message.participants?.map((p: any) => p.toString()) ?? [];
       participants.forEach((id) => emitToUser(id, "message:deleted", payload));
 
       return res.json({
         success: true,
-        data: { message: normalizeMessage(message as MessageLike) },
+        data: { messageId },
       });
     } catch (error) {
       console.error("Failed to delete message", error);
@@ -919,4 +971,5 @@ router.delete(
   }
 );
 
+export const messageRouter = router;
 export default router;

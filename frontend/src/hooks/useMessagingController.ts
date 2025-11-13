@@ -7,6 +7,7 @@ import {
   fetchInbox,
   fetchRecipients,
   fetchThread,
+  markMessageRead,
   uploadMessageFile,
 } from "@/lib/api/messagesApi";
 import type {
@@ -566,47 +567,77 @@ export const useMessagingController = ({
 
   const handleMessageDeleted = useCallback(
     (event: MessageDeletedEvent) => {
+      const removeCompletely =
+        event.mode === "everyone" || event.forEveryone === true;
+      const updatedConversations = new Map<string, MessageItem[]>();
+
       setMessagesByConversation((previous) => {
         const next: typeof previous = {};
+
         Object.entries(previous).forEach(([conversationId, messages]) => {
-          const updated = messages.map((message) =>
-            message.id === event.messageId
-              ? {
-                  ...message,
-                  deleted: true,
-                  content: "",
-                  fileUrl: undefined,
-                  fileName: undefined,
-                  preview: "This message was deleted.",
-                }
-              : message
-          );
+          let updated = messages;
+
+          if (removeCompletely) {
+            const filtered = messages.filter(
+              (message) => message.id !== event.messageId
+            );
+            if (filtered.length !== messages.length) {
+              updated = filtered;
+            }
+          } else {
+            let changed = false;
+            const mapped = messages.map((message) => {
+              if (message.id !== event.messageId) {
+                return message;
+              }
+              changed = true;
+              return {
+                ...message,
+                deleted: true,
+                content: "",
+                fileUrl: undefined,
+                fileName: undefined,
+                preview: "This message was deleted.",
+              };
+            });
+            if (changed) {
+              updated = mapped;
+            }
+          }
+
           next[conversationId] = updated;
+          if (updated !== messages) {
+            updatedConversations.set(conversationId, updated);
+          }
         });
+
         return next;
       });
 
-      setContactsSorted((list) =>
-        list.map((contact) =>
-          messagesRef.current[contact.id]?.some(
-            (message) => message.id === event.messageId
-          ) &&
-          contact.lastMessageAt ===
-            messagesRef.current[contact.id]?.find(
-              (message) => message.id === event.messageId
-            )?.timestampIso
-            ? {
-                ...contact,
-                lastMessage: contact.lastMessage
-                  ? {
-                      ...contact.lastMessage,
-                      content: "This message was deleted.",
-                    }
-                  : contact.lastMessage,
-              }
-            : contact
-        )
-      );
+      if (updatedConversations.size > 0) {
+        setContactsSorted((list) =>
+          list.map((contact) => {
+            const updatedMessages = updatedConversations.get(contact.id);
+            if (!updatedMessages) {
+              return contact;
+            }
+
+            const last = updatedMessages[updatedMessages.length - 1];
+            return {
+              ...contact,
+              lastMessage: last
+                ? {
+                    content: last.preview ?? last.content,
+                    timestamp: last.timestamp,
+                    timestampIso: last.timestampIso,
+                    senderRole: last.senderRole,
+                  }
+                : undefined,
+              lastMessageAt: last?.timestampIso,
+            };
+          })
+        );
+      }
     },
     [setContactsSorted]
   );

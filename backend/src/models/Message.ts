@@ -31,6 +31,7 @@ export interface IMessage extends Document {
   deleted: boolean;
   editedAt?: Date;
   isEdited?: boolean;
+  editCount?: number;
   deliveredTo: string[];
   seenBy: string[];
   readAt?: Date;
@@ -110,6 +111,11 @@ const MessageSchema = new Schema<IMessage>(
     isEdited: {
       type: Boolean,
       default: false,
+    },
+    editCount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     replyToMessageId: {
       type: Schema.Types.ObjectId,

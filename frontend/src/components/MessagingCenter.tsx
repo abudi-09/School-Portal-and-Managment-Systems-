@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Send,
   Paperclip,
@@ -42,6 +42,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import ForwardMessageDialog from "./messaging/ForwardMessageDialog";
+import { fetchRecipients, forwardMessage } from "@/lib/api/messagesApi";
+import { useToast } from "@/hooks/use-toast";
 
 export type UserRole = "admin" | "head" | "teacher";
 
@@ -64,6 +67,14 @@ export interface MessageItem {
   seenBy: string[];
   threadKey?: string;
   preview?: string;
+  replyToMessageId?: string;
+  replyTo?: {
+    messageId: string;
+    senderName: string;
+    type: "text" | "image" | "file" | "doc";
+    snippet: string;
+  };
+  replyToDeleted?: boolean;
   isPending?: boolean;
 }
 
@@ -83,7 +94,6 @@ export interface ContactItem {
   };
   lastMessageAt?: string;
 }
-
 interface MessagingCenterProps {
   title: string;
   description?: string;
@@ -103,6 +113,7 @@ interface MessagingCenterProps {
       file?: File;
       fileUrl?: string;
       fileName?: string;
+      replyToMessageId?: string;
     }
   ) => Promise<void> | void;
   onEditMessage?: (
@@ -150,6 +161,63 @@ const formatRoleLabel = (role: UserRole) => {
   }
 };
 
+const DELETED_MESSAGE_TEXT = "This message was deleted.";
+
+const getMessageTypeLabel = (type: MessageItem["type"]) => {
+  switch (type) {
+    case "image":
+      return "Photo";
+    case "doc":
+      return "Document";
+    case "file":
+      return "File";
+    default:
+      return "Message";
+  }
+};
+
+const getReplyPreviewText = (message: MessageItem) => {
+  if (message.deleted) {
+    return DELETED_MESSAGE_TEXT;
+  }
+
+  const content = (message.content ?? "").trim();
+
+  if (message.type === "text" && content.length > 0) {
+    return content;
+  }
+
+  if (message.fileName) {
+    return message.fileName;
+  }
+
+  if (content.length > 0) {
+    return content;
+  }
+
+  return getMessageTypeLabel(message.type);
+};
+
+const getReplyHeaderLabel = (
+  message: MessageItem,
+  currentUserId?: string,
+  participantName?: string
+) => {
+  if (message.deleted) {
+    return "Replying to a deleted message";
+  }
+
+  if (currentUserId && message.senderId === currentUserId) {
+    return "Replying to yourself";
+  }
+
+  if (participantName) {
+    return `Replying to ${participantName}`;
+  }
+
+  return `Replying to ${formatRoleLabel(message.senderRole)}`;
+};
+
 const MessagingCenter = ({
   title,
   description,
@@ -179,13 +247,30 @@ const MessagingCenter = ({
 }: MessagingCenterProps) => {
   const [search, setSearch] = useState("");
   const [internalIsSending, setInternalIsSending] = useState(false);
-  const [replyTo, setReplyTo] = useState<MessageItem | null>(null);
+  const [replyToMessageId, setReplyToMessageId] = useState<string | null>(null);
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pendingDeleteMessage, setPendingDeleteMessage] =
     useState<MessageItem | null>(null);
+  const [pendingPinMessage, setPendingPinMessage] =
+    useState<MessageItem | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingOriginal, setEditingOriginal] = useState<string | null>(null);
+  const [forwardingMessage, setForwardingMessage] =
+    useState<MessageItem | null>(null);
+  const [forwardRecipients, setForwardRecipients] = useState<
+    import("@/lib/api/messagesApi").RecipientDto[]
+  >([]);
+  const [forwardLoading, setForwardLoading] = useState(false);
+  const [forwardSelectedId, setForwardSelectedId] = useState<string | null>(
+    null
+  );
+  const [forwardPage, setForwardPage] = useState(1);
+  const [forwardHasMore, setForwardHasMore] = useState(false);
+
+  const { toast } = useToast();
+
+  const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const sending = isSendingMessage ?? internalIsSending;
 
@@ -240,10 +325,25 @@ const MessagingCenter = ({
     );
   }, [contacts, selectedConversationId]);
 
+  const replyTo = useMemo(() => {
+    if (!replyToMessageId) {
+      return null;
+    }
+    return messages.find((item) => item.id === replyToMessageId) ?? null;
+  }, [messages, replyToMessageId]);
+
+  const pinnedMessages = useMemo(() => {
+    if (!messages || pinnedIds.size === 0) return [] as MessageItem[];
+    return messages.filter((m) => pinnedIds.has(m.id));
+  }, [messages, pinnedIds]);
+
   const handleSelectContact = (contact: ContactItem) => {
     if (!isSelectable(contact)) {
       return;
     }
+    setReplyToMessageId(null);
+    setEditingMessageId(null);
+    setEditingOriginal(null);
     onSelectConversation(contact.id);
   };
 
@@ -271,8 +371,10 @@ const MessagingCenter = ({
       } else {
         await onSendMessage(selectedConversationId, {
           content: messageDraft.trim(),
+          replyToMessageId: replyTo?.id,
         });
         onChangeDraft("");
+        setReplyToMessageId(null);
       }
     } finally {
       if (isSendingMessage === undefined) {
@@ -303,15 +405,7 @@ const MessagingCenter = ({
   };
 
   const handlePinMessage = (message: MessageItem) => {
-    setPinnedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(message.id)) {
-        next.delete(message.id);
-      } else {
-        next.add(message.id);
-      }
-      return next;
-    });
+    setPendingPinMessage(message);
   };
 
   const handleSelectMessage = (message: MessageItem) => {
@@ -353,18 +447,125 @@ const MessagingCenter = ({
     [pendingDeleteMessage, onDeleteMessage, selectedConversationId]
   );
 
+  const handleCancelPin = useCallback(() => {
+    setPendingPinMessage(null);
+  }, []);
+
+  const handleConfirmPin = useCallback(() => {
+    if (!pendingPinMessage) {
+      setPendingPinMessage(null);
+      return;
+    }
+    const message = pendingPinMessage;
+    setPendingPinMessage(null);
+    setPinnedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(message.id)) {
+        next.delete(message.id);
+      } else {
+        next.add(message.id);
+      }
+      return next;
+    });
+  }, [pendingPinMessage]);
+
   const handleReplyMessage = (message: MessageItem) => {
-    setReplyTo(message);
+    setReplyToMessageId(message.id);
   };
 
   const handleForwardMessage = async (message: MessageItem) => {
-    // Simple forward: prompt for recipient ID from existing contacts
-    const recipientId = window.prompt("Enter recipient ID to forward message:");
-    if (!recipientId || !onSendMessage) return;
-    await onSendMessage(recipientId, { content: message.content });
+    // Open forward dialog and fetch recipients from remote API
+    setForwardingMessage(message);
+    setForwardSelectedId(null);
+    setForwardRecipients([]);
+    setForwardLoading(true);
+    setForwardPage(1);
+    setForwardHasMore(false);
+    try {
+      const { recipients, hasMore } = await fetchRecipients(1, 20);
+      setForwardRecipients(recipients);
+      setForwardHasMore(hasMore);
+    } catch (e) {
+      setForwardRecipients([]);
+      setForwardHasMore(false);
+    } finally {
+      setForwardLoading(false);
+    }
   };
 
-  const clearReply = () => setReplyTo(null);
+  const closeForwardDialog = () => {
+    setForwardingMessage(null);
+    setForwardSelectedId(null);
+    setForwardRecipients([]);
+    setForwardLoading(false);
+    setForwardPage(1);
+    setForwardHasMore(false);
+  };
+
+  const loadMoreForwardRecipients = async () => {
+    if (forwardLoading || !forwardHasMore) return;
+    setForwardLoading(true);
+    try {
+      const nextPage = forwardPage + 1;
+      const { recipients, hasMore } = await fetchRecipients(nextPage, 20);
+      setForwardRecipients((prev) => [...prev, ...recipients]);
+      setForwardHasMore(hasMore);
+      setForwardPage(nextPage);
+    } catch (e) {
+      // ignore
+    } finally {
+      setForwardLoading(false);
+    }
+  };
+
+  const confirmForward = async () => {
+    if (!forwardingMessage || !forwardSelectedId) return;
+    setForwardLoading(true);
+    try {
+      await forwardMessage(forwardingMessage.id, forwardSelectedId);
+      toast({
+        title: "Message forwarded",
+        description: "Your message was forwarded successfully.",
+      });
+      closeForwardDialog();
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Forward failed",
+        description:
+          err?.message ?? "Unable to forward message. Please try again.",
+      });
+    } finally {
+      setForwardLoading(false);
+    }
+  };
+
+  const clearReply = () => setReplyToMessageId(null);
+
+  const handleReplyPreviewClick = (message: MessageItem) => {
+    if (
+      !message.replyTo ||
+      !message.replyTo.messageId ||
+      message.replyToDeleted
+    ) {
+      return;
+    }
+
+    const originalId = message.replyTo.messageId;
+    const originalElement = messageRefs.current[originalId];
+
+    if (!originalElement) {
+      return;
+    }
+
+    originalElement.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    originalElement.classList.add("ring-2", "ring-blue-400");
+
+    window.setTimeout(() => {
+      originalElement.classList.remove("ring-2", "ring-blue-400");
+    }, 1200);
+  };
 
   return (
     <div className="min-h-screen bg-background py-6">
@@ -374,6 +575,22 @@ const MessagingCenter = ({
             <h1 className="text-3xl font-bold text-foreground">{title}</h1>
             {description ? (
               <p className="text-muted-foreground">{description}</p>
+            ) : null}
+
+            {forwardingMessage ? (
+              <ForwardMessageDialog
+                open={Boolean(forwardingMessage)}
+                onOpenChange={(open: boolean) => {
+                  if (!open) closeForwardDialog();
+                }}
+                recipients={forwardRecipients}
+                isLoading={forwardLoading}
+                selectedId={forwardSelectedId}
+                onSelectRecipient={setForwardSelectedId}
+                onConfirm={confirmForward}
+                hasMore={forwardHasMore}
+                onLoadMore={loadMoreForwardRecipients}
+              />
             ) : null}
           </div>
           {onCompose ? (
@@ -521,6 +738,61 @@ const MessagingCenter = ({
                   </div>
                 </CardHeader>
                 <CardContent className="flex flex-1 flex-col gap-4 pt-6">
+                  {pinnedMessages.length > 0 ? (
+                    <div className="rounded-2xl border border-yellow-300/60 bg-yellow-50/60 p-3 dark:border-yellow-800/60 dark:bg-yellow-950/20">
+                      <div className="mb-2 flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
+                        <Pin className="h-4 w-4" />
+                        <p className="text-xs font-semibold uppercase tracking-wide">
+                          Pinned
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        {pinnedMessages.map((msg) => {
+                          const isSelf =
+                            msg.senderId === currentUserId ||
+                            (!currentUserId &&
+                              msg.senderRole === currentUserRole);
+                          return (
+                            <div
+                              key={msg.id}
+                              className="group relative rounded-xl border border-yellow-200 bg-background/70 px-3 py-2 text-sm dark:border-yellow-900"
+                            >
+                              <div className="mb-1 flex items-center justify-between">
+                                <span className="text-[11px] font-medium text-muted-foreground">
+                                  {isSelf
+                                    ? "You"
+                                    : selectedContact?.name ?? "User"}
+                                </span>
+                                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                  <span>{msg.timestamp}</span>
+                                  <button
+                                    type="button"
+                                    className="rounded-md px-2 py-0.5 text-xs hover:bg-yellow-100 dark:hover:bg-yellow-900/40"
+                                    onClick={() => handlePinMessage(msg)}
+                                  >
+                                    Unpin
+                                  </button>
+                                </div>
+                              </div>
+                              {msg.type === "file" && msg.fileUrl ? (
+                                <a
+                                  href={msg.fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer noopener"
+                                  className="inline-block rounded-md bg-background/50 px-2 py-0.5 text-xs"
+                                >
+                                  {msg.fileName ?? "Download file"}
+                                </a>
+                              ) : null}
+                              {msg.content ? (
+                                <p className="leading-relaxed">{msg.content}</p>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                   <ScrollArea className="h-[420px] pr-4">
                     <div className="space-y-3">
                       {isLoadingThread ? (
@@ -550,25 +822,63 @@ const MessagingCenter = ({
                                 >
                                   <div
                                     className={cn(
-                                      "group relative max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm",
+                                      "group relative max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm transition-colors",
                                       isSelf
                                         ? "bg-primary text-primary-foreground"
                                         : "bg-muted text-foreground",
                                       isSelected && "ring-2 ring-ring",
-                                      isPinned && "border-2 border-yellow-500"
+                                      isPinned &&
+                                        "border-2 border-yellow-500 hover:border-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
                                     )}
+                                    ref={(el) => {
+                                      messageRefs.current[message.id] = el;
+                                    }}
                                   >
                                     {isPinned ? (
                                       <Pin className="absolute -top-2 -right-2 h-4 w-4 rotate-12 text-yellow-500" />
                                     ) : null}
                                     <div className="space-y-2">
-                                      {message.type === "image" &&
-                                      message.fileUrl ? (
-                                        <img
-                                          src={message.fileUrl}
-                                          alt={message.fileName ?? "image"}
-                                          className="max-h-48 w-auto rounded-md"
-                                        />
+                                      {message.replyTo ? (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleReplyPreviewClick(message)
+                                          }
+                                          disabled={message.replyToDeleted}
+                                          aria-disabled={message.replyToDeleted}
+                                          className={cn(
+                                            "mb-1 flex w-full items-start gap-2 rounded-md bg-background/40 px-2 py-1 text-xs text-left",
+                                            isSelf
+                                              ? "text-primary-foreground/80"
+                                              : "text-muted-foreground",
+                                            message.replyToDeleted
+                                              ? "cursor-not-allowed opacity-80"
+                                              : "hover:bg-background/60"
+                                          )}
+                                        >
+                                          <div className="border-l-2 border-primary/60 pr-1" />
+                                          <div className="min-w-0 flex-1">
+                                            <p className="font-semibold truncate">
+                                              {message.replyTo.senderName ||
+                                                "Unknown"}
+                                            </p>
+                                            <p
+                                              className={cn(
+                                                "truncate",
+                                                message.replyToDeleted
+                                                  ? "italic"
+                                                  : undefined
+                                              )}
+                                            >
+                                              {message.replyToDeleted
+                                                ? DELETED_MESSAGE_TEXT
+                                                : message.replyTo.snippet ||
+                                                  getMessageTypeLabel(
+                                                    message.replyTo.type
+                                                  )}
+                                            </p>
+                                          </div>
+                                        </button>
                                       ) : null}
                                       {(message.type === "file" ||
                                         message.type === "doc") &&
@@ -678,17 +988,36 @@ const MessagingCenter = ({
 
                   <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-2">
                     {replyTo ? (
-                      <div className="flex items-start justify-between rounded-lg border border-border bg-background/60 p-2 text-xs">
-                        <div className="max-w-[80%]">
-                          <p className="font-semibold">Replying to</p>
-                          <p className="truncate opacity-80">
-                            {replyTo.content}
+                      <div className="flex items-start justify-between rounded-lg border border-border bg-background/60 p-3 text-xs">
+                        <div className="max-w-[80%] space-y-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            {replyTo.deleted
+                              ? "Deleted"
+                              : getMessageTypeLabel(replyTo.type)}
+                          </p>
+                          <p className="font-semibold">
+                            {getReplyHeaderLabel(
+                              replyTo,
+                              currentUserId,
+                              selectedContact?.name
+                            )}
+                          </p>
+                          <p
+                            className={cn(
+                              "truncate",
+                              replyTo.deleted
+                                ? "italic opacity-70"
+                                : "opacity-80"
+                            )}
+                          >
+                            {getReplyPreviewText(replyTo)}
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={clearReply}
-                          className="text-muted-foreground hover:text-foreground"
+                          className="text-muted-foreground transition hover:text-foreground"
+                          aria-label="Cancel reply"
                         >
                           ✕
                         </button>
@@ -802,6 +1131,43 @@ const MessagingCenter = ({
                 onClick={() => handleConfirmDelete(true)}
               >
                 Delete for everyone
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(pendingPinMessage)}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCancelPin();
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pinnedIds.has(pendingPinMessage?.id || "")
+                ? "Unpin message?"
+                : "Pin message?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Pin this message. Do not move it in the chat. Instead, show it in
+              the pinned area at the top of the screen while keeping the
+              original message in its place in the chat history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel onClick={handleCancelPin}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                type="button"
+                variant="default"
+                onClick={handleConfirmPin}
+              >
+                {pinnedIds.has(pendingPinMessage?.id || "") ? "Unpin" : "Pin"}
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>

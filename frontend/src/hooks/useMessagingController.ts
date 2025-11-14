@@ -53,14 +53,23 @@ const formatTimestamp = (iso: string) => {
   }).format(date);
 };
 
-const summarizeMessage = (
-  message: Pick<
-    MessageDto | SocketMessagePayload,
-    "type" | "deleted" | "content" | "fileName"
-  >
-) => {
+type Summarizable = Pick<
+  MessageDto | SocketMessagePayload,
+  "type" | "deleted" | "content" | "fileName" | "replyTo" | "replyToDeleted"
+>;
+
+const summarizeMessage = (message: Summarizable) => {
   if (message.deleted) {
     return "This message was deleted.";
+  }
+
+  if (message.replyToDeleted) {
+    return "Replied to a deleted message";
+  }
+
+  if (message.replyTo) {
+    const target = message.replyTo;
+    return `Reply to ${target.senderName}: ${target.snippet}`;
   }
 
   switch (message.type) {
@@ -123,6 +132,9 @@ const mapMessageDto = (message: MessageDto): MessageItem => ({
   seenBy: message.seenBy ?? [],
   threadKey: message.threadKey,
   preview: summarizeMessage(message),
+  replyToMessageId: message.replyToMessageId,
+  replyTo: message.replyTo,
+  replyToDeleted: message.replyToDeleted,
 });
 
 const mapSocketMessage = (message: SocketMessagePayload): MessageItem => ({
@@ -144,6 +156,9 @@ const mapSocketMessage = (message: SocketMessagePayload): MessageItem => ({
   seenBy: message.seenBy ?? [],
   threadKey: message.threadKey,
   preview: summarizeMessage(message),
+  replyToMessageId: message.replyToMessageId,
+  replyTo: message.replyTo,
+  replyToDeleted: message.replyToDeleted,
 });
 
 const contactFromSummary = (summary: ContactSummaryDto): ContactItem => ({
@@ -172,6 +187,7 @@ type OutgoingMessagePayload = {
   file?: File;
   fileUrl?: string;
   fileName?: string;
+  replyToMessageId?: string;
 };
 
 const sortContacts = (items: ContactItem[]): ContactItem[] => {
@@ -392,7 +408,7 @@ export const useMessagingController = ({
               online,
               unreadCount,
               lastMessage: {
-                content: message.preview,
+                content: message.preview ?? message.content,
                 timestamp: message.timestamp,
                 timestampIso: message.timestampIso,
                 senderRole: message.senderRole,
@@ -407,7 +423,7 @@ export const useMessagingController = ({
               online,
               unreadCount,
               lastMessage: {
-                content: message.preview,
+                content: message.preview ?? message.content,
                 timestamp: message.timestamp,
                 timestampIso: message.timestampIso,
                 senderRole: message.senderRole,
@@ -540,6 +556,8 @@ export const useMessagingController = ({
                 fileUrl: mapped.fileUrl,
                 fileName: mapped.fileName,
                 preview: mapped.preview,
+                replyTo: mapped.replyTo,
+                replyToDeleted: mapped.replyToDeleted,
               }
             : item
         )
@@ -552,7 +570,7 @@ export const useMessagingController = ({
             ? {
                 ...contact,
                 lastMessage: {
-                  content: mapped.preview,
+                  content: mapped.preview ?? mapped.content,
                   timestamp: mapped.timestamp,
                   timestampIso: mapped.timestampIso,
                   senderRole: mapped.senderRole,
@@ -888,6 +906,7 @@ export const useMessagingController = ({
           type: messageType,
           fileUrl,
           fileName,
+          replyToMessageId: payload.replyToMessageId,
         });
 
         threadCacheRef.current.add(conversationId);
@@ -1068,7 +1087,7 @@ export const useMessagingController = ({
                   ? (existing.unreadCount ?? 0) + 1
                   : 0,
               lastMessage: {
-                content: mapped.content,
+                content: mapped.preview ?? mapped.content,
                 timestamp: mapped.timestamp,
                 timestampIso: mapped.timestampIso,
                 senderRole: mapped.senderRole,
@@ -1085,7 +1104,7 @@ export const useMessagingController = ({
                   ? 1
                   : 0,
               lastMessage: {
-                content: mapped.content,
+                content: mapped.preview ?? mapped.content,
                 timestamp: mapped.timestamp,
                 timestampIso: mapped.timestampIso,
                 senderRole: mapped.senderRole,

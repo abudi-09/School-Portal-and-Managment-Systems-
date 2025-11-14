@@ -4,18 +4,26 @@ import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import { env } from "./config/env";
 import User, { IUser } from "./models/User";
-import Message, { IMessage, MessageRole, MessageType } from "./models/Message";
+import Message, {
+  IMessage,
+  MessageRole,
+  MessageStatus,
+  MessageType,
+  getThreadKey,
+} from "./models/Message";
 import {
   ensureUsersExist,
   formatUserName,
   hierarchyAllows,
 } from "./services/messaging.utils";
+import { flagRepliesForDeletedOriginal } from "./services/replyPreview.service";
 import {
   markOnline,
   markOffline,
   getOnlineUsers,
 } from "./services/presence.service";
 import { normalizeMessage, normalizeMessageIds } from "./utils/messages";
+// reply snippet construction now handled inline per new business rules.
 
 interface SocketUser {
   id: string;
@@ -117,7 +125,7 @@ export const initSocket = (server: http.Server): Server => {
           type?: string;
           fileUrl?: string;
           fileName?: string;
-          metadata?: Record<string, unknown>;
+          replyToMessageId?: string;
         },
         callback?: (response: {
           success: boolean;
@@ -146,7 +154,14 @@ export const initSocket = (server: http.Server): Server => {
           }
 
           const type = (payload.type as MessageType | undefined) ?? "text";
-          const allowedTypes: MessageType[] = ["text", "image", "file", "doc"];
+          const allowedTypes: MessageType[] = [
+            "text",
+            "image",
+            "file",
+            "doc",
+            "audio",
+            "video",
+          ];
           if (!allowedTypes.includes(type)) {
             callback?.({ success: false, message: "Invalid message type" });
             return;
@@ -161,19 +176,110 @@ export const initSocket = (server: http.Server): Server => {
             return;
           }
 
-          const message = await Message.create({
+          let replyToId: mongoose.Types.ObjectId | undefined;
+          let replyToMeta: IMessage["replyToMeta"] | null = null;
+          let replyToDeleted = false;
+
+          if (payload.replyToMessageId) {
+            replyToId = new mongoose.Types.ObjectId(payload.replyToMessageId);
+            const referenced = await Message.findById(replyToId)
+              .populate("sender", "firstName lastName role")
+              .lean();
+
+            if (!referenced) {
+              callback?.({
+                success: false,
+                message: "Referenced message not found",
+              });
+              return;
+            }
+
+            const expectedThread = getThreadKey(senderId, receiverId);
+            if (referenced.threadKey !== expectedThread) {
+              callback?.({
+                success: false,
+                message:
+                  "Reply must reference a message from the same conversation",
+              });
+              return;
+            }
+
+            const referencedSender = referenced.sender as any;
+            const referencedType =
+              (referenced.type as MessageType | undefined) ?? "text";
+            const referencedDeleted = Boolean(
+              referenced.deleted || (referenced as any).isDeletedForEveryone
+            );
+            // Build snippet only for replies.
+            let snippet: string;
+            if (referencedDeleted) {
+              snippet = "This message was deleted"; // deleted original rule
+            } else if (referencedType === "text") {
+              const raw =
+                typeof referenced.content === "string"
+                  ? referenced.content.trim()
+                  : "";
+              snippet = raw.length <= 70 ? raw : raw.slice(0, 67) + "..."; // 70 char max
+            } else {
+              const typeLabelMap: Record<MessageType, string> = {
+                text: "Message", // won't normally occur because handled above
+                image: "Photo",
+                file: "File",
+                doc: "Document",
+                audio: "Audio",
+                video: "Video",
+              };
+              snippet = typeLabelMap[referencedType];
+            }
+            replyToMeta = {
+              messageId: referenced._id.toString(),
+              senderName: formatUserName(referencedSender) || "Unknown",
+              type:
+                referencedType === "image" ? "photo" : (referencedType as any), // keep existing ReplyToMessageType mapping for image->photo
+              snippet,
+            };
+            replyToDeleted = referencedDeleted;
+          }
+
+          const socketMessagePayload: Partial<IMessage> & {
+            sender: mongoose.Types.ObjectId;
+            receiver: mongoose.Types.ObjectId;
+            senderRole: MessageRole;
+            receiverRole: MessageRole;
+            content: string;
+            type: MessageType;
+            deliveredTo: string[];
+            seenBy: string[];
+            status: MessageStatus;
+          } = {
             sender: senderId,
             receiver: receiverId,
             senderRole,
             receiverRole,
             content: trimmedContent,
             type,
-            fileUrl: payload.fileUrl,
-            fileName: payload.fileName,
             deliveredTo: [senderId.toString()],
             seenBy: [senderId.toString()],
             status: "unread",
-          });
+          };
+
+          if (payload.fileUrl) {
+            socketMessagePayload.fileUrl = payload.fileUrl;
+          }
+          if (payload.fileName) {
+            socketMessagePayload.fileName = payload.fileName;
+          }
+
+          if (replyToId && replyToMeta) {
+            socketMessagePayload.replyToMessageId = replyToId;
+            socketMessagePayload.replyToMeta = replyToMeta;
+            socketMessagePayload.replyToDeleted = replyToDeleted;
+          } else {
+            // Explicitly store null to satisfy strict rule (non-reply messages)
+            (socketMessagePayload as any).replyToMeta = null;
+          }
+
+          const message = await Message.create(socketMessagePayload);
 
           const normalized = normalizeMessage(message);
           const responsePayload = {
@@ -336,6 +442,30 @@ export const initSocket = (server: http.Server): Server => {
           ]);
           message.hiddenFor = Array.from(hidden);
           await message.save();
+
+          const affectedReplies = await flagRepliesForDeletedOriginal(
+            message._id as mongoose.Types.ObjectId
+          );
+
+          if (affectedReplies.length > 0) {
+            affectedReplies.forEach((reply) => {
+              reply.replyToDeleted = true;
+              const normalizedReply = normalizeMessage(reply);
+              emitToParticipants(
+                (
+                  (reply.participants?.length
+                    ? reply.participants
+                    : [reply.sender, reply.receiver]) as Array<
+                    mongoose.Types.ObjectId | string | undefined
+                  >
+                ).filter((p): p is mongoose.Types.ObjectId | string =>
+                  Boolean(p)
+                ),
+                "message:update",
+                normalizedReply
+              );
+            });
+          }
 
           emitToParticipants(message.participants, "message:deleted", {
             messageId: payload.messageId,

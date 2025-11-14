@@ -11,6 +11,7 @@ import Message, {
   IMessage,
   MessageRole,
   MessageType,
+  ReplyToMeta,
   getThreadKey,
 } from "../models/Message";
 import User, { IUser } from "../models/User";
@@ -25,6 +26,7 @@ import {
   formatUserName,
   hierarchyAllows,
 } from "../services/messaging.utils";
+import { flagRepliesForDeletedOriginal } from "../services/replyPreview.service";
 import { isOnline } from "../services/presence.service";
 
 const router = express.Router();
@@ -91,7 +93,7 @@ router.post(
       .withMessage("receiverId must be a valid identifier"),
     body("type")
       .optional()
-      .isIn(["text", "image", "file", "doc"])
+      .isIn(["text", "image", "file", "doc", "audio", "video"])
       .withMessage("Invalid message type"),
     body("content")
       .optional()
@@ -166,9 +168,13 @@ router.post(
 
       // If replying, validate referenced message exists and belongs to same thread
       let replyToId: mongoose.Types.ObjectId | undefined;
+      let replyToMeta: IMessage["replyToMeta"] | null = null;
+      let replyToDeleted = false;
       if (req.body.replyToMessageId) {
         replyToId = new mongoose.Types.ObjectId(req.body.replyToMessageId);
-        const referenced = await Message.findById(replyToId).lean();
+        const referenced = await Message.findById(replyToId)
+          .populate("sender", "firstName lastName role")
+          .lean();
         if (!referenced) {
           return res
             .status(404)
@@ -181,9 +187,54 @@ router.post(
             message: "Reply must reference a message from the same thread",
           });
         }
+
+        const referencedSender = referenced.sender as any;
+        const referencedSenderName =
+          formatUserName(referencedSender) || "Unknown";
+        const referencedType =
+          (referenced.type as MessageType | undefined) ?? "text";
+        const referencedDeleted = Boolean(
+          referenced.deleted || (referenced as any).isDeletedForEveryone
+        );
+        let snippet: string;
+        if (referencedDeleted) {
+          snippet = "This message was deleted";
+        } else if (referencedType === "text") {
+          const raw =
+            typeof referenced.content === "string"
+              ? referenced.content.trim()
+              : "";
+          snippet = raw.length <= 70 ? raw : raw.slice(0, 67) + "...";
+        } else {
+          const typeLabelMap: Record<MessageType, string> = {
+            text: "Message",
+            image: "Photo",
+            file: "File",
+            doc: "Document",
+            audio: "Audio",
+            video: "Video",
+          };
+          snippet = typeLabelMap[referencedType];
+        }
+        replyToMeta = {
+          messageId: referenced._id.toString(),
+          senderName: referencedSenderName,
+          type: referencedType === "image" ? "photo" : (referencedType as any),
+          snippet,
+        };
+        replyToDeleted = referencedDeleted;
       }
 
-      const message = await Message.create({
+      const messagePayload: Partial<IMessage> & {
+        sender: Types.ObjectId;
+        receiver: Types.ObjectId;
+        senderRole: MessageRole;
+        receiverRole: MessageRole;
+        content: string;
+        type: MessageType;
+        deliveredTo: string[];
+        seenBy: string[];
+      } = {
         sender: sender._id,
         receiver: receiverId,
         senderRole,
@@ -192,10 +243,19 @@ router.post(
         type,
         fileUrl: req.body.fileUrl,
         fileName: req.body.fileName,
-        replyToMessageId: replyToId,
         deliveredTo: [sender._id.toString()],
         seenBy: [sender._id.toString()],
-      });
+      };
+
+      if (replyToId && replyToMeta) {
+        messagePayload.replyToMessageId = replyToId;
+        messagePayload.replyToMeta = replyToMeta;
+        messagePayload.replyToDeleted = replyToDeleted;
+      } else {
+        (messagePayload as any).replyToMeta = null; // enforce null for non-replies
+      }
+
+      const message = await Message.create(messagePayload);
 
       const payload = {
         message: normalizeMessage(message),
@@ -307,6 +367,19 @@ router.post(
         // ignore
       }
 
+      let forwardedReplyMeta: ReplyToMeta | undefined;
+      if ((original as any).replyToMeta) {
+        const meta = (original as any).replyToMeta;
+        if (meta.messageId && meta.senderName && meta.snippet && meta.type) {
+          forwardedReplyMeta = {
+            messageId: meta.messageId,
+            senderName: meta.senderName,
+            type: meta.type,
+            snippet: meta.snippet,
+          };
+        }
+      }
+
       const newMessage = await Message.create({
         sender: currentUser._id,
         receiver: receiverId,
@@ -316,6 +389,12 @@ router.post(
         type: original.type ?? "text",
         fileUrl: (original as any).fileUrl,
         fileName: (original as any).fileName,
+        ...(forwardedReplyMeta
+          ? {
+              replyToMeta: forwardedReplyMeta,
+              replyToDeleted: Boolean((original as any).replyToDeleted),
+            }
+          : {}),
         forwardedFrom: {
           originalMessageId: original._id,
           originalSenderId: (original as any).sender,
@@ -409,10 +488,17 @@ router.get(
 
     const allowedRoles = roleFilters[role] ?? [];
     if (allowedRoles.length === 0) {
-      return res.json({ success: true, data: { recipients: [] } });
+      return res.json({
+        success: true,
+        data: { recipients: [], hasMore: false },
+      });
     }
 
     try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const skip = (page - 1) * limit;
+
       const recipients = await User.find({
         role: { $in: allowedRoles },
         isActive: true,
@@ -420,9 +506,14 @@ router.get(
       })
         .select("firstName lastName email role")
         .sort({ firstName: 1, lastName: 1 })
+        .skip(skip)
+        .limit(limit + 1) // fetch one extra to check if there are more
         .lean();
 
-      const formatted = recipients
+      const hasMore = recipients.length > limit;
+      const actualRecipients = hasMore ? recipients.slice(0, -1) : recipients;
+
+      const formatted = actualRecipients
         .filter((user) => !user._id?.equals(currentUser._id))
         .map((user) => ({
           id: user._id?.toString() ?? "",
@@ -432,7 +523,10 @@ router.get(
           online: isOnline(user._id?.toString() ?? ""),
         }));
 
-      return res.json({ success: true, data: { recipients: formatted } });
+      return res.json({
+        success: true,
+        data: { recipients: formatted, hasMore },
+      });
     } catch (error) {
       console.error("Failed to fetch recipients", error);
       return res.status(500).json({
@@ -949,6 +1043,24 @@ router.delete(
       message.hiddenFor = Array.from(hidden);
 
       await message.save();
+
+      const affectedReplies = await flagRepliesForDeletedOriginal(
+        message._id as Types.ObjectId
+      );
+
+      if (affectedReplies.length > 0) {
+        affectedReplies.forEach((reply) => {
+          reply.replyToDeleted = true;
+          const normalizedReply = normalizeMessage(reply);
+          const replyParticipants = reply.participants?.map(
+            (participant: any) => participant.toString()
+          ) ?? [reply.sender.toString(), reply.receiver.toString()];
+
+          replyParticipants.forEach((participantId) =>
+            emitToUser(participantId, "message:update", normalizedReply)
+          );
+        });
+      }
 
       const payload = {
         messageId,

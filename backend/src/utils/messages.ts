@@ -4,7 +4,12 @@ import {
   MessageRole,
   MessageStatus,
   MessageType,
+  ReplyToMessageType,
 } from "../models/Message";
+
+// Snippet shown for replies whose original message has been deleted.
+// Business rule: presented consistently without trailing period.
+export const DELETED_REPLY_SNIPPET = "This message was deleted";
 
 export type ObjectIdLike = Types.ObjectId | string;
 export type DateLike = Date | string | null | undefined;
@@ -15,6 +20,7 @@ export interface MessageLike {
   _id: ObjectIdLike;
   sender: ObjectIdLike;
   receiver: ObjectIdLike;
+  participants?: MaybeObjectIdLike[];
   content: string;
   status: MessageStatus;
   senderRole: MessageRole;
@@ -34,6 +40,13 @@ export interface MessageLike {
     originalSenderId?: ObjectIdLike;
     originalSenderName?: string;
     originalSentAt?: DateLike;
+  };
+  replyToDeleted?: boolean;
+  replyToMeta?: {
+    messageId: string;
+    senderName: string;
+    type: ReplyToMessageType;
+    snippet: string;
   };
   editCount?: number;
   deliveredTo?: MaybeObjectIdLike[];
@@ -70,6 +83,13 @@ export interface NormalizedMessage {
     originalSenderName?: string;
     originalSentAt?: string;
   };
+  replyTo?: {
+    messageId: string;
+    senderName: string;
+    type: ReplyToMessageType;
+    snippet: string;
+  };
+  replyToDeleted?: boolean;
   deliveredTo: string[];
   seenBy: string[];
   threadKey: string;
@@ -178,6 +198,35 @@ export const normalizeMessage = (
     if (Object.keys(forwarded).length > 0) {
       normalized.forwardedFrom = forwarded;
     }
+  }
+
+  // Only include reply metadata if present (replyToMeta is stored) AND
+  // the message is actually a reply (has replyToMessageId). Non-reply
+  // messages must surface replyTo as null/undefined.
+  if ((message as any).replyToMessageId && (message as any).replyToMeta) {
+    const r = (message as any).replyToMeta;
+    const replyTo: NonNullable<NormalizedMessage["replyTo"]> = {
+      messageId:
+        typeof r.messageId === "string"
+          ? r.messageId
+          : toStringId(r.messageId as ObjectIdLike),
+      senderName:
+        typeof r.senderName === "string" && r.senderName.trim().length > 0
+          ? r.senderName
+          : "Unknown",
+      type: (r.type as ReplyToMessageType | undefined) ?? "text",
+      snippet:
+        typeof r.snippet === "string" && r.snippet.trim().length > 0
+          ? r.snippet
+          : "Text message",
+    };
+
+    normalized.replyTo = replyTo;
+  }
+
+  if (normalized.replyTo && Boolean((message as any).replyToDeleted)) {
+    normalized.replyTo.snippet = DELETED_REPLY_SNIPPET;
+    normalized.replyToDeleted = true;
   }
 
   if (message.fileUrl) {

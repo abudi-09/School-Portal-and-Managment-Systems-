@@ -3,7 +3,15 @@ import mongoose, { Document, Schema, Types } from "mongoose";
 export type MessageStatus = "read" | "unread";
 export type MessageRole = "admin" | "head" | "teacher";
 
-export type MessageType = "text" | "image" | "file" | "doc";
+export type MessageType = "text" | "image" | "file" | "doc" | "audio" | "video";
+
+export type ReplyToMessageType =
+  | "text"
+  | "photo"
+  | "file"
+  | "document"
+  | "audio"
+  | "video";
 
 export interface MessageDeliveryStatus {
   deliveredTo: string[];
@@ -15,6 +23,13 @@ export interface ForwardedFrom {
   originalSenderId: Types.ObjectId | string;
   originalSenderName?: string;
   originalSentAt?: Date;
+}
+
+export interface ReplyToMeta {
+  messageId: string;
+  senderName: string;
+  type: ReplyToMessageType;
+  snippet: string;
 }
 
 export interface IMessage extends Document {
@@ -37,6 +52,8 @@ export interface IMessage extends Document {
   readAt?: Date;
   threadKey: string;
   replyToMessageId?: Types.ObjectId;
+  replyToMeta?: ReplyToMeta;
+  replyToDeleted?: boolean;
   forwardedFrom?: ForwardedFrom;
   forwardedAt?: Date;
   isDeletedForEveryone?: boolean;
@@ -92,7 +109,7 @@ const MessageSchema = new Schema<IMessage>(
     },
     type: {
       type: String,
-      enum: ["text", "image", "file", "doc"],
+      enum: ["text", "image", "file", "doc", "audio", "video"],
       default: "text",
     },
     fileUrl: {
@@ -120,6 +137,20 @@ const MessageSchema = new Schema<IMessage>(
     replyToMessageId: {
       type: Schema.Types.ObjectId,
       ref: "Message",
+    },
+    replyToMeta: {
+      messageId: { type: String },
+      senderName: { type: String },
+      type: {
+        type: String,
+        enum: ["text", "photo", "file", "document", "audio", "video"],
+        default: "text",
+      },
+      snippet: { type: String },
+    },
+    replyToDeleted: {
+      type: Boolean,
+      default: false,
     },
     forwardedFrom: {
       originalMessageId: { type: Schema.Types.ObjectId, ref: "Message" },

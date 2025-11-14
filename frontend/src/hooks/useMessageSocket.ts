@@ -23,6 +23,14 @@ export interface SocketMessagePayload {
   editedAt?: string;
   deliveredTo: string[];
   seenBy: string[];
+  replyToMessageId?: string;
+  replyTo?: {
+    messageId: string;
+    senderName: string;
+    type: "text" | "image" | "file" | "doc";
+    snippet: string;
+  };
+  replyToDeleted?: boolean;
 }
 
 export interface MessageSocketEvent {
@@ -206,6 +214,7 @@ export const useMessageSocket = ({
     type?: SocketMessagePayload["type"];
     fileUrl?: string;
     fileName?: string;
+    replyToMessageId?: string;
   }) => emitWithAck<{ message: SocketMessagePayload }>("message:send", payload);
 
   const editMessage = async (messageId: string, newText: string) =>

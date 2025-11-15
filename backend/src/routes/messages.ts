@@ -107,31 +107,45 @@ router.post(
   async (req: express.Request, res: express.Response) => {
     const currentUser = req.user as IUser;
     if (!currentUser) {
-      return res.status(401).json({ success: false, message: "Authentication required" });
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
     }
     const receiverIdRaw = req.body.receiverId as string | undefined;
     if (!receiverIdRaw || !Types.ObjectId.isValid(receiverIdRaw)) {
-      return res.status(400).json({ success: false, message: "receiverId required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "receiverId required" });
     }
     const receiver = await User.findById(receiverIdRaw);
     if (!receiver) {
-      return res.status(404).json({ success: false, message: "Receiver not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Receiver not found" });
     }
     if (!req.file) {
-      return res.status(400).json({ success: false, message: "No voice file uploaded" });
+      return res
+        .status(400)
+        .json({ success: false, message: "No voice file uploaded" });
     }
     const voiceFile = req.file as Express.Multer.File;
     const allowedVoice = new Set(["audio/webm", "audio/mp3", "audio/mpeg"]);
     if (!allowedVoice.has(voiceFile.mimetype)) {
-      return res.status(400).json({ success: false, message: "Unsupported voice mime type" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Unsupported voice mime type" });
     }
     if (!isCloudinaryConfigured) {
-      return res.status(500).json({ success: false, message: "Cloudinary not configured" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Cloudinary not configured" });
     }
     let uploadResult: any;
     try {
       uploadResult = await new Promise((resolve, reject) => {
-        const cloudFolder = `${(env.cloudinary?.avatarFolder || "pathways")}/voices`;
+        const cloudFolder = `${
+          env.cloudinary?.avatarFolder || "pathways"
+        }/voices`;
         const stream = cloudinary.uploader.upload_stream(
           {
             resource_type: "auto",
@@ -139,7 +153,8 @@ router.post(
             filename_override: voiceFile.originalname,
           },
           (error, result) => {
-            if (error || !result) return reject(error || new Error("Cloudinary upload failed"));
+            if (error || !result)
+              return reject(error || new Error("Cloudinary upload failed"));
             resolve(result);
           }
         );
@@ -147,10 +162,14 @@ router.post(
       });
     } catch (err) {
       console.error("Voice upload error", err);
-      return res.status(500).json({ success: false, message: "Failed to upload voice" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Failed to upload voice" });
     }
     // Generate waveform & duration
-    const { waveform, duration, error } = await generateWaveform(voiceFile.buffer);
+    const { waveform, duration, error } = await generateWaveform(
+      voiceFile.buffer
+    );
     const messageDoc = new Message({
       sender: currentUser._id,
       receiver: receiver._id,
@@ -1440,7 +1459,9 @@ router.patch(
           userId,
           isPlayed: true,
         };
-        participants.forEach((pid) => emitToUser(pid, "message:voicePlayed", payload));
+        participants.forEach((pid) =>
+          emitToUser(pid, "message:voicePlayed", payload)
+        );
       }
 
       return res.json({

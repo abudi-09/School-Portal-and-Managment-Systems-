@@ -43,10 +43,7 @@ app.use(
 );
 
 // Serve uploaded static files
-app.use(
-  "/uploads",
-  express.static(path.join(__dirname, "..", "..", "uploads"))
-);
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 // Logging middleware
 app.use(morgan("combined"));
 
@@ -98,7 +95,9 @@ const startServer = async () => {
     initSocket(server);
 
     server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
+      if (env.nodeEnv === "development") {
+        console.log(`🚀 Server running on port ${PORT}`);
+      }
     });
   } catch (error) {
     console.error("❌ Failed to start server", error);

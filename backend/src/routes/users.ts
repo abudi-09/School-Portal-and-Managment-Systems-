@@ -69,6 +69,99 @@ const upload =
     : multer();
 
 const router = express.Router();
+// @route   PATCH /api/users/me/privacy
+// @desc    Update own privacy settings (e.g., Hide Online Status)
+// @access  Private
+router.patch(
+  "/me/privacy",
+  authMiddleware,
+  [body("hideOnlineStatus").optional().isBoolean()],
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid input",
+          errors: errors.array(),
+        });
+      }
+      const userId = req.user?._id?.toString();
+      if (!userId) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
+      }
+
+      const { hideOnlineStatus } = req.body as { hideOnlineStatus?: boolean };
+
+      const user = await User.findById(userId).select("privacy");
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+      const privacy: any = { ...(user.privacy || {}) };
+      if (typeof hideOnlineStatus === "boolean") {
+        privacy.hideOnlineStatus = hideOnlineStatus;
+      }
+      user.privacy = privacy;
+      const hiddenAfterUpdate = Boolean(privacy.hideOnlineStatus);
+      let hiddenIso: string | undefined;
+      if (hiddenAfterUpdate) {
+        const now = new Date();
+        hiddenIso = now.toISOString();
+        user.lastSeenAt = now;
+      }
+      await user.save();
+
+      // Update in-memory presence visibility and broadcast
+      const { setHidden, isOnline, setLastSeen, getPresenceForUser } =
+        await import("../services/presence.service");
+      const { getIO } = await import("../socket");
+      const hidden = hiddenAfterUpdate;
+      setHidden(userId, hidden);
+
+      const io = getIO();
+      if (hidden) {
+        const isoNow = hiddenIso ?? new Date().toISOString();
+        setLastSeen(userId, isoNow);
+        const payload = {
+          userId,
+          hidden: true,
+          visibleStatus: "offline" as const,
+          lastSeenAt: isoNow,
+        };
+        io.emit("user:hidden", { userId, hidden: true });
+        io.emit("user:visibilityChange", { userId, visibleStatus: "offline" });
+        io.emit("presence:visibilityChange", payload);
+        io.emit("presence:lastSeenUpdate", payload);
+      } else {
+        const presence = getPresenceForUser(userId);
+        const payload = {
+          userId,
+          hidden: false,
+          visibleStatus: presence.visibleStatus,
+          lastSeenAt: presence.lastSeenAt,
+        };
+        io.emit("presence:visibilityChange", payload);
+        if (isOnline(userId)) {
+          io.emit("presence:online", {
+            ...payload,
+            visibleStatus: "online" as const,
+          });
+          io.emit("user:online", { userId, visibleStatus: "online" });
+          io.emit("user:status", { userId, online: true });
+        }
+      }
+
+      return res.json({ success: true, data: { privacy: user.privacy } });
+    } catch (error: any) {
+      console.error("Update privacy error:", error);
+      return res.status(500).json({ success: false, message: "Server error" });
+    }
+  }
+);
 
 const createStudentValidators = [
   body("firstName").trim().notEmpty().withMessage("First name is required"),

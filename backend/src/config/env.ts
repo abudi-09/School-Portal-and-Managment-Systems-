@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ debug: false });
 
 const getEnv = (key: string, fallback?: string): string => {
   const value = process.env[key];

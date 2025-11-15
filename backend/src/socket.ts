@@ -20,7 +20,10 @@ import { flagRepliesForDeletedOriginal } from "./services/replyPreview.service";
 import {
   markOnline,
   markOffline,
-  getOnlineUsers,
+  setHidden,
+  isHidden,
+  getPresenceSnapshot,
+  getPresenceForUser,
 } from "./services/presence.service";
 import { normalizeMessage, normalizeMessageIds } from "./utils/messages";
 // reply snippet construction now handled inline per new business rules.
@@ -78,7 +81,7 @@ export const initSocket = (server: http.Server): Server => {
 
       const decoded = jwt.verify(token, env.jwtSecret) as { userId: string };
       const user = await User.findById(decoded.userId)
-        .select("role isActive status")
+        .select("role isActive status privacy.hideOnlineStatus")
         .lean();
 
       if (!user || !user.isActive || user.status !== "approved") {
@@ -96,6 +99,9 @@ export const initSocket = (server: http.Server): Server => {
   });
 
   ioInstance.on("connection", (socket: AuthenticatedSocket) => {
+    try {
+      console.log("SERVER > Socket connected:", socket.id);
+    } catch {}
     const socketUser = socket.user;
     if (!socketUser) {
       socket.disconnect(true);
@@ -105,16 +111,48 @@ export const initSocket = (server: http.Server): Server => {
     socket.join(roomForUser(socketUser.id));
 
     const becameOnline = markOnline(socketUser.id);
-    socket.emit("user:status:init", {
-      online: getOnlineUsers(),
-    });
 
-    if (becameOnline && ioInstance) {
-      ioInstance.emit("user:status", {
-        userId: socketUser.id,
-        online: true,
-      });
-    }
+    // Initialize hidden state from DB for this user
+    (async () => {
+      try {
+        const me = await User.findById(socketUser.id)
+          .select("privacy.hideOnlineStatus")
+          .lean();
+        const hidden = Boolean(me?.privacy?.hideOnlineStatus);
+        setHidden(socketUser.id, hidden);
+        // Send snapshot of currently visible-online users
+        const snapshot = getPresenceSnapshot();
+        socket.emit("presence:snapshot", { users: snapshot });
+        // For backward compatibility
+        socket.emit("user:status:init", {
+          online: Object.entries(snapshot)
+            .filter(([, entry]) => entry.visibleStatus === "online")
+            .map(([userId]) => userId),
+        });
+
+        if (becameOnline && ioInstance) {
+          if (!hidden) {
+            const onlinePayload = {
+              userId: socketUser.id,
+              hidden: false,
+              visibleStatus: "online" as const,
+            };
+            ioInstance.emit("presence:online", onlinePayload);
+            ioInstance.emit("user:online", onlinePayload);
+            ioInstance.emit("user:status", {
+              userId: socketUser.id,
+              online: true,
+            });
+          } else {
+            // Hidden mode: do NOT broadcast online; just inform client of hidden state.
+            ioInstance.emit("user:hidden", {
+              userId: socketUser.id,
+              hidden: true,
+            });
+          }
+        }
+      } catch {}
+    })();
 
     socket.on(
       "message:send",
@@ -125,6 +163,8 @@ export const initSocket = (server: http.Server): Server => {
           type?: string;
           fileUrl?: string;
           fileName?: string;
+          mimeType?: string;
+          fileSize?: number;
           replyToMessageId?: string;
         },
         callback?: (response: {
@@ -134,6 +174,16 @@ export const initSocket = (server: http.Server): Server => {
         }) => void
       ) => {
         try {
+          try {
+            console.log(
+              `[socket] message:send -> from ${socketUser.id} to ${payload.recipientId}`
+            );
+            console.log("SERVER > message:send event triggered:", {
+              hasCallback: typeof callback === "function",
+              keys: Object.keys(payload || {}),
+            });
+            console.log("SERVER > Handler received data:", payload);
+          } catch {}
           const senderId = new mongoose.Types.ObjectId(socketUser.id);
           const receiverId = new mongoose.Types.ObjectId(payload.recipientId);
 
@@ -269,6 +319,12 @@ export const initSocket = (server: http.Server): Server => {
           if (payload.fileName) {
             socketMessagePayload.fileName = payload.fileName;
           }
+          if (payload.mimeType) {
+            (socketMessagePayload as any).mimeType = payload.mimeType;
+          }
+          if (typeof payload.fileSize === "number") {
+            (socketMessagePayload as any).fileSize = payload.fileSize;
+          }
 
           if (replyToId && replyToMeta) {
             socketMessagePayload.replyToMessageId = replyToId;
@@ -279,8 +335,17 @@ export const initSocket = (server: http.Server): Server => {
             (socketMessagePayload as any).replyToMeta = null;
           }
 
+          try {
+            console.log("SERVER > About to save message…");
+          } catch {}
           const message = await Message.create(socketMessagePayload);
 
+          try {
+            console.log(
+              "SERVER > Message saved:",
+              (message._id as any)?.toString?.() || message._id
+            );
+          } catch {}
           const normalized = normalizeMessage(message);
           const responsePayload = {
             message: normalized,
@@ -296,12 +361,22 @@ export const initSocket = (server: http.Server): Server => {
             },
           };
 
+          try {
+            console.log("SERVER > SENDING ACK SUCCESS");
+          } catch {}
+          callback?.({ success: true, data: responsePayload });
+
           emitToParticipants(
             message.participants,
             "message:new",
             responsePayload
           );
-          callback?.({ success: true, data: responsePayload });
+          try {
+            console.log(
+              "SERVER > Broadcasting message to participants:",
+              participantsToStrings(message.participants)
+            );
+          } catch {}
 
           await Message.updateOne(
             { _id: message._id },
@@ -312,6 +387,9 @@ export const initSocket = (server: http.Server): Server => {
             }
           );
         } catch (error) {
+          try {
+            console.error("SERVER > ERROR:", error);
+          } catch {}
           callback?.({ success: false, message: "Failed to send message" });
         }
       }
@@ -533,13 +611,28 @@ export const initSocket = (server: http.Server): Server => {
 
     socket.on("disconnect", () => {
       socket.leave(roomForUser(socketUser.id));
-      const becameOffline = markOffline(socketUser.id);
-      if (becameOffline && ioInstance) {
-        ioInstance.emit("user:status", {
-          userId: socketUser.id,
-          online: false,
-        });
-      }
+      // Schedule graceful offline via presence service; callback runs after grace period if still offline.
+      markOffline(socketUser.id, async (uid, iso) => {
+        if (!ioInstance) return;
+        try {
+          await User.updateOne(
+            { _id: uid },
+            { $set: { lastSeenAt: new Date(iso) } }
+          );
+        } catch {}
+        const hidden = isHidden(uid);
+        const payload = {
+          userId: uid,
+          lastSeenAt: iso,
+          hidden,
+          visibleStatus: "offline" as const,
+        };
+        // Broadcast offline only now (after grace, no remaining sessions)
+        ioInstance.emit("presence:lastSeenUpdate", payload);
+        ioInstance.emit("presence:offline", payload);
+        ioInstance.emit("user:offline", payload);
+        ioInstance.emit("user:status", { userId: uid, online: false });
+      });
     });
   });
 

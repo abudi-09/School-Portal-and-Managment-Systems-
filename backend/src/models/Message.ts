@@ -43,6 +43,8 @@ export interface IMessage extends Document {
   type: MessageType;
   fileUrl?: string;
   fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
   deleted: boolean;
   editedAt?: Date;
   isEdited?: boolean;
@@ -59,6 +61,10 @@ export interface IMessage extends Document {
   isDeletedForEveryone?: boolean;
   hiddenFor?: string[];
   deletedAt?: Date;
+  reactions?: Array<{
+    emoji: string;
+    userId: string;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -118,6 +124,13 @@ const MessageSchema = new Schema<IMessage>(
     fileName: {
       type: String,
     },
+    mimeType: {
+      type: String,
+    },
+    fileSize: {
+      type: Number,
+      min: 0,
+    },
     deleted: {
       type: Boolean,
       default: false,
@@ -172,6 +185,15 @@ const MessageSchema = new Schema<IMessage>(
     deletedAt: {
       type: Date,
     },
+    reactions: [
+      new Schema(
+        {
+          emoji: { type: String, required: true, trim: true },
+          userId: { type: String, required: true },
+        },
+        { _id: false }
+      ),
+    ],
     deliveredTo: {
       type: [String],
       default: [],

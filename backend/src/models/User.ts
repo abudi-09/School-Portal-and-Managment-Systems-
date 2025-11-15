@@ -44,6 +44,10 @@ export interface IUser extends Document {
     responsibilities?: string;
   };
   lastLogin?: Date;
+  lastSeenAt?: Date;
+  privacy?: {
+    hideOnlineStatus?: boolean;
+  };
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -139,6 +143,10 @@ const userSchema = new Schema<IUser>(
       responsibilities: String,
     },
     lastLogin: Date,
+    lastSeenAt: Date,
+    privacy: {
+      hideOnlineStatus: { type: Boolean, default: false },
+    },
   },
   {
     timestamps: true,

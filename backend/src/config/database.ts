@@ -29,10 +29,7 @@ const connectWithRetry = async (retries = 0): Promise<void> => {
     try {
       const masked = maskMongoUri(env.mongoUri);
       const hosts = extractHostPart(env.mongoUri);
-      console.log(
-        `🔎 MongoDB connection target (hosts only, credentials masked): ${hosts}`
-      );
-      console.log(`🔒 MongoDB URI (masked): ${masked}`);
+      // Removed console logs for cleaner output
     } catch (e) {
       // Don't let logging interfere with connection; keep silent on parse errors
     }

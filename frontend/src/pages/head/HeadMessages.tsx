@@ -58,6 +58,9 @@ const HeadMessages = () => {
         onSendMessage={controller.onSendMessage}
         onEditMessage={controller.onEditMessage}
         onDeleteMessage={controller.onDeleteMessage}
+        onToggleReaction={controller.onToggleReaction}
+        onSaveMessage={controller.onSaveMessage}
+        onSearchSavedMessages={controller.searchSavedMessages}
         isUploadingAttachment={controller.isUploadingAttachment}
         messageDraft={controller.messageDraft}
         onChangeDraft={controller.onChangeDraft}

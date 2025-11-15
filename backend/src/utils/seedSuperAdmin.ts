@@ -26,9 +26,6 @@ export const seedSuperAdmin = async (): Promise<void> => {
       isActive: true,
     });
 
-    console.log(
-      `${logPrefix}: Created default super admin (${email}). Please change the password immediately.`
-    );
     return;
   }
 
@@ -61,11 +58,6 @@ export const seedSuperAdmin = async (): Promise<void> => {
 
   if (requiresUpdate) {
     await existingUser.save();
-    console.log(
-      `${logPrefix}: Ensured existing super admin account is active and approved.`
-    );
     return;
   }
-
-  console.log(`${logPrefix}: Super admin already exists. No action required.`);
 };

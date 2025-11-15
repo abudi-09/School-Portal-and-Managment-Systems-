@@ -1,4 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
+// CSS for Emoji Mart omitted due to package unavailability
 import {
   Send,
   Paperclip,
@@ -12,6 +15,14 @@ import {
   Clipboard,
   Edit,
   Trash,
+  Bookmark,
+  File as FileIcon,
+  FileText,
+  FileSpreadsheet,
+  FileArchive,
+  Image as ImageIcon,
+  Video,
+  Smile,
 } from "lucide-react";
 import {
   Card,
@@ -43,8 +54,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import ForwardMessageDialog from "./messaging/ForwardMessageDialog";
-import { fetchRecipients, forwardMessage } from "@/lib/api/messagesApi";
+import {
+  fetchRecipients,
+  forwardMessage,
+  uploadMessageFileWithProgress,
+} from "@/lib/api/messagesApi";
 import { useToast } from "@/hooks/use-toast";
+import type { PresenceRecord } from "@/contexts/PresenceContext";
 
 export type UserRole = "admin" | "head" | "teacher";
 
@@ -61,6 +77,8 @@ export interface MessageItem {
   type: "text" | "image" | "file" | "doc";
   fileUrl?: string;
   fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
   deleted: boolean;
   editedAt?: string;
   deliveredTo: string[];
@@ -76,6 +94,7 @@ export interface MessageItem {
   };
   replyToDeleted?: boolean;
   isPending?: boolean;
+  reactions?: Array<{ emoji: string; users: string[] }>;
 }
 
 export interface ContactItem {
@@ -85,6 +104,7 @@ export interface ContactItem {
   avatarUrl?: string;
   email?: string;
   online?: boolean;
+  presence?: PresenceRecord;
   unreadCount?: number;
   lastMessage?: {
     content: string;
@@ -113,6 +133,8 @@ interface MessagingCenterProps {
       file?: File;
       fileUrl?: string;
       fileName?: string;
+      mimeType?: string;
+      fileSize?: number;
       replyToMessageId?: string;
     }
   ) => Promise<void> | void;
@@ -126,6 +148,16 @@ interface MessagingCenterProps {
     messageId: string,
     options?: { forEveryone?: boolean }
   ) => Promise<void> | void;
+  onToggleReaction?: (
+    conversationId: string,
+    messageId: string,
+    emoji: string
+  ) => Promise<void> | void;
+  onSaveMessage?: (
+    conversationId: string,
+    messageId: string
+  ) => Promise<void> | void;
+  onSearchSavedMessages?: (query: string) => Promise<void> | void;
   isUploadingAttachment?: boolean;
   messageDraft: string;
   onChangeDraft: (value: string) => void;
@@ -176,6 +208,18 @@ const getMessageTypeLabel = (type: MessageItem["type"]) => {
   }
 };
 
+const formatFileSize = (size?: number) => {
+  if (!size || typeof size !== "number") return undefined;
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+const isImageMime = (mime?: string) => {
+  if (!mime) return false;
+  return mime.startsWith("image/");
+};
+
 const getReplyPreviewText = (message: MessageItem) => {
   if (message.deleted) {
     return DELETED_MESSAGE_TEXT;
@@ -218,6 +262,58 @@ const getReplyHeaderLabel = (
   return `Replying to ${formatRoleLabel(message.senderRole)}`;
 };
 
+const isPresenceOnline = (
+  presence?: PresenceRecord,
+  fallbackOnline?: boolean
+) => {
+  if (presence) {
+    return presence.visibleStatus === "online" && !presence.hidden;
+  }
+  return Boolean(fallbackOnline);
+};
+
+const formatPresenceLabel = (
+  presence?: PresenceRecord,
+  fallbackOnline?: boolean
+) => {
+  if (isPresenceOnline(presence, fallbackOnline)) {
+    return "Online";
+  }
+
+  const hidden = presence?.hidden ?? false;
+  const lastSeenAt = presence?.lastSeenAt;
+  if (!lastSeenAt) {
+    return hidden ? "Last seen recently" : "Offline";
+  }
+
+  const date = new Date(lastSeenAt);
+  if (Number.isNaN(date.getTime())) {
+    return hidden ? "Last seen recently" : `Last seen ${lastSeenAt}`;
+  }
+
+  const minutesAgo = (Date.now() - date.getTime()) / 60000;
+  if (hidden && minutesAgo <= 5) {
+    return "Last seen recently";
+  }
+
+  const now = new Date();
+  const sameDay = now.toDateString() === date.toDateString();
+  const timeFormatter = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  if (sameDay) {
+    return `Last seen at ${timeFormatter.format(date)}`;
+  }
+  const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `Last seen ${dateTimeFormatter.format(date)}`;
+};
+
 const MessagingCenter = ({
   title,
   description,
@@ -232,6 +328,9 @@ const MessagingCenter = ({
   onSendMessage,
   onEditMessage,
   onDeleteMessage,
+  onToggleReaction,
+  onSaveMessage,
+  onSearchSavedMessages,
   messageDraft,
   onChangeDraft,
   isUploadingAttachment,
@@ -267,10 +366,87 @@ const MessagingCenter = ({
   );
   const [forwardPage, setForwardPage] = useState(1);
   const [forwardHasMore, setForwardHasMore] = useState(false);
+  const [uploadItems, setUploadItems] = useState<
+    Array<{
+      id: string;
+      file: File;
+      previewUrl?: string;
+      progress: number; // 0..100
+      status: "uploading" | "done" | "error" | "canceled";
+      cancel?: () => void;
+      result?: {
+        fileUrl: string;
+        fileName: string;
+        mimeType: string;
+        size: number;
+      };
+    }>
+  >([]);
+  const hasActiveUploads = uploadItems.some((u) => u.status === "uploading");
+  const [isDragging, setIsDragging] = useState(false);
+  const [showEmojiPanel, setShowEmojiPanel] = useState(false);
+  const emojiPanelRef = useRef<HTMLDivElement | null>(null);
+  const emojiToggleRef = useRef<HTMLButtonElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const lastSelection = useRef<{ start: number; end: number } | null>(null);
+  const [activeReactionFor, setActiveReactionFor] = useState<string | null>(
+    null
+  );
+  const reactionEmojis = ["❤️", "👍", "😂", "😢", "😡", "🔥", "🎉"];
 
   const { toast } = useToast();
 
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      // Revoke any object URLs when unmounting
+      uploadItems.forEach(
+        (u) => u.previewUrl && URL.revokeObjectURL(u.previewUrl)
+      );
+    };
+  }, [uploadItems]);
+
+  // Close emoji panel on outside click
+  useEffect(() => {
+    if (!showEmojiPanel) return;
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (
+        emojiPanelRef.current &&
+        !emojiPanelRef.current.contains(target) &&
+        emojiToggleRef.current &&
+        !emojiToggleRef.current.contains(target)
+      ) {
+        setShowEmojiPanel(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowEmojiPanel(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keyup", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keyup", onKey);
+    };
+  }, [showEmojiPanel]);
+
+  const adjustComposerHeight = useCallback(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const max = 160; // px ~ up to ~6 lines depending on font
+    const next = Math.min(el.scrollHeight, max);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+  }, []);
+
+  useEffect(() => {
+    // adjust when messageDraft changes from outside
+    adjustComposerHeight();
+  }, [messageDraft, adjustComposerHeight]);
 
   const sending = isSendingMessage ?? internalIsSending;
 
@@ -292,6 +468,8 @@ const MessagingCenter = ({
 
   const isSelectable = useCallback(
     (contact: ContactItem) => {
+      // Allow self-chat for Saved Messages
+      if (contact.id === currentUserId) return true;
       const hierarchyValid = hierarchyAllows(contact.role);
       if (!hierarchyValid) {
         return false;
@@ -301,7 +479,7 @@ const MessagingCenter = ({
       }
       return true;
     },
-    [hierarchyAllows, validateRecipient]
+    [hierarchyAllows, validateRecipient, currentUserId]
   );
 
   const filteredContacts = useMemo(() => {
@@ -325,6 +503,32 @@ const MessagingCenter = ({
     );
   }, [contacts, selectedConversationId]);
 
+  const isSavedConversation = useMemo(() => {
+    return Boolean(
+      selectedContact && currentUserId && selectedContact.id === currentUserId
+    );
+  }, [selectedContact, currentUserId]);
+
+  const [savedSearch, setSavedSearch] = useState("");
+  useEffect(() => {
+    if (!isSavedConversation) return;
+    if (!onSearchSavedMessages) return;
+    void (async () => {
+      try {
+        await onSearchSavedMessages(savedSearch);
+      } catch {
+        /* noop */
+      }
+    })();
+  }, [savedSearch, isSavedConversation, onSearchSavedMessages]);
+
+  const selectedStatusLabel = selectedContact
+    ? formatPresenceLabel(selectedContact.presence, selectedContact.online)
+    : null;
+  const selectedStatusOnline = selectedContact
+    ? isPresenceOnline(selectedContact.presence, selectedContact.online)
+    : false;
+
   const replyTo = useMemo(() => {
     if (!replyToMessageId) {
       return null;
@@ -347,13 +551,13 @@ const MessagingCenter = ({
     onSelectConversation(contact.id);
   };
 
+  const hasReadyUploads = useMemo(
+    () => uploadItems.some((u) => u.status === "done" && !!u.result),
+    [uploadItems]
+  );
+
   const handleSendMessage = async () => {
-    if (
-      !selectedConversationId ||
-      !messageDraft.trim() ||
-      !onSendMessage ||
-      sending
-    ) {
+    if (!selectedConversationId || !onSendMessage || sending) {
       return;
     }
     try {
@@ -369,12 +573,31 @@ const MessagingCenter = ({
         setEditingOriginal(null);
         onChangeDraft("");
       } else {
-        await onSendMessage(selectedConversationId, {
-          content: messageDraft.trim(),
-          replyToMessageId: replyTo?.id,
-        });
+        // 1) Send any ready file attachments as individual messages
+        for (const u of uploadItems) {
+          if (u.status === "done" && u.result) {
+            await onSendMessage(selectedConversationId, {
+              type: determineTypeForFile(u.file),
+              fileUrl: u.result.fileUrl,
+              fileName: u.result.fileName,
+              mimeType: u.result.mimeType,
+              fileSize: u.result.size,
+              replyToMessageId: replyTo?.id,
+            });
+          }
+        }
+        // 2) Send text message if provided
+        const trimmed = messageDraft.trim();
+        if (trimmed.length > 0) {
+          await onSendMessage(selectedConversationId, {
+            content: trimmed,
+            replyToMessageId: replyTo?.id,
+          });
+        }
         onChangeDraft("");
         setReplyToMessageId(null);
+        // 3) Clear uploaded items after sending
+        setUploadItems([]);
       }
     } finally {
       if (isSendingMessage === undefined) {
@@ -401,7 +624,9 @@ const MessagingCenter = ({
       if (message.content) {
         await navigator.clipboard.writeText(message.content);
       }
-    } catch {}
+    } catch {
+      /* noop */
+    }
   };
 
   const handlePinMessage = (message: MessageItem) => {
@@ -473,6 +698,176 @@ const MessagingCenter = ({
     setReplyToMessageId(message.id);
   };
 
+  const handleSaveMessage = async (message: MessageItem) => {
+    if (!onSaveMessage || !selectedConversationId) return;
+    try {
+      await onSaveMessage(selectedConversationId, message.id);
+    } catch {
+      // Errors are surfaced by controller via toast
+    }
+  };
+
+  const acceptTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    ".jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.pdf,.docx,.xlsx,.pptx,.txt",
+  ].join(",");
+
+  const onClickAttach = () => {
+    if (!selectedConversationId) return;
+    fileInputRef.current?.click();
+  };
+
+  const insertAtCursor = (text: string) => {
+    const el = composerRef.current;
+    // Fallback to appending if no ref
+    if (!el) {
+      onChangeDraft(messageDraft + text);
+      return;
+    }
+    const start =
+      el.selectionStart ?? lastSelection.current?.start ?? messageDraft.length;
+    const end =
+      el.selectionEnd ?? lastSelection.current?.end ?? messageDraft.length;
+    const next = messageDraft.slice(0, start) + text + messageDraft.slice(end);
+    const caret = start + text.length;
+    onChangeDraft(next);
+    requestAnimationFrame(() => {
+      try {
+        el.focus();
+        el.setSelectionRange(caret, caret);
+        lastSelection.current = { start: caret, end: caret };
+        adjustComposerHeight();
+      } catch {
+        /* noop */
+      }
+    });
+  };
+
+  const determineTypeForFile = (file: File): MessageItem["type"] =>
+    file.type.startsWith("image/") ? "image" : "file";
+
+  const getExt = (name?: string) =>
+    (name?.split(".").pop() || "").toLowerCase();
+  const pickFileIcon = (mime?: string, name?: string) => {
+    const ext = getExt(name);
+    if (
+      mime?.startsWith("image/") ||
+      ["jpg", "jpeg", "png", "webp"].includes(ext)
+    )
+      return ImageIcon;
+    if (mime?.startsWith("video/") || ["mp4", "webm", "mov"].includes(ext))
+      return Video;
+    if (mime === "application/pdf" || ext === "pdf") return FileText;
+    if (
+      mime ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      ext === "docx"
+    )
+      return FileText;
+    if (
+      mime ===
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+      ext === "xlsx"
+    )
+      return FileSpreadsheet;
+    if (
+      mime ===
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+      ext === "pptx"
+    )
+      return FileText;
+    if (mime === "application/zip" || ext === "zip") return FileArchive;
+    if (ext === "txt") return FileText;
+    return FileIcon;
+  };
+  const handleFilesSelected = (files: FileList | File[] | null) => {
+    if (!files || !selectedConversationId || !onSendMessage) return;
+    const MAX_SIZE = 10 * 1024 * 1024;
+
+    const filesArray: File[] = Array.isArray(files) ? files : Array.from(files);
+
+    filesArray.forEach((file) => {
+      if (file.size > MAX_SIZE) {
+        // Skip oversize files; a toast would be nicer but keep minimal here
+        return;
+      }
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const previewUrl = file.type.startsWith("image/")
+        ? URL.createObjectURL(file)
+        : undefined;
+      setUploadItems((prev) => [
+        ...prev,
+        { id, file, previewUrl, progress: 0, status: "uploading" },
+      ]);
+
+      const { promise, cancel } = uploadMessageFileWithProgress(
+        file,
+        (loaded, total) => {
+          const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
+          setUploadItems((prev) =>
+            prev.map((u) => (u.id === id ? { ...u, progress: pct } : u))
+          );
+        }
+      );
+
+      setUploadItems((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, cancel } : u))
+      );
+
+      promise
+        .then(async (result) => {
+          setUploadItems((prev) =>
+            prev.map((u) =>
+              u.id === id ? { ...u, status: "done", result, progress: 100 } : u
+            )
+          );
+          // confirmation toast: uploaded and ready to send
+          try {
+            toast({
+              title: "Attachment ready",
+              description: `${result.fileName} uploaded. Click Send to deliver.`,
+            });
+          } catch {
+            /* noop */
+          }
+        })
+        .catch(() => {
+          setUploadItems((prev) =>
+            prev.map((u) => (u.id === id ? { ...u, status: "error" } : u))
+          );
+        });
+    });
+  };
+
+  const cancelUpload = (id: string) => {
+    setUploadItems((prev) => {
+      const item = prev.find((u) => u.id === id);
+      if (item?.cancel) {
+        try {
+          item.cancel();
+        } catch {
+          /* noop */
+        }
+      }
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return prev.map((u) => (u.id === id ? { ...u, status: "canceled" } : u));
+    });
+    // remove canceled from view after a bit
+    setTimeout(() => {
+      setUploadItems((prev) => prev.filter((u) => u.id !== id));
+    }, 400);
+  };
+
   const handleForwardMessage = async (message: MessageItem) => {
     // Open forward dialog and fetch recipients from remote API
     setForwardingMessage(message);
@@ -528,12 +923,15 @@ const MessagingCenter = ({
         description: "Your message was forwarded successfully.",
       });
       closeForwardDialog();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const description =
+        err instanceof Error
+          ? err.message
+          : "Unable to forward message. Please try again.";
       toast({
         variant: "destructive",
         title: "Forward failed",
-        description:
-          err?.message ?? "Unable to forward message. Please try again.",
+        description,
       });
     } finally {
       setForwardLoading(false);
@@ -639,6 +1037,14 @@ const MessagingCenter = ({
                   {filteredContacts.map((contact) => {
                     const lastMessage = contact.lastMessage;
                     const allowed = isSelectable(contact);
+                    const online = isPresenceOnline(
+                      contact.presence,
+                      contact.online
+                    );
+                    const statusLabel = formatPresenceLabel(
+                      contact.presence,
+                      contact.online
+                    );
                     return (
                       <button
                         key={contact.id}
@@ -662,17 +1068,25 @@ const MessagingCenter = ({
                               />
                             ) : null}
                             <AvatarFallback className="bg-primary/10 text-primary">
-                              {getInitials(contact.name)}
+                              {contact.id === currentUserId ? (
+                                <Bookmark className="h-6 w-6" />
+                              ) : (
+                                getInitials(contact.name)
+                              )}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1">
                             <div className="flex items-center justify-between">
                               <p className="font-medium">{contact.name}</p>
-                              {contact.online ? (
-                                <span className="h-2 w-2 rounded-full bg-green-500" />
-                              ) : (
-                                <span className="h-2 w-2 rounded-full bg-gray-400" />
-                              )}
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <span
+                                  className={cn(
+                                    "h-2 w-2 rounded-full",
+                                    online ? "bg-green-500" : "bg-gray-400"
+                                  )}
+                                />
+                                <span>{statusLabel}</span>
+                              </div>
                             </div>
                             <p className="text-xs text-muted-foreground">
                               {formatRoleLabel(contact.role)}
@@ -719,7 +1133,11 @@ const MessagingCenter = ({
                         />
                       ) : null}
                       <AvatarFallback className="bg-primary/10 text-primary">
-                        {getInitials(selectedContact.name)}
+                        {selectedContact.id === currentUserId ? (
+                          <Bookmark className="h-6 w-6" />
+                        ) : (
+                          getInitials(selectedContact.name)
+                        )}
                       </AvatarFallback>
                     </Avatar>
                     <div>
@@ -729,6 +1147,19 @@ const MessagingCenter = ({
                       <CardDescription>
                         {formatRoleLabel(selectedContact.role)}
                       </CardDescription>
+                      {selectedStatusLabel ? (
+                        <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full",
+                              selectedStatusOnline
+                                ? "bg-green-500"
+                                : "bg-gray-400"
+                            )}
+                          />
+                          <span>{selectedStatusLabel}</span>
+                        </p>
+                      ) : null}
                       {selectedContact.email ? (
                         <p className="text-xs text-muted-foreground">
                           {selectedContact.email}
@@ -738,6 +1169,24 @@ const MessagingCenter = ({
                   </div>
                 </CardHeader>
                 <CardContent className="flex flex-1 flex-col gap-4 pt-6">
+                  {isSavedConversation ? (
+                    <div className="rounded-xl border border-primary/40 bg-primary/5 p-3 text-sm">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-primary">
+                          This is your personal cloud storage.
+                        </p>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={savedSearch}
+                            onChange={(e) => setSavedSearch(e.target.value)}
+                            placeholder="Search Saved Messages"
+                            className="w-full rounded-md border border-border bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 sm:w-80"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   {pinnedMessages.length > 0 ? (
                     <div className="rounded-2xl border border-yellow-300/60 bg-yellow-50/60 p-3 dark:border-yellow-800/60 dark:bg-yellow-950/20">
                       <div className="mb-2 flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
@@ -774,15 +1223,42 @@ const MessagingCenter = ({
                                   </button>
                                 </div>
                               </div>
-                              {msg.type === "file" && msg.fileUrl ? (
-                                <a
-                                  href={msg.fileUrl}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                  className="inline-block rounded-md bg-background/50 px-2 py-0.5 text-xs"
-                                >
-                                  {msg.fileName ?? "Download file"}
-                                </a>
+                              {msg.fileUrl ? (
+                                isImageMime(msg.mimeType) ||
+                                msg.type === "image" ? (
+                                  <a
+                                    href={msg.fileUrl}
+                                    download={msg.fileName || true}
+                                    target="_blank"
+                                    rel="noreferrer noopener"
+                                    className="inline-block rounded-md"
+                                  >
+                                    <img
+                                      src={msg.fileUrl}
+                                      alt={msg.fileName ?? "image"}
+                                      className="max-h-28 w-auto rounded-md object-cover"
+                                    />
+                                    <div className="mt-1 text-[11px] text-muted-foreground flex items-center gap-2">
+                                      <span className="font-medium">
+                                        {msg.fileName ?? "Image"}
+                                      </span>
+                                      {msg.fileSize ? (
+                                        <span>
+                                          {formatFileSize(msg.fileSize)}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </a>
+                                ) : (
+                                  <a
+                                    href={msg.fileUrl}
+                                    target="_blank"
+                                    rel="noreferrer noopener"
+                                    className="inline-block rounded-md bg-background/50 px-2 py-0.5 text-xs"
+                                  >
+                                    {msg.fileName ?? "Download file"}
+                                  </a>
+                                )
                               ) : null}
                               {msg.content ? (
                                 <p className="leading-relaxed">{msg.content}</p>
@@ -833,7 +1309,53 @@ const MessagingCenter = ({
                                     ref={(el) => {
                                       messageRefs.current[message.id] = el;
                                     }}
+                                    onMouseEnter={() =>
+                                      setActiveReactionFor(message.id)
+                                    }
+                                    onMouseLeave={() =>
+                                      setActiveReactionFor((cur) =>
+                                        cur === message.id ? null : cur
+                                      )
+                                    }
+                                    onTouchStart={() => {
+                                      setActiveReactionFor(message.id);
+                                    }}
                                   >
+                                    {/* Reaction bar above bubble */}
+                                    <div
+                                      className={cn(
+                                        "absolute -top-9 z-10 rounded-full border border-border bg-card/95 px-2 py-1 shadow-md transition-all duration-150",
+                                        isSelf ? "right-2" : "left-2",
+                                        activeReactionFor === message.id
+                                          ? "opacity-100 translate-y-0"
+                                          : "pointer-events-none opacity-0 translate-y-1",
+                                        "group-hover:opacity-100 group-hover:translate-y-0"
+                                      )}
+                                      onMouseLeave={() =>
+                                        setActiveReactionFor(null)
+                                      }
+                                    >
+                                      <div className="flex items-center gap-1">
+                                        {reactionEmojis.map((e) => (
+                                          <button
+                                            key={e}
+                                            type="button"
+                                            className="h-7 w-7 rounded-full text-lg hover:bg-muted flex items-center justify-center"
+                                            onClick={() => {
+                                              if (!selectedConversationId)
+                                                return;
+                                              onToggleReaction?.(
+                                                selectedConversationId,
+                                                message.id,
+                                                e
+                                              );
+                                            }}
+                                          >
+                                            {e}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
                                     {isPinned ? (
                                       <Pin className="absolute -top-2 -right-2 h-4 w-4 rotate-12 text-yellow-500" />
                                     ) : null}
@@ -880,19 +1402,141 @@ const MessagingCenter = ({
                                           </div>
                                         </button>
                                       ) : null}
-                                      {(message.type === "file" ||
-                                        message.type === "doc") &&
-                                      message.fileUrl ? (
-                                        <a
-                                          href={message.fileUrl}
-                                          target="_blank"
-                                          rel="noreferrer noopener"
-                                          className="inline-block rounded-md bg-background/50 px-3 py-1 text-sm"
-                                        >
-                                          {message.fileName ?? "Download file"}
-                                        </a>
+                                      {/* File / image rendering */}
+                                      {message.fileUrl ? (
+                                        isImageMime(message.mimeType) ||
+                                        message.type === "image" ? (
+                                          <a
+                                            href={message.fileUrl}
+                                            download={message.fileName || true}
+                                            target="_blank"
+                                            rel="noreferrer noopener"
+                                            className="inline-block rounded-md"
+                                          >
+                                            <img
+                                              src={message.fileUrl}
+                                              alt={message.fileName ?? "image"}
+                                              className="max-h-40 w-auto rounded-md object-cover"
+                                            />
+                                            <div className="mt-1 text-xs text-muted-foreground flex items-center gap-2">
+                                              <span className="font-medium">
+                                                {message.fileName ?? "Image"}
+                                              </span>
+                                              {message.mimeType ? (
+                                                <span className="px-1 text-[11px] rounded bg-muted/20">
+                                                  {message.mimeType}
+                                                </span>
+                                              ) : null}
+                                              {message.fileSize ? (
+                                                <span className="text-[11px] text-muted-foreground">
+                                                  {formatFileSize(
+                                                    message.fileSize
+                                                  )}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                          </a>
+                                        ) : (
+                                          <div className="inline-flex items-center gap-3">
+                                            <a
+                                              href={message.fileUrl}
+                                              download={
+                                                message.fileName || true
+                                              }
+                                              target="_blank"
+                                              rel="noreferrer noopener"
+                                              className="inline-flex items-center gap-2 rounded-md border border-border bg-background/60 px-3 py-1 text-sm hover:bg-background"
+                                            >
+                                              {(() => {
+                                                const Icon = pickFileIcon(
+                                                  message.mimeType,
+                                                  message.fileName
+                                                );
+                                                return (
+                                                  <Icon className="h-4 w-4" />
+                                                );
+                                              })()}
+                                              <span className="truncate max-w-[220px]">
+                                                {message.fileName ??
+                                                  "Download file"}
+                                              </span>
+                                            </a>
+                                            <div className="text-xs text-muted-foreground">
+                                              {message.mimeType ? (
+                                                <span className="px-1 mr-2 rounded bg-muted/20">
+                                                  {message.mimeType}
+                                                </span>
+                                              ) : null}
+                                              {message.fileSize ? (
+                                                <span>
+                                                  {formatFileSize(
+                                                    message.fileSize
+                                                  )}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                          </div>
+                                        )
                                       ) : null}
-                                      <p>{message.content}</p>
+                                      {message.content &&
+                                      message.content !== message.fileUrl &&
+                                      !/^https?:\/\//i.test(message.content) ? (
+                                        <p>{message.content}</p>
+                                      ) : null}
+                                      {message.reactions &&
+                                      message.reactions.length > 0 ? (
+                                        <div
+                                          className={cn(
+                                            "mt-2 inline-flex flex-wrap items-center gap-1",
+                                            isSelf
+                                              ? "justify-end"
+                                              : "justify-start"
+                                          )}
+                                        >
+                                          {message.reactions.map((r) => {
+                                            const count = r.users.length;
+                                            const mine = currentUserId
+                                              ? r.users.includes(currentUserId)
+                                              : false;
+                                            return (
+                                              <button
+                                                key={`${message.id}-${r.emoji}`}
+                                                type="button"
+                                                onClick={() => {
+                                                  if (!selectedConversationId)
+                                                    return;
+                                                  onToggleReaction?.(
+                                                    selectedConversationId,
+                                                    message.id,
+                                                    r.emoji
+                                                  );
+                                                }}
+                                                className={cn(
+                                                  "rounded-full border border-border bg-background/70 px-2 py-0.5 text-xs hover:bg-background",
+                                                  mine
+                                                    ? "ring-1 ring-primary"
+                                                    : undefined
+                                                )}
+                                                title={
+                                                  mine
+                                                    ? `You and ${Math.max(
+                                                        0,
+                                                        count - 1
+                                                      )} others`
+                                                    : `${count} reacted`
+                                                }
+                                              >
+                                                <span className="mr-1">
+                                                  {r.emoji}
+                                                </span>
+                                                <span className="tabular-nums">
+                                                  {count}
+                                                </span>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : null}
                                     </div>
                                     <div
                                       className={cn(
@@ -972,6 +1616,14 @@ const MessagingCenter = ({
                                 >
                                   <Trash className="mr-2 h-4 w-4" /> Delete
                                 </ContextMenuItem>
+                                {onSaveMessage ? (
+                                  <ContextMenuItem
+                                    onClick={() => handleSaveMessage(message)}
+                                  >
+                                    <Bookmark className="mr-2 h-4 w-4" /> Save
+                                    to Saved Messages
+                                  </ContextMenuItem>
+                                ) : null}
                                 <ContextMenuSeparator />
                                 <ContextMenuItem
                                   onClick={() => handleSelectMessage(message)}
@@ -1024,21 +1676,192 @@ const MessagingCenter = ({
                       </div>
                     ) : null}
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <div className="flex flex-1 items-center gap-3 rounded-full border border-border bg-background px-4 py-2">
-                        <Paperclip className="h-4 w-4 text-muted-foreground" />
-                        <Input
+                      {/* Upload queue preview */}
+                      {uploadItems.length > 0 ? (
+                        <div className="flex flex-wrap items-start gap-3">
+                          {uploadItems.map((u) => (
+                            <div
+                              key={u.id}
+                              className="rounded-md border border-border bg-background/60 p-2 text-xs"
+                            >
+                              <div className="flex items-start gap-2">
+                                {u.previewUrl ? (
+                                  <img
+                                    src={u.previewUrl}
+                                    className="h-12 w-12 rounded object-cover"
+                                    alt={u.file.name}
+                                  />
+                                ) : (
+                                  <div className="h-12 w-12 rounded bg-muted flex items-center justify-center">
+                                    {(() => {
+                                      const Icon = pickFileIcon(
+                                        u.file.type,
+                                        u.file.name
+                                      );
+                                      return (
+                                        <Icon className="h-6 w-6 text-muted-foreground" />
+                                      );
+                                    })()}
+                                  </div>
+                                )}
+                                <div className="min-w-[160px] max-w-[220px]">
+                                  <div className="truncate font-medium">
+                                    {u.file.name}
+                                  </div>
+                                  <div className="opacity-70">
+                                    {(u.file.size / 1024 / 1024).toFixed(2)} MB
+                                  </div>
+                                  <div className="mt-1 h-1.5 w-full rounded bg-muted">
+                                    <div
+                                      className={cn(
+                                        "h-1.5 rounded",
+                                        u.status === "error"
+                                          ? "bg-red-500"
+                                          : "bg-primary"
+                                      )}
+                                      style={{ width: `${u.progress}%` }}
+                                    />
+                                  </div>
+                                  {u.status === "uploading" ? (
+                                    <div className="mt-1 text-[11px] text-muted-foreground">
+                                      Uploading… {u.progress}%
+                                    </div>
+                                  ) : null}
+                                  {u.status === "done" ? (
+                                    <div className="mt-1 flex items-center gap-2">
+                                      <span className="text-[11px] text-green-600">
+                                        Uploaded
+                                      </span>
+                                      {u.result?.fileUrl ? (
+                                        <a
+                                          href={u.result.fileUrl}
+                                          download={u.result.fileName || true}
+                                          target="_blank"
+                                          rel="noreferrer noopener"
+                                          className="text-[11px] rounded border border-border px-2 py-0.5 hover:bg-background"
+                                        >
+                                          Download
+                                        </a>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                </div>
+                                <button
+                                  className="ml-2 text-muted-foreground hover:text-foreground"
+                                  onClick={() => cancelUpload(u.id)}
+                                  aria-label="Remove attachment"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                              {u.status === "error" ? (
+                                <div className="mt-1 text-red-500">
+                                  Upload failed
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="relative flex flex-1 items-center gap-3 rounded-full border border-border bg-background px-4 py-2">
+                        <button
+                          type="button"
+                          onClick={onClickAttach}
+                          className="text-muted-foreground hover:text-foreground"
+                          aria-label="Attach files"
+                        >
+                          <Paperclip className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          ref={emojiToggleRef}
+                          onClick={() => setShowEmojiPanel((v) => !v)}
+                          className="text-muted-foreground hover:text-foreground"
+                          aria-label="Emoji picker"
+                        >
+                          <Smile className="h-4 w-4" />
+                        </button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept={acceptTypes}
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            const inputEl = e.currentTarget;
+                            const list = inputEl.files
+                              ? Array.from(inputEl.files)
+                              : [];
+                            // Clear the input so selecting the same file again triggers change
+                            inputEl.value = "";
+                            handleFilesSelected(list);
+                          }}
+                        />
+                        <textarea
+                          ref={composerRef}
                           value={messageDraft}
-                          onChange={(event) =>
-                            onChangeDraft(event.target.value)
-                          }
+                          onChange={(event) => {
+                            onChangeDraft(event.target.value);
+                            adjustComposerHeight();
+                          }}
+                          onClick={() => {
+                            const el = composerRef.current;
+                            if (!el) return;
+                            lastSelection.current = {
+                              start: el.selectionStart ?? messageDraft.length,
+                              end: el.selectionEnd ?? messageDraft.length,
+                            };
+                          }}
+                          onKeyUp={() => {
+                            const el = composerRef.current;
+                            if (!el) return;
+                            lastSelection.current = {
+                              start: el.selectionStart ?? messageDraft.length,
+                              end: el.selectionEnd ?? messageDraft.length,
+                            };
+                          }}
+                          onSelect={() => {
+                            const el = composerRef.current;
+                            if (!el) return;
+                            lastSelection.current = {
+                              start: el.selectionStart ?? messageDraft.length,
+                              end: el.selectionEnd ?? messageDraft.length,
+                            };
+                          }}
                           placeholder={
                             selectedContact
                               ? `Message ${selectedContact.name}`
                               : "Write a message"
                           }
-                          className="border-none px-0 shadow-none focus-visible:ring-0"
+                          rows={1}
+                          className="flex-1 resize-none border-none p-0 shadow-none focus-visible:ring-0 leading-6 max-h-40 overflow-y-auto bg-transparent"
                           disabled={!onSendMessage || !selectedConversationId}
                         />
+
+                        {/* Emoji Panel */}
+                        <div
+                          ref={emojiPanelRef}
+                          className={cn(
+                            "absolute bottom-full mb-2 right-2 z-20 w-[320px] sm:w-[360px] rounded-2xl border border-border bg-card p-2 shadow-xl transition-all duration-200",
+                            showEmojiPanel
+                              ? "opacity-100 translate-y-0"
+                              : "pointer-events-none opacity-0 translate-y-2"
+                          )}
+                        >
+                          <Picker
+                            data={data}
+                            onEmojiSelect={(emoji: unknown) => {
+                              const native =
+                                emoji &&
+                                typeof emoji === "object" &&
+                                (emoji as { native?: string }).native;
+                              if (native) insertAtCursor(native);
+                            }}
+                            theme="auto"
+                            previewPosition="none"
+                            skinTonePosition="none"
+                          />
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         {editingMessageId ? (
@@ -1066,13 +1889,18 @@ const MessagingCenter = ({
                               ? onEditMessage
                               : onSendMessage) ||
                             !selectedConversationId ||
-                            !messageDraft.trim() ||
-                            sending
+                            sending ||
+                            hasActiveUploads ||
+                            (!editingMessageId &&
+                              !messageDraft.trim() &&
+                              !hasReadyUploads)
                           }
                           className="gap-2"
                         >
                           <Send className="h-4 w-4" />
-                          {sending
+                          {hasActiveUploads
+                            ? "Uploading"
+                            : sending
                             ? editingMessageId
                               ? "Saving"
                               : "Sending"

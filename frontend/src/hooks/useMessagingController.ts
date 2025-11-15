@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PresenceRecord, usePresence } from "@/contexts/PresenceContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   ContactSummaryDto,
   MessageDto,
   RecipientDto,
+  reactToMessage,
+  saveMessage,
   fetchInbox,
   fetchRecipients,
   fetchThread,
+  fetchSavedThread,
   markMessageRead,
   uploadMessageFile,
+  toAbsoluteFileUrl,
 } from "@/lib/api/messagesApi";
 import type {
   ContactItem,
@@ -124,8 +129,10 @@ const mapMessageDto = (message: MessageDto): MessageItem => ({
   timestampIso: message.timestamp,
   status: message.status,
   type: message.type,
-  fileUrl: message.fileUrl,
+  fileUrl: toAbsoluteFileUrl(message.fileUrl),
   fileName: message.fileName,
+  mimeType: message.mimeType,
+  fileSize: message.fileSize,
   deleted: message.deleted,
   editedAt: message.editedAt,
   deliveredTo: message.deliveredTo ?? [],
@@ -135,6 +142,7 @@ const mapMessageDto = (message: MessageDto): MessageItem => ({
   replyToMessageId: message.replyToMessageId,
   replyTo: message.replyTo,
   replyToDeleted: message.replyToDeleted,
+  reactions: message.reactions ?? [],
 });
 
 const mapSocketMessage = (message: SocketMessagePayload): MessageItem => ({
@@ -148,8 +156,10 @@ const mapSocketMessage = (message: SocketMessagePayload): MessageItem => ({
   timestampIso: message.timestamp,
   status: message.status,
   type: message.type,
-  fileUrl: message.fileUrl,
+  fileUrl: toAbsoluteFileUrl(message.fileUrl),
   fileName: message.fileName,
+  mimeType: message.mimeType,
+  fileSize: message.fileSize,
   deleted: message.deleted,
   editedAt: message.editedAt,
   deliveredTo: message.deliveredTo ?? [],
@@ -159,6 +169,12 @@ const mapSocketMessage = (message: SocketMessagePayload): MessageItem => ({
   replyToMessageId: message.replyToMessageId,
   replyTo: message.replyTo,
   replyToDeleted: message.replyToDeleted,
+  reactions:
+    (
+      message as {
+        reactions?: Array<{ emoji: string; users: string[] }>;
+      }
+    ).reactions ?? [],
 });
 
 const contactFromSummary = (summary: ContactSummaryDto): ContactItem => ({
@@ -166,7 +182,12 @@ const contactFromSummary = (summary: ContactSummaryDto): ContactItem => ({
   name: summary.user.name,
   role: adaptRole(summary.user.role),
   email: summary.user.email,
-  online: summary.user.online,
+  online:
+    summary.user.presence?.visibleStatus === "online" &&
+    !summary.user.presence?.hidden
+      ? true
+      : summary.user.online,
+  presence: summary.user.presence,
   unreadCount: summary.unreadCount,
   lastMessage: buildLastMessage(summary.lastMessage),
   lastMessageAt: summary.lastMessage?.timestamp,
@@ -177,7 +198,12 @@ const contactFromRecipient = (recipient: RecipientDto): ContactItem => ({
   name: recipient.name,
   role: adaptRole(recipient.role),
   email: recipient.email,
-  online: recipient.online,
+  online:
+    recipient.presence?.visibleStatus === "online" &&
+    !recipient.presence?.hidden
+      ? true
+      : recipient.online,
+  presence: recipient.presence,
   unreadCount: 0,
 });
 
@@ -190,8 +216,16 @@ type OutgoingMessagePayload = {
   replyToMessageId?: string;
 };
 
-const sortContacts = (items: ContactItem[]): ContactItem[] => {
+const sortContacts = (items: ContactItem[], currentUserId?: string): ContactItem[] => {
   return [...items].sort((a, b) => {
+    // Prioritize Saved Messages (self-chat) at the top
+    if (currentUserId) {
+      const aIsSaved = a.id === currentUserId;
+      const bIsSaved = b.id === currentUserId;
+      if (aIsSaved && !bIsSaved) return -1;
+      if (!aIsSaved && bIsSaved) return 1;
+    }
+
     const aTime = a.lastMessage?.timestampIso ?? "";
     const bTime = b.lastMessage?.timestampIso ?? "";
 
@@ -238,6 +272,13 @@ interface MessagingControllerResult {
     messageId: string,
     options?: { forEveryone?: boolean }
   ) => Promise<void>;
+  onToggleReaction: (
+    conversationId: string,
+    messageId: string,
+    emoji: string
+  ) => Promise<void>;
+  onSaveMessage: (conversationId: string, messageId: string) => Promise<void>;
+  searchSavedMessages: (query: string) => Promise<void>;
   isLoadingContacts: boolean;
   isLoadingThread: boolean;
   isSendingMessage: boolean;
@@ -280,6 +321,9 @@ export const useMessagingController = ({
     ((messageIds: string[], threadKey?: string) => Promise<unknown>) | undefined
   >(undefined);
 
+  const { state: presenceState, dispatch: presenceDispatch } = usePresence();
+  const presenceRef = useRef(presenceState);
+
   useEffect(() => {
     contactsRef.current = contacts;
   }, [contacts]);
@@ -292,15 +336,28 @@ export const useMessagingController = ({
     messagesRef.current = messagesByConversation;
   }, [messagesByConversation]);
 
+  useEffect(() => {
+    presenceRef.current = presenceState;
+  }, [presenceState]);
+
   const setContactsSorted = useCallback(
     (updater: (prev: ContactItem[]) => ContactItem[]) =>
-      setContacts((previous) => sortContacts(updater(previous))),
-    []
+      setContacts((previous) => sortContacts(updater(previous), currentUserId)),
+    [currentUserId]
   );
 
   const applyPresence = useCallback(
-    (userId: string, online: boolean) => {
-      if (online) {
+    (userId: string, record: PresenceRecord) => {
+      const nextRecord: PresenceRecord = {
+        visibleStatus: record.visibleStatus,
+        lastSeenAt: record.lastSeenAt,
+        hidden: record.hidden ?? false,
+      };
+
+      const isVisiblyOnline =
+        nextRecord.visibleStatus === "online" && !nextRecord.hidden;
+
+      if (isVisiblyOnline) {
         onlineUsersRef.current.add(userId);
       } else {
         onlineUsersRef.current.delete(userId);
@@ -308,13 +365,25 @@ export const useMessagingController = ({
 
       setContactsSorted((list) =>
         list.map((contact) =>
-          contact.id === userId ? { ...contact, online } : contact
+          contact.id === userId
+            ? {
+                ...contact,
+                online: isVisiblyOnline,
+                presence: nextRecord,
+              }
+            : contact
         )
       );
 
       setRecipients((previous) =>
         previous.map((recipient) =>
-          recipient.id === userId ? { ...recipient, online } : recipient
+          recipient.id === userId
+            ? {
+                ...recipient,
+                online: isVisiblyOnline,
+                presence: nextRecord,
+              }
+            : recipient
         )
       );
     },
@@ -323,30 +392,41 @@ export const useMessagingController = ({
 
   const handleUserStatusInit = useCallback(
     (payload: UserStatusInitEvent) => {
-      onlineUsersRef.current = new Set(payload.online);
-
-      setContactsSorted((list) =>
-        list.map((contact) => ({
-          ...contact,
-          online: onlineUsersRef.current.has(contact.id),
-        }))
+      const snapshot = payload.online.reduce<Record<string, PresenceRecord>>(
+        (acc, userId) => {
+          acc[userId] = { visibleStatus: "online", hidden: false };
+          return acc;
+        },
+        {}
       );
 
-      setRecipients((previous) =>
-        previous.map((recipient) => ({
-          ...recipient,
-          online: onlineUsersRef.current.has(recipient.id),
-        }))
+      presenceDispatch({ type: "snapshot", payload: snapshot });
+      Object.entries(snapshot).forEach(([userId, record]) =>
+        applyPresence(userId, record)
       );
     },
-    [setContactsSorted]
+    [applyPresence, presenceDispatch]
   );
 
   const handleUserStatus = useCallback(
     (payload: UserStatusEvent) => {
-      applyPresence(payload.userId, payload.online);
+      if (payload.online) {
+        const record: PresenceRecord = {
+          visibleStatus: "online",
+          hidden: false,
+        };
+        presenceDispatch({ type: "online", userId: payload.userId });
+        applyPresence(payload.userId, record);
+      } else {
+        const record: PresenceRecord = {
+          visibleStatus: "offline",
+          hidden: false,
+        };
+        presenceDispatch({ type: "offline", userId: payload.userId });
+        applyPresence(payload.userId, record);
+      }
     },
-    [applyPresence]
+    [applyPresence, presenceDispatch]
   );
 
   const upsertConversationMessage = useCallback(
@@ -393,8 +473,13 @@ export const useMessagingController = ({
     ) => {
       setContactsSorted((list) => {
         const existing = list.find((contact) => contact.id === conversationId);
-        const online =
-          existing?.online ?? onlineUsersRef.current.has(conversationId);
+        const presence =
+          counterpart.presence ??
+          existing?.presence ??
+          presenceRef.current[conversationId];
+        const online = presence
+          ? presence.visibleStatus === "online" && !presence.hidden
+          : existing?.online ?? onlineUsersRef.current.has(conversationId);
         const unreadCount = options.incrementUnread
           ? (existing?.unreadCount ?? 0) + 1
           : 0;
@@ -406,6 +491,7 @@ export const useMessagingController = ({
               role: adaptRole(counterpart.role),
               email: counterpart.email,
               online,
+              presence: presence ?? existing?.presence,
               unreadCount,
               lastMessage: {
                 content: message.preview ?? message.content,
@@ -421,6 +507,7 @@ export const useMessagingController = ({
               role: adaptRole(counterpart.role),
               email: counterpart.email,
               online,
+              presence,
               unreadCount,
               lastMessage: {
                 content: message.preview ?? message.content,
@@ -698,6 +785,7 @@ export const useMessagingController = ({
     [handleSeenUpdate]
   );
 
+  // Presence integration
   const {
     socketRef,
     sendMessage: emitSendMessage,
@@ -711,8 +799,128 @@ export const useMessagingController = ({
     onMessageUpdated: handleMessageUpdate,
     onMessageDeleted: handleMessageDeleted,
     onMessageSeenUpdate: handleSeenUpdate,
+    onMessageReactionUpdate: ({ messageId, reactions, threadKey }) => {
+      // Use threadKey to resolve conversation id
+      const ids = threadKey.split(":");
+      const myId = currentUserId ?? "";
+      const conversationId = ids.find((id) => id !== myId) ?? ids[0];
+
+      mutateConversationMessages(conversationId, (previous) =>
+        previous.map((item) =>
+          item.id === messageId ? { ...item, reactions } : item
+        )
+      );
+    },
     onUserStatus: handleUserStatus,
     onUserStatusInit: handleUserStatusInit,
+    onPresenceSnapshot: ({ users }) => {
+      presenceDispatch({ type: "snapshot", payload: users });
+      Object.entries(users).forEach(([userId, record]) =>
+        applyPresence(userId, record)
+      );
+    },
+    onPresenceOnline: ({ userId, hidden, visibleStatus }) => {
+      const record: PresenceRecord = {
+        visibleStatus: visibleStatus ?? "online",
+        hidden: hidden ?? false,
+      };
+      presenceDispatch({
+        type: "online",
+        userId,
+        hidden,
+      });
+      applyPresence(userId, record);
+    },
+    onPresenceOffline: ({ userId, lastSeenAt, hidden, visibleStatus }) => {
+      const record: PresenceRecord = {
+        visibleStatus: visibleStatus ?? "offline",
+        lastSeenAt,
+        hidden: hidden ?? false,
+      };
+      presenceDispatch({
+        type: "offline",
+        userId,
+        lastSeenAt,
+        hidden,
+      });
+      applyPresence(userId, record);
+    },
+    onPresenceLastSeenUpdate: ({ userId, lastSeenAt, hidden }) => {
+      // Do not change visibleStatus here; rely on presence:online/offline events for status transitions.
+      presenceDispatch({ type: "lastSeen", userId, lastSeenAt, hidden });
+      const current = presenceRef.current[userId];
+      if (current) {
+        applyPresence(userId, {
+          ...current,
+          lastSeenAt,
+          hidden: hidden ?? current.hidden,
+        });
+      } else {
+        applyPresence(userId, {
+          visibleStatus: "offline",
+          lastSeenAt,
+          hidden: hidden ?? false,
+        });
+      }
+    },
+    onPresenceVisibilityChange: ({
+      userId,
+      visibleStatus,
+      hidden,
+      lastSeenAt,
+    }) => {
+      presenceDispatch({
+        type: "visibility",
+        userId,
+        visibleStatus,
+        hidden,
+      });
+      const base: PresenceRecord = {
+        visibleStatus,
+        hidden: hidden ?? false,
+        lastSeenAt: lastSeenAt ?? presenceRef.current[userId]?.lastSeenAt,
+      };
+      applyPresence(userId, base);
+    },
+    // Legacy fallbacks
+    onUserOnline: ({ userId }) => {
+      const record: PresenceRecord = {
+        visibleStatus: "online",
+        hidden: false,
+      };
+      presenceDispatch({ type: "online", userId });
+      applyPresence(userId, record);
+    },
+    onUserOffline: ({ userId, lastSeenAt }) => {
+      const record: PresenceRecord = {
+        visibleStatus: "offline",
+        lastSeenAt,
+        hidden: false,
+      };
+      presenceDispatch({ type: "offline", userId, lastSeenAt });
+      applyPresence(userId, record);
+    },
+    onUserHidden: ({ userId }) => {
+      const record: PresenceRecord = {
+        visibleStatus: "offline",
+        hidden: true,
+      };
+      presenceDispatch({
+        type: "visibility",
+        userId,
+        visibleStatus: "offline",
+        hidden: true,
+      });
+      applyPresence(userId, record);
+    },
+    onUserVisibilityChange: ({ userId, visibleStatus }) => {
+      const record: PresenceRecord = {
+        visibleStatus,
+        hidden: presenceRef.current[userId]?.hidden ?? false,
+      };
+      presenceDispatch({ type: "visibility", userId, visibleStatus });
+      applyPresence(userId, record);
+    },
   });
 
   useEffect(() => {
@@ -736,8 +944,12 @@ export const useMessagingController = ({
   );
 
   const validateContact = useCallback(
-    (contact: ContactItem) => hierarchyAllows(contact.role),
-    [hierarchyAllows]
+    (contact: ContactItem) => {
+      // Allow self-chat for Saved Messages
+      if (contact.id === currentUserId) return true;
+      return hierarchyAllows(contact.role);
+    },
+    [hierarchyAllows, currentUserId]
   );
 
   const loadThread = useCallback(
@@ -758,7 +970,10 @@ export const useMessagingController = ({
 
       setIsLoadingThread(true);
       try {
-        const data = await fetchThread(participantId);
+        const data =
+          currentUserId && participantId === currentUserId
+            ? await fetchSavedThread()
+            : await fetchThread(participantId);
         const mappedMessages = data.messages.map(mapMessageDto);
         threadCacheRef.current.add(participantId);
 
@@ -772,11 +987,38 @@ export const useMessagingController = ({
           [participantId]: mappedMessages,
         }));
 
+        const baseContact = contactFromRecipient(data.participant);
+        const participantPresence = baseContact.presence;
+        const participantOnline = participantPresence
+          ? participantPresence.visibleStatus === "online" &&
+            !participantPresence.hidden
+          : baseContact.online ??
+            onlineUsersRef.current.has(data.participant.id);
+        if (participantPresence) {
+          presenceDispatch({
+            type: "visibility",
+            userId: baseContact.id,
+            visibleStatus: participantPresence.visibleStatus,
+            hidden: participantPresence.hidden,
+          });
+          if (participantPresence.lastSeenAt) {
+            presenceDispatch({
+              type: "lastSeen",
+              userId: baseContact.id,
+              lastSeenAt: participantPresence.lastSeenAt,
+              hidden: participantPresence.hidden,
+            });
+          }
+          if (participantOnline) {
+            onlineUsersRef.current.add(baseContact.id);
+          } else {
+            onlineUsersRef.current.delete(baseContact.id);
+          }
+        }
         const participantContact = {
-          ...contactFromRecipient(data.participant),
-          online:
-            data.participant.online ??
-            onlineUsersRef.current.has(data.participant.id),
+          ...baseContact,
+          online: participantOnline,
+          presence: participantPresence,
         };
         participantContact.lastMessage = mappedMessages.length
           ? {
@@ -803,7 +1045,6 @@ export const useMessagingController = ({
                 unreadCount: 0,
               }
             : { ...participantContact, unreadCount: 0 };
-
           return [
             ...list.filter((contact) => contact.id !== participantId),
             updated,
@@ -825,15 +1066,104 @@ export const useMessagingController = ({
         setIsLoadingThread(false);
       }
     },
-    [markConversationSeen, setContactsSorted, toast]
+    [
+      currentUserId,
+      markConversationSeen,
+      presenceDispatch,
+      setContactsSorted,
+      toast,
+    ]
+  );
+
+  const searchSavedMessages = useCallback(
+    async (query: string) => {
+      if (!currentUserId) return;
+      const participantId = currentUserId;
+      setIsLoadingThread(true);
+      try {
+        const data = await fetchSavedThread(query);
+        const mappedMessages = data.messages.map(mapMessageDto);
+        threadCacheRef.current.add(participantId);
+        setMessagesByConversation((previous) => ({
+          ...previous,
+          [participantId]: mappedMessages,
+        }));
+
+        const baseContact = contactFromRecipient(data.participant);
+        const updated: ContactItem = {
+          ...baseContact,
+          name: "Saved Messages",
+          unreadCount: 0,
+          lastMessage: mappedMessages.length
+            ? {
+                content:
+                  mappedMessages[mappedMessages.length - 1].preview ??
+                  mappedMessages[mappedMessages.length - 1].content,
+                timestamp: mappedMessages[mappedMessages.length - 1].timestamp,
+                timestampIso:
+                  mappedMessages[mappedMessages.length - 1].timestampIso,
+                senderRole:
+                  mappedMessages[mappedMessages.length - 1].senderRole,
+              }
+            : undefined,
+          lastMessageAt:
+            mappedMessages[mappedMessages.length - 1]?.timestampIso,
+        };
+
+        setContactsSorted((list) => {
+          const exists = list.find((c) => c.id === participantId);
+          return [
+            ...list.filter((c) => c.id !== participantId),
+            exists ? { ...exists, ...updated } : updated,
+          ];
+        });
+      } catch (error) {
+        const description =
+          error instanceof Error
+            ? error.message
+            : "Failed to search saved messages.";
+        toast({
+          title: "Search failed",
+          description,
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingThread(false);
+      }
+    },
+    [currentUserId, setContactsSorted, toast]
   );
 
   const initializeInbox = useCallback(async () => {
     setIsLoadingContacts(true);
     try {
       const inbox = await fetchInbox();
-      const mapped = sortContacts(inbox.map(contactFromSummary));
+      const mapped = sortContacts(inbox.map(contactFromSummary), currentUserId);
       setContacts(mapped);
+
+      const presenceFromInbox = mapped.reduce<Record<string, PresenceRecord>>(
+        (acc, contact) => {
+          if (contact.presence) {
+            acc[contact.id] = contact.presence;
+          }
+          return acc;
+        },
+        {}
+      );
+
+      const onlineIds = mapped
+        .filter((contact) =>
+          contact.presence
+            ? contact.presence.visibleStatus === "online" &&
+              !contact.presence.hidden
+            : contact.online
+        )
+        .map((contact) => contact.id);
+      onlineUsersRef.current = new Set(onlineIds);
+
+      if (Object.keys(presenceFromInbox).length > 0) {
+        presenceDispatch({ type: "snapshot", payload: presenceFromInbox });
+      }
 
       if (mapped.length > 0) {
         const initialConversationId = mapped[0].id;
@@ -853,7 +1183,7 @@ export const useMessagingController = ({
     } finally {
       setIsLoadingContacts(false);
     }
-  }, [loadThread, toast]);
+  }, [loadThread, presenceDispatch, toast, currentUserId]);
 
   useEffect(() => {
     void initializeInbox();
@@ -884,6 +1214,8 @@ export const useMessagingController = ({
       try {
         let fileUrl = payload.fileUrl;
         let fileName = payload.fileName;
+        let mimeType: string | undefined;
+        let fileSize: number | undefined;
         let messageType = payload.type ?? "text";
         const content = payload.content?.trim() ?? "";
 
@@ -893,6 +1225,8 @@ export const useMessagingController = ({
           const uploadResult = await uploadMessageFile(payload.file);
           fileUrl = uploadResult.fileUrl;
           fileName = uploadResult.fileName;
+          mimeType = uploadResult.mimeType;
+          fileSize = uploadResult.size;
           messageType = determineMessageType(payload.file);
         }
 
@@ -906,6 +1240,8 @@ export const useMessagingController = ({
           type: messageType,
           fileUrl,
           fileName,
+          mimeType,
+          fileSize,
           replyToMessageId: payload.replyToMessageId,
         });
 
@@ -919,7 +1255,7 @@ export const useMessagingController = ({
           description,
           variant: "destructive",
         });
-        throw error;
+        // Error handled by toast, no need to re-throw
       } finally {
         setIsSending(false);
         if (uploading) {
@@ -998,12 +1334,94 @@ export const useMessagingController = ({
     [emitDeleteMessage, mutateConversationMessages, setContactsSorted, toast]
   );
 
+  const onToggleReaction = useCallback(
+    async (conversationId: string, messageId: string, emoji: string) => {
+      try {
+        const result = await reactToMessage(messageId, emoji);
+        const ids = result.threadKey.split(":");
+        const myId = currentUserId ?? "";
+        const conv = ids.find((id) => id !== myId) ?? ids[0];
+        mutateConversationMessages(conv, (previous) =>
+          previous.map((item) =>
+            item.id === result.messageId
+              ? { ...item, reactions: result.reactions }
+              : item
+          )
+        );
+      } catch (error) {
+        const description =
+          error instanceof Error ? error.message : "Failed to react.";
+        toast({
+          title: "Unable to react",
+          description,
+          variant: "destructive",
+        });
+      }
+    },
+    [currentUserId, mutateConversationMessages, toast]
+  );
+
+  const onSaveMessage = useCallback(
+    async (conversationId: string, messageId: string) => {
+      try {
+        await saveMessage(messageId);
+        toast({ title: "Saved", description: "Added to Saved Messages." });
+      } catch (error) {
+        const description =
+          error instanceof Error ? error.message : "Failed to save message.";
+        toast({ title: "Unable to save", description, variant: "destructive" });
+      }
+    },
+    [toast]
+  );
+
   const loadRecipientsList = useCallback(async () => {
     setIsRecipientsLoading(true);
     try {
       const data = await fetchRecipients();
-      setRecipients(data);
-      return data;
+      const recipientsWithPresence = data.recipients.map((recipient) => ({
+        ...recipient,
+        online:
+          recipient.presence?.visibleStatus === "online" &&
+          !recipient.presence?.hidden
+            ? true
+            : recipient.online,
+      }));
+      setRecipients(recipientsWithPresence);
+
+      const presenceFromRecipients = recipientsWithPresence.reduce<
+        Record<string, PresenceRecord>
+      >((acc, recipient) => {
+        if (recipient.presence) {
+          acc[recipient.id] = recipient.presence;
+        }
+        return acc;
+      }, {});
+
+      Object.entries(presenceFromRecipients).forEach(([userId, record]) => {
+        presenceDispatch({
+          type: "visibility",
+          userId,
+          visibleStatus: record.visibleStatus,
+          hidden: record.hidden,
+        });
+        if (record.lastSeenAt) {
+          presenceDispatch({
+            type: "lastSeen",
+            userId,
+            lastSeenAt: record.lastSeenAt,
+            hidden: record.hidden,
+          });
+        }
+        const isOnline =
+          record.visibleStatus === "online" && !(record.hidden ?? false);
+        if (isOnline) {
+          onlineUsersRef.current.add(userId);
+        } else {
+          onlineUsersRef.current.delete(userId);
+        }
+      });
+      return recipientsWithPresence;
     } catch (error) {
       const description =
         error instanceof Error ? error.message : "Failed to load recipients.";
@@ -1015,10 +1433,34 @@ export const useMessagingController = ({
     } finally {
       setIsRecipientsLoading(false);
     }
-  }, [toast]);
+  }, [presenceDispatch, toast]);
 
   const startConversationWith = useCallback(
     async (recipient: RecipientDto) => {
+      if (recipient.presence) {
+        presenceDispatch({
+          type: "visibility",
+          userId: recipient.id,
+          visibleStatus: recipient.presence.visibleStatus,
+          hidden: recipient.presence.hidden,
+        });
+        if (recipient.presence.lastSeenAt) {
+          presenceDispatch({
+            type: "lastSeen",
+            userId: recipient.id,
+            lastSeenAt: recipient.presence.lastSeenAt,
+            hidden: recipient.presence.hidden,
+          });
+        }
+        const isOnline =
+          recipient.presence.visibleStatus === "online" &&
+          !(recipient.presence.hidden ?? false);
+        if (isOnline) {
+          onlineUsersRef.current.add(recipient.id);
+        } else {
+          onlineUsersRef.current.delete(recipient.id);
+        }
+      }
       setContactsSorted((list) => {
         const base = contactFromRecipient(recipient);
         const existing = list.find((contact) => contact.id === base.id);
@@ -1040,7 +1482,7 @@ export const useMessagingController = ({
       }));
       await loadThread(recipient.id, { force: true });
     },
-    [loadThread, setContactsSorted]
+    [loadThread, presenceDispatch, setContactsSorted]
   );
 
   const handleSocketMessage = useCallback(
@@ -1173,6 +1615,9 @@ export const useMessagingController = ({
     onSendMessage,
     onEditMessage,
     onDeleteMessage,
+    onToggleReaction,
+    onSaveMessage,
+    searchSavedMessages,
     isLoadingContacts,
     isLoadingThread,
     isSendingMessage: isSending,

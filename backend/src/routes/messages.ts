@@ -15,6 +15,7 @@ import Message, {
   getThreadKey,
 } from "../models/Message";
 import User, { IUser } from "../models/User";
+import SavedMessage from "../models/SavedMessage";
 import { emitToUser } from "../socket";
 import {
   MessageLike,
@@ -27,7 +28,31 @@ import {
   hierarchyAllows,
 } from "../services/messaging.utils";
 import { flagRepliesForDeletedOriginal } from "../services/replyPreview.service";
-import { isOnline } from "../services/presence.service";
+import {
+  getPresenceForUser,
+  isVisibleOnline,
+} from "../services/presence.service";
+
+const mapPresenceDto = (
+  user: Pick<IUser, "_id" | "lastSeenAt" | "privacy">
+) => {
+  const userId = user._id?.toString();
+  if (!userId) {
+    return undefined;
+  }
+  const presence = getPresenceForUser(userId);
+  const hidden = Boolean(user.privacy?.hideOnlineStatus ?? presence.hidden);
+  const lastSeenAt = presence.lastSeenAt ?? user.lastSeenAt?.toISOString();
+  return {
+    visibleStatus: hidden ? "offline" : presence.visibleStatus,
+    hidden,
+    ...(lastSeenAt ? { lastSeenAt } : {}),
+  } as {
+    visibleStatus: "online" | "offline";
+    hidden?: boolean;
+    lastSeenAt?: string;
+  };
+};
 
 const router = express.Router();
 
@@ -37,6 +62,11 @@ const uploadsDir = path.join(__dirname, "..", "..", "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+// Store message attachments under /uploads/messages for organization
+const uploadsMessagesDir = path.join(uploadsDir, "messages");
+if (!fs.existsSync(uploadsMessagesDir)) {
+  fs.mkdirSync(uploadsMessagesDir, { recursive: true });
+}
 
 const storage = multer.diskStorage({
   destination: (
@@ -44,7 +74,7 @@ const storage = multer.diskStorage({
     _file: Express.Multer.File,
     cb: (error: Error | null, destination: string) => void
   ) => {
-    cb(null, uploadsDir);
+    cb(null, uploadsMessagesDir);
   },
   filename: (
     _req: express.Request,
@@ -60,17 +90,23 @@ const storage = multer.diskStorage({
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
+  "image/webp",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/zip",
+  "text/plain",
   "text/csv",
 ]);
 
 const upload = multer({
   storage,
   limits: {
-    fileSize: 15 * 1024 * 1024,
+    fileSize: 10 * 1024 * 1024,
   },
   fileFilter: (
     _req: express.Request,
@@ -85,6 +121,252 @@ const upload = multer({
   },
 });
 
+router.post(
+  "/:id/react",
+  [param("id").isMongoId().withMessage("Invalid message identifier")],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
+    }
+
+    const currentUser = req.user as IUser;
+    if (!currentUser) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
+    }
+
+    const allowed = new Set(["❤️", "👍", "😂", "😢", "😡", "🔥", "🎉"]);
+    const emoji = String((req.body?.emoji ?? "").trim());
+    if (!emoji || !allowed.has(emoji)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Unsupported emoji reaction" });
+    }
+
+    try {
+      const message = await Message.findById<IMessage>(req.params.id);
+      if (!message) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Message not found" });
+      }
+
+      // Only participants can react
+      const participants = (
+        message.participants?.length
+          ? message.participants
+          : [message.sender, message.receiver]
+      )
+        .map((p: any) => p.toString())
+        .filter(Boolean);
+      if (!participants.includes(currentUser._id.toString())) {
+        return res
+          .status(403)
+          .json({ success: false, message: "Not authorized" });
+      }
+
+      const userId = currentUser._id.toString();
+      const reactions = Array.isArray((message as any).reactions)
+        ? ((message as any).reactions as Array<{
+            emoji: string;
+            userId: string;
+          }>)
+        : [];
+
+      const existsIndex = reactions.findIndex(
+        (r) => r.emoji === emoji && r.userId === userId
+      );
+      if (existsIndex >= 0) {
+        reactions.splice(existsIndex, 1); // remove existing reaction (toggle off)
+      } else {
+        reactions.push({ emoji, userId });
+      }
+
+      (message as any).reactions = reactions;
+      await message.save();
+
+      const normalized = normalizeMessage(message as MessageLike);
+      const payload = {
+        messageId: normalized.id,
+        threadKey: normalized.threadKey,
+        reactions: normalized.reactions ?? [],
+      };
+
+      // Broadcast to both participants
+      const participantIds = participants as string[];
+      participantIds.forEach((id) =>
+        emitToUser(id, "message:reaction:update", payload)
+      );
+
+      return res.json({ success: true, data: payload });
+    } catch (error) {
+      console.error("Failed to react to message", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Failed to react to message" });
+    }
+  }
+);
+
+router.post(
+  "/:id/save",
+  [param("id").isMongoId().withMessage("Invalid message identifier")],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
+    }
+
+    const currentUser = req.user as IUser;
+    if (!currentUser) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
+    }
+
+    try {
+      const existing = await SavedMessage.findOne({
+        userId: currentUser._id,
+        messageId: req.params.id,
+      });
+
+      // Load the original message to copy into self-chat
+      const original = await Message.findById<IMessage>(req.params.id).lean();
+      if (!original) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Message not found" });
+      }
+
+      // If already saved, just acknowledge and ensure client stays in sync
+      if (existing) {
+        // Emit a lightweight event so clients can ensure the Saved chat exists
+        const payload = {
+          message: normalizeMessage(original as any),
+          sender: {
+            id: String(original.sender),
+            name: "",
+            role: original.senderRole as MessageRole,
+          },
+          receiver: {
+            id: String(original.receiver),
+            name: "",
+            role: original.receiverRole as MessageRole,
+          },
+        };
+        emitToUser(currentUser._id.toString(), "message:saved:ack", payload);
+        return res.json({ success: true, data: { saved: true } });
+      }
+
+      // Create SavedMessage link to prevent duplicates
+      await SavedMessage.create({
+        userId: currentUser._id,
+        messageId: original._id,
+      });
+
+      // Create a new message in user's self-thread (Saved Messages)
+      const newMessage = await Message.create({
+        sender: currentUser._id,
+        receiver: currentUser._id,
+        senderRole: currentUser.role as MessageRole,
+        receiverRole: currentUser.role as MessageRole,
+        content: original.content,
+        type: (original.type as MessageType) ?? "text",
+        fileUrl: (original as any).fileUrl,
+        fileName: (original as any).fileName,
+        mimeType: (original as any).mimeType,
+        fileSize: (original as any).fileSize,
+        // Preserve reply preview context when available
+        ...(original.replyToMeta
+          ? {
+              replyToMeta: original.replyToMeta,
+              replyToDeleted: Boolean((original as any).replyToDeleted),
+            }
+          : {}),
+        // Mark as immediately delivered and seen by current user
+        deliveredTo: [currentUser._id.toString()],
+        seenBy: [currentUser._id.toString()],
+        status: "read",
+      });
+
+      const payload = {
+        message: normalizeMessage(newMessage as any),
+        sender: {
+          id: currentUser._id.toString(),
+          name: formatUserName(currentUser as any),
+          role: currentUser.role as MessageRole,
+        },
+        receiver: {
+          id: currentUser._id.toString(),
+          name: "Saved Messages",
+          role: currentUser.role as MessageRole,
+        },
+      };
+
+      // Emit both as new and sent so existing flows update instantly
+      emitToUser(currentUser._id.toString(), "message:new", payload);
+      emitToUser(currentUser._id.toString(), "message:sent", payload);
+
+      // If saving own message, "move" it by deleting the original
+      if (original.sender.toString() === currentUser._id.toString()) {
+        const messageId = original._id.toString();
+        const participants = original.participants?.map((p: any) => p.toString()) ?? [original.sender.toString(), original.receiver.toString()];
+
+        // Mark as deleted for everyone
+        await Message.updateOne(
+          { _id: original._id },
+          {
+            deleted: true,
+            isDeletedForEveryone: true,
+            deletedAt: new Date(),
+            content: "",
+            fileUrl: undefined,
+            fileName: undefined,
+            hiddenFor: participants,
+          }
+        );
+
+        // Flag replies as deleted
+        const affectedReplies = await flagRepliesForDeletedOriginal(original._id as Types.ObjectId);
+        if (affectedReplies.length > 0) {
+          affectedReplies.forEach((reply) => {
+            reply.replyToDeleted = true;
+            const normalizedReply = normalizeMessage(reply);
+            const replyParticipants = reply.participants?.map((participant: any) => participant.toString()) ?? [reply.sender.toString(), reply.receiver.toString()];
+            replyParticipants.forEach((participantId) =>
+              emitToUser(participantId, "message:update", normalizedReply)
+            );
+          });
+        }
+
+        // Emit delete event
+        const deletePayload = {
+          messageId,
+          threadKey: original.threadKey,
+          mode: "everyone",
+        };
+        participants.forEach((id) => emitToUser(id, "message:deleted", deletePayload));
+      }
+
+      return res.status(201).json({ success: true, data: { saved: true } });
+    } catch (error) {
+      console.error("Failed to save message", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Failed to save message" });
+    }
+  }
+);
 router.post(
   "/",
   [
@@ -130,12 +412,6 @@ router.post(
     }
 
     const receiverId = new mongoose.Types.ObjectId(req.body.receiverId);
-    if (receiverId.equals(sender._id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Cannot send a message to yourself",
-      });
-    }
 
     try {
       const { sender: senderDoc, receiver } = await ensureUsersExist(
@@ -144,7 +420,8 @@ router.post(
       );
 
       const receiverRole = receiver.role as MessageRole;
-      if (!hierarchyAllows(senderRole, receiverRole)) {
+      // Allow self-messaging for Saved Messages
+      if (!receiverId.equals(sender._id) && !hierarchyAllows(senderRole, receiverRole)) {
         return res
           .status(403)
           .json({ success: false, message: "Messaging hierarchy violation" });
@@ -243,6 +520,9 @@ router.post(
         type,
         fileUrl: req.body.fileUrl,
         fileName: req.body.fileName,
+        mimeType: req.body.mimeType,
+        fileSize:
+          typeof req.body.fileSize === "number" ? req.body.fileSize : undefined,
         deliveredTo: [sender._id.toString()],
         seenBy: [sender._id.toString()],
       };
@@ -335,12 +615,6 @@ router.post(
       }
 
       const receiverId = new mongoose.Types.ObjectId(req.body.receiverId);
-      if (receiverId.equals(currentUser._id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Cannot forward a message to yourself",
-        });
-      }
 
       const { sender: senderDoc, receiver } = await ensureUsersExist(
         currentUser._id,
@@ -348,10 +622,11 @@ router.post(
       );
       const senderRole = currentUser.role as MessageRole;
       const receiverRole = receiver.role as MessageRole;
-      if (!hierarchyAllows(senderRole, receiverRole)) {
-        return res
-          .status(403)
-          .json({ success: false, message: "Messaging hierarchy violation" });
+      if (!receiverId.equals(currentUser._id) && !hierarchyAllows(senderRole, receiverRole)) {
+        return res.status(403).json({
+          success: false,
+          message: "Cannot forward a message to this recipient due to role restrictions",
+        });
       }
 
       // Build forwardedFrom metadata
@@ -456,7 +731,7 @@ router.post(
     }
 
     const uploadedFile = req.file as Express.Multer.File;
-    const fileUrl = `/uploads/${uploadedFile.filename}`;
+    const fileUrl = `/uploads/messages/${uploadedFile.filename}`;
     return res.status(201).json({
       success: true,
       data: {
@@ -504,7 +779,9 @@ router.get(
         isActive: true,
         status: "approved",
       })
-        .select("firstName lastName email role")
+        .select(
+          "firstName lastName email role lastSeenAt privacy.hideOnlineStatus"
+        )
         .sort({ firstName: 1, lastName: 1 })
         .skip(skip)
         .limit(limit + 1) // fetch one extra to check if there are more
@@ -520,8 +797,19 @@ router.get(
           name: formatUserName(user),
           role: user.role,
           email: user.email,
-          online: isOnline(user._id?.toString() ?? ""),
+          online: isVisibleOnline(user._id?.toString() ?? ""),
+          presence: mapPresenceDto(user as any),
         }));
+
+      // Add Saved Messages as a recipient
+      formatted.unshift({
+        id: currentUser._id.toString(),
+        name: "Saved Messages",
+        role: currentUser.role as MessageRole,
+        email: currentUser.email,
+        online: false,
+        presence: undefined,
+      });
 
       return res.json({
         success: true,
@@ -584,32 +872,74 @@ router.get("/inbox", async (req: express.Request, res: express.Response) => {
       .filter((id): id is Types.ObjectId => Boolean(id));
 
     const counterpartDocs = await User.find({ _id: { $in: counterpartIds } })
-      .select("firstName lastName email role")
+      .select(
+        "firstName lastName email role lastSeenAt privacy.hideOnlineStatus"
+      )
       .lean();
 
     const contacts = grouped
       .map((group) => {
         const otherId = group.participants.find((id) => !id.equals(currentId));
+        // For self-thread (Saved Messages), otherId will be undefined.
         if (!otherId) {
-          return null;
+          return {
+            user: {
+              id: currentId.toString(),
+              name: "Saved Messages",
+              role: currentUser.role,
+              email: currentUser.email,
+              online: false,
+              presence: undefined,
+            },
+            unreadCount: 0,
+            lastMessage: normalizeMessage(group.lastMessage),
+          } as const;
         }
         const userDoc = counterpartDocs.find((doc) => doc._id?.equals(otherId));
         if (!userDoc) {
           return null;
         }
+        const presence = mapPresenceDto(userDoc as any);
+        const online =
+          presence?.visibleStatus === "online" && !presence?.hidden
+            ? true
+            : isVisibleOnline(otherId.toString());
         return {
           user: {
             id: otherId.toString(),
             name: formatUserName(userDoc),
             role: userDoc.role,
             email: userDoc.email,
-            online: isOnline(otherId.toString()),
+            online,
+            presence,
           },
           unreadCount: group.unreadCount,
           lastMessage: normalizeMessage(group.lastMessage),
         };
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    // Ensure Saved Messages contact exists even if there is no self-thread yet
+    const hasSavedContact = contacts.some((c) => c.user.id === currentId.toString());
+    if (!hasSavedContact) {
+      // Find latest self-message, if any, to attach as lastMessage
+      const selfThreadKey = getThreadKey(currentId, currentId);
+      const lastSelf = await Message.findOne({ threadKey: selfThreadKey })
+        .sort({ createdAt: -1 })
+        .lean<MessageLike | null>();
+      contacts.push({
+        user: {
+          id: currentId.toString(),
+          name: "Saved Messages",
+          role: currentUser.role as MessageRole,
+          email: currentUser.email,
+          online: false,
+          presence: undefined,
+        },
+        unreadCount: 0,
+        ...(lastSelf ? { lastMessage: normalizeMessage(lastSelf) } : {}),
+      } as any);
+    }
 
     return res.json({ success: true, data: { contacts } });
   } catch (error) {
@@ -650,7 +980,8 @@ router.get(
     if (participantId.equals(currentId)) {
       return res.status(400).json({
         success: false,
-        message: "Cannot open a thread with yourself",
+        message:
+          "Use /messages/saved to fetch Saved Messages (self-thread) instead.",
       });
     }
 
@@ -755,7 +1086,8 @@ router.get(
             name: formatUserName(participantDoc),
             role: participantDoc.role,
             email: participantDoc.email,
-            online: isOnline(participantIdString),
+            online: isVisibleOnline(participantIdString),
+            presence: mapPresenceDto(participantDoc as any),
           },
           messages: mappedMessages,
         },
@@ -768,6 +1100,57 @@ router.get(
     }
   }
 );
+
+// Saved Messages (self-thread) listing with optional search
+router.get("/saved", async (req: express.Request, res: express.Response) => {
+  const currentUser = req.user as IUser;
+  if (!currentUser) {
+    return res
+      .status(401)
+      .json({ success: false, message: "Authentication required" });
+  }
+
+  try {
+    const currentId = new mongoose.Types.ObjectId(currentUser._id);
+    const threadKey = getThreadKey(currentId, currentId);
+
+    const q = (req.query.q as string | undefined)?.trim();
+    const filter: any = { threadKey };
+    if (q && q.length > 0) {
+      const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [
+        { content: { $regex: regex } },
+        { fileName: { $regex: regex } },
+      ];
+    }
+
+    const messages = await Message.find<MessageLike>(filter)
+      .sort({ createdAt: 1 })
+      .lean<MessageLike[]>();
+
+    const mapped = normalizeMessageIds(messages);
+
+    return res.json({
+      success: true,
+      data: {
+        participant: {
+          id: currentId.toString(),
+          name: "Saved Messages",
+          role: currentUser.role,
+          email: currentUser.email,
+          online: false,
+          presence: undefined,
+        },
+        messages: mapped,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to fetch saved messages", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch saved messages" });
+  }
+});
 
 router.patch(
   "/:id/read",

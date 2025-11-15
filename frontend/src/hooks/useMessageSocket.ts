@@ -1,8 +1,12 @@
-import { useEffect, useRef } from "react";
+import { MutableRefObject, useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { getAuthToken } from "@/lib/utils";
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5001";
+
+// Module-level shared socket to avoid multiple connections when the hook is used more than once
+let sharedSocket: Socket | null = null;
+let sharedSubscribers = 0;
 
 export interface SocketMessagePayload {
   _id: string;
@@ -19,6 +23,8 @@ export interface SocketMessagePayload {
   type: "text" | "image" | "file" | "doc";
   fileUrl?: string;
   fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
   deleted: boolean;
   editedAt?: string;
   deliveredTo: string[];
@@ -72,6 +78,12 @@ export interface MessageSeenUpdateEvent {
   threadKey?: string;
 }
 
+export interface MessageReactionUpdateEvent {
+  messageId: string;
+  threadKey: string;
+  reactions: Array<{ emoji: string; users: string[] }>;
+}
+
 export interface UserStatusEvent {
   userId: string;
   online: boolean;
@@ -81,6 +93,74 @@ export interface UserStatusInitEvent {
   online: string[];
 }
 
+export interface PresenceSnapshotEvent {
+  users: Record<
+    string,
+    {
+      visibleStatus: "online" | "offline";
+      lastSeenAt?: string;
+      hidden?: boolean;
+    }
+  >;
+}
+
+export interface UserVisibilityEvent {
+  userId: string;
+  visibleStatus: "online" | "offline";
+}
+
+export interface UserHiddenEvent {
+  userId: string;
+  hidden: true;
+}
+
+export interface PresenceOnlineEvent {
+  userId: string;
+  hidden?: boolean;
+  visibleStatus?: "online" | "offline";
+}
+
+export interface PresenceOfflineEvent {
+  userId: string;
+  lastSeenAt: string;
+  hidden?: boolean;
+  visibleStatus?: "online" | "offline";
+}
+
+export interface PresenceLastSeenEvent {
+  userId: string;
+  lastSeenAt: string;
+  hidden?: boolean;
+  visibleStatus?: "online" | "offline";
+}
+
+export interface PresenceVisibilityChangeEvent {
+  userId: string;
+  visibleStatus: "online" | "offline";
+  hidden?: boolean;
+  lastSeenAt?: string;
+}
+
+export interface MessageSocketHandle {
+  socketRef: MutableRefObject<Socket | null>;
+  sendMessage: (payload: {
+    recipientId: string;
+    content?: string;
+    type?: SocketMessagePayload["type"];
+    fileUrl?: string;
+    fileName?: string;
+    mimeType?: string;
+    fileSize?: number;
+    replyToMessageId?: string;
+  }) => Promise<{ message: SocketMessagePayload }>;
+  editMessage: (
+    messageId: string,
+    newText: string
+  ) => Promise<MessageUpdateEvent>;
+  deleteMessage: (messageId: string, forEveryone?: boolean) => Promise<unknown>;
+  emitSeen: (messageIds: string[], threadKey?: string) => Promise<unknown>;
+}
+
 interface UseMessageSocketOptions {
   onIncomingMessage?: (payload: MessageSocketEvent) => void;
   onMessageSent?: (payload: MessageSocketEvent) => void;
@@ -88,8 +168,20 @@ interface UseMessageSocketOptions {
   onMessageUpdated?: (payload: MessageUpdateEvent) => void;
   onMessageDeleted?: (payload: MessageDeletedEvent) => void;
   onMessageSeenUpdate?: (payload: MessageSeenUpdateEvent) => void;
+  onMessageReactionUpdate?: (payload: MessageReactionUpdateEvent) => void;
   onUserStatus?: (payload: UserStatusEvent) => void;
   onUserStatusInit?: (payload: UserStatusInitEvent) => void;
+  onPresenceSnapshot?: (payload: PresenceSnapshotEvent) => void;
+  onUserOnline?: (payload: UserVisibilityEvent) => void;
+  onUserOffline?: (
+    payload: UserVisibilityEvent & { lastSeenAt?: string }
+  ) => void;
+  onUserHidden?: (payload: UserHiddenEvent) => void;
+  onUserVisibilityChange?: (payload: UserVisibilityEvent) => void;
+  onPresenceOnline?: (payload: PresenceOnlineEvent) => void;
+  onPresenceOffline?: (payload: PresenceOfflineEvent) => void;
+  onPresenceLastSeenUpdate?: (payload: PresenceLastSeenEvent) => void;
+  onPresenceVisibilityChange?: (payload: PresenceVisibilityChangeEvent) => void;
 }
 
 type AckResponse<T> = { success: boolean; data?: T; message?: string };
@@ -101,24 +193,56 @@ export const useMessageSocket = ({
   onMessageUpdated,
   onMessageDeleted,
   onMessageSeenUpdate,
+  onMessageReactionUpdate,
   onUserStatus,
   onUserStatusInit,
-}: UseMessageSocketOptions) => {
+  onPresenceSnapshot,
+  onUserOnline,
+  onUserOffline,
+  onUserHidden,
+  onUserVisibilityChange,
+  onPresenceOnline,
+  onPresenceOffline,
+  onPresenceLastSeenUpdate,
+  onPresenceVisibilityChange,
+}: UseMessageSocketOptions): MessageSocketHandle => {
   const socketRef = useRef<Socket | null>(null);
 
+  // Effect 1: initialize or reuse a shared socket. Only reconnect when token or base URL changes.
   useEffect(() => {
     const token = getAuthToken();
     if (!token) {
       return () => undefined;
     }
 
-    const socket = io(apiBaseUrl, {
-      auth: { token },
-      transports: ["websocket"],
-      autoConnect: true,
-    });
+    if (!sharedSocket) {
+      sharedSocket = io(apiBaseUrl, {
+        auth: { token },
+        transports: ["websocket"],
+        autoConnect: true,
+      });
+    }
 
-    socketRef.current = socket;
+    sharedSubscribers += 1;
+    socketRef.current = sharedSocket;
+
+    return () => {
+      sharedSubscribers = Math.max(0, sharedSubscribers - 1);
+      if (sharedSubscribers === 0 && sharedSocket) {
+        // Disconnect only when the last subscriber unmounts
+        sharedSocket.disconnect();
+        sharedSocket = null;
+      }
+      socketRef.current = null;
+    };
+  }, []);
+
+  // Effect 2: attach/detach listeners when handlers change, do NOT create/disconnect sockets here
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) {
+      return () => undefined;
+    }
 
     if (onIncomingMessage) {
       socket.on("message:new", onIncomingMessage);
@@ -144,12 +268,44 @@ export const useMessageSocket = ({
       socket.on("message:seen:update", onMessageSeenUpdate);
     }
 
+    if (onMessageReactionUpdate) {
+      socket.on("message:reaction:update", onMessageReactionUpdate);
+    }
+
     if (onUserStatus) {
       socket.on("user:status", onUserStatus);
     }
 
     if (onUserStatusInit) {
       socket.on("user:status:init", onUserStatusInit);
+    }
+
+    if (onPresenceSnapshot) {
+      socket.on("presence:snapshot", onPresenceSnapshot);
+    }
+    if (onUserOnline) {
+      socket.on("user:online", onUserOnline);
+    }
+    if (onUserOffline) {
+      socket.on("user:offline", onUserOffline);
+    }
+    if (onUserHidden) {
+      socket.on("user:hidden", onUserHidden);
+    }
+    if (onUserVisibilityChange) {
+      socket.on("user:visibilityChange", onUserVisibilityChange);
+    }
+    if (onPresenceOnline) {
+      socket.on("presence:online", onPresenceOnline);
+    }
+    if (onPresenceOffline) {
+      socket.on("presence:offline", onPresenceOffline);
+    }
+    if (onPresenceLastSeenUpdate) {
+      socket.on("presence:lastSeenUpdate", onPresenceLastSeenUpdate);
+    }
+    if (onPresenceVisibilityChange) {
+      socket.on("presence:visibilityChange", onPresenceVisibilityChange);
     }
 
     return () => {
@@ -171,22 +327,60 @@ export const useMessageSocket = ({
       if (onMessageSeenUpdate) {
         socket.off("message:seen:update", onMessageSeenUpdate);
       }
+      if (onMessageReactionUpdate) {
+        socket.off("message:reaction:update", onMessageReactionUpdate);
+      }
       if (onUserStatus) {
         socket.off("user:status", onUserStatus);
       }
       if (onUserStatusInit) {
         socket.off("user:status:init", onUserStatusInit);
       }
-      socket.disconnect();
-      socketRef.current = null;
+      if (onPresenceSnapshot) {
+        socket.off("presence:snapshot", onPresenceSnapshot);
+      }
+      if (onUserOnline) {
+        socket.off("user:online", onUserOnline);
+      }
+      if (onUserOffline) {
+        socket.off("user:offline", onUserOffline);
+      }
+      if (onUserHidden) {
+        socket.off("user:hidden", onUserHidden);
+      }
+      if (onUserVisibilityChange) {
+        socket.off("user:visibilityChange", onUserVisibilityChange);
+      }
+      if (onPresenceOnline) {
+        socket.off("presence:online", onPresenceOnline);
+      }
+      if (onPresenceOffline) {
+        socket.off("presence:offline", onPresenceOffline);
+      }
+      if (onPresenceLastSeenUpdate) {
+        socket.off("presence:lastSeenUpdate", onPresenceLastSeenUpdate);
+      }
+      if (onPresenceVisibilityChange) {
+        socket.off("presence:visibilityChange", onPresenceVisibilityChange);
+      }
     };
   }, [
     onIncomingMessage,
     onMessageSent,
+    onPresenceSnapshot,
+    onUserOnline,
+    onUserOffline,
+    onUserHidden,
+    onUserVisibilityChange,
+    onPresenceOnline,
+    onPresenceOffline,
+    onPresenceLastSeenUpdate,
+    onPresenceVisibilityChange,
     onMessagesRead,
     onMessageUpdated,
     onMessageDeleted,
     onMessageSeenUpdate,
+    onMessageReactionUpdate,
     onUserStatus,
     onUserStatusInit,
   ]);
@@ -199,13 +393,36 @@ export const useMessageSocket = ({
         return;
       }
 
-      socket.emit(event, payload, (response: AckResponse<T>) => {
-        if (response?.success) {
-          resolve((response.data as T) ?? ({} as T));
-        } else {
-          reject(new Error(response?.message ?? "Socket request failed"));
+      const timeout = setTimeout(() => {
+        reject(
+          new Error(
+            "Message sending timed out. Please check your connection and try again."
+          )
+        );
+      }, 30000);
+
+      try {
+        if (event === "message:send") {
+          console.log("CLIENT > sending payload:", payload);
         }
-      });
+        socket.emit(event, payload, (response: AckResponse<T>) => {
+          clearTimeout(timeout);
+          if (event === "message:send") {
+            console.log("CLIENT > received ACK:", response);
+            if (!response) {
+              console.error("CLIENT > ACK is undefined!");
+            }
+          }
+          if (response?.success) {
+            resolve((response.data as T) ?? ({} as T));
+          } else {
+            reject(new Error(response?.message ?? "Socket request failed"));
+          }
+        });
+      } catch (err) {
+        clearTimeout(timeout);
+        reject(err as Error);
+      }
     });
 
   const sendMessage = async (payload: {
@@ -232,5 +449,5 @@ export const useMessageSocket = ({
     editMessage,
     deleteMessage,
     emitSeen,
-  } as const;
+  };
 };

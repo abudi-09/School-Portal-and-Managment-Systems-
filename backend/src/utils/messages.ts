@@ -28,6 +28,8 @@ export interface MessageLike {
   type?: MessageType;
   fileUrl?: string;
   fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
   deleted?: boolean;
   editedAt?: DateLike;
   isEdited?: boolean;
@@ -70,6 +72,8 @@ export interface NormalizedMessage {
   type: MessageType;
   fileUrl?: string;
   fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
   deleted: boolean;
   editedAt?: string;
   isEdited?: boolean;
@@ -94,6 +98,7 @@ export interface NormalizedMessage {
   seenBy: string[];
   threadKey: string;
   editCount?: number;
+  reactions?: Array<{ emoji: string; users: string[] }>;
 }
 
 const toStringId = (value: ObjectIdLike): string => String(value);
@@ -237,9 +242,37 @@ export const normalizeMessage = (
     normalized.fileName = message.fileName as string;
   }
 
+  if ((message as any).mimeType) {
+    normalized.mimeType = (message as any).mimeType as string;
+  }
+
+  const size = (message as any).fileSize;
+  if (typeof size === "number" && !Number.isNaN(size)) {
+    normalized.fileSize = size as number;
+  }
+
   const editCount = (message as any).editCount;
   if (typeof editCount === "number" && !Number.isNaN(editCount)) {
     normalized.editCount = editCount;
+  }
+
+  const reactions = (message as any).reactions as
+    | Array<{ emoji?: string; userId?: string }>
+    | undefined;
+  if (Array.isArray(reactions) && reactions.length > 0) {
+    const grouped = new Map<string, Set<string>>();
+    reactions.forEach((r) => {
+      const e = (r.emoji ?? "").trim();
+      const u = (r.userId ?? "").trim();
+      if (!e || !u) return;
+      if (!grouped.has(e)) grouped.set(e, new Set());
+      grouped.get(e)!.add(u);
+    });
+    if (grouped.size > 0) {
+      normalized.reactions = Array.from(grouped.entries()).map(
+        ([emoji, users]) => ({ emoji, users: Array.from(users) })
+      );
+    }
   }
 
   return normalized;

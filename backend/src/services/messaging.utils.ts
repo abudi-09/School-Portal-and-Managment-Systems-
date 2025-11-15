@@ -32,7 +32,9 @@ export const ensureUsersExist = async (
   receiverId: Types.ObjectId
 ): Promise<{ sender: IUser; receiver: IUser }> => {
   const users = await User.find({ _id: { $in: [senderId, receiverId] } })
-    .select("firstName lastName email role status isActive")
+    .select(
+      "firstName lastName email role status isActive lastSeenAt privacy.hideOnlineStatus"
+    )
     .lean();
 
   const sender = users.find((item) => item._id?.equals(senderId));

@@ -1,25 +1,39 @@
 import { getAuthToken } from "@/lib/utils";
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+
+// Build API URLs robustly whether apiBaseUrl ends with /api or not.
+const apiUrl = (p: string) => {
+  const path = p.startsWith("/") ? p : `/${p}`;
+  const base = (apiBaseUrl || "").trim().replace(/\/$/, "");
+  if (!base) {
+    return `/api${path}`;
+  }
+  if (/\/api$/i.test(base)) {
+    return `${base}${path}`;
+  }
+  return `${base}/api${path}`;
+};
 
 const ensureRemoteApiBase = () => {
-  // Allow an explicit dev override to permit localhost when developing.
-  // Set VITE_ALLOW_LOCALHOST=true in .env to enable localhost during development.
+  // In development, allow missing API base and rely on Vite proxy (/api, /uploads).
+  const isDev = Boolean(import.meta.env.DEV);
+  if (isDev && !apiBaseUrl) return;
+
+  // In non-dev (or when explicitly set), validate the base.
   const allowLocal =
-    (import.meta.env.VITE_ALLOW_LOCALHOST as string) === "true" ||
-    Boolean(import.meta.env.DEV);
+    (import.meta.env.VITE_ALLOW_LOCALHOST as string) === "true";
   if (!apiBaseUrl) {
     throw new Error(
-      "VITE_API_BASE_URL is not set. Forwarding requires a remote API endpoint."
+      "VITE_API_BASE_URL is not set. Please configure it to your backend origin."
     );
   }
+
   const lower = apiBaseUrl.toLowerCase();
-  if (
-    (lower.includes("localhost") || lower.includes("127.0.0.1")) &&
-    !allowLocal
-  ) {
+  const isLocal = lower.includes("localhost") || lower.includes("127.0.0.1");
+  if (isLocal && !allowLocal && !isDev) {
     throw new Error(
-      "API base URL points to localhost. Forwarding requires a remote API endpoint (not localhost). Set VITE_ALLOW_LOCALHOST=true to allow localhost in development."
+      "API base URL points to localhost, which is not allowed in production. Set VITE_ALLOW_LOCALHOST=true to override."
     );
   }
 };
@@ -39,6 +53,8 @@ type MessageResponse = {
   type: "text" | "image" | "file" | "doc";
   fileUrl?: string;
   fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
   deleted: boolean;
   editedAt?: string;
   deliveredTo: string[];
@@ -51,7 +67,14 @@ type MessageResponse = {
     snippet: string;
   };
   replyToDeleted?: boolean;
+  reactions?: Array<{ emoji: string; users: string[] }>;
 };
+
+export interface PresenceDto {
+  visibleStatus: "online" | "offline";
+  lastSeenAt?: string;
+  hidden?: boolean;
+}
 
 export interface RecipientDto {
   id: string;
@@ -59,6 +82,7 @@ export interface RecipientDto {
   role: "admin" | "head" | "teacher";
   email?: string;
   online?: boolean;
+  presence?: PresenceDto;
 }
 
 export interface ContactSummaryDto {
@@ -97,7 +121,7 @@ export const fetchRecipients = async (
 ): Promise<{ recipients: RecipientDto[]; hasMore: boolean }> => {
   ensureRemoteApiBase();
   const response = await fetch(
-    `${apiBaseUrl}/api/messages/recipients?page=${page}&limit=${limit}`,
+    `${apiUrl("/messages/recipients")}?page=${page}&limit=${limit}`,
     {
       method: "GET",
       headers: authHeaders(),
@@ -112,7 +136,7 @@ export const fetchRecipients = async (
 
 export const fetchInbox = async (): Promise<ContactSummaryDto[]> => {
   ensureRemoteApiBase();
-  const response = await fetch(`${apiBaseUrl}/api/messages/inbox`, {
+  const response = await fetch(apiUrl("/messages/inbox"), {
     method: "GET",
     headers: authHeaders(),
   });
@@ -126,17 +150,38 @@ export const fetchThread = async (
   participantId: string
 ): Promise<{ participant: RecipientDto; messages: MessageResponse[] }> => {
   ensureRemoteApiBase();
-  const response = await fetch(
-    `${apiBaseUrl}/api/messages/thread/${participantId}`,
-    {
-      method: "GET",
-      headers: authHeaders(),
-    }
-  );
+  const response = await fetch(apiUrl(`/messages/thread/${participantId}`), {
+    method: "GET",
+    headers: authHeaders(),
+  });
   return handleResponse<{
     participant: RecipientDto;
     messages: MessageResponse[];
   }>(response);
+};
+
+export const fetchSavedThread = async (
+  q?: string
+): Promise<{ participant: RecipientDto; messages: MessageResponse[] }> => {
+  ensureRemoteApiBase();
+  const url =
+    q && q.trim().length > 0
+      ? `${apiUrl("/messages/saved")}?q=${encodeURIComponent(q.trim())}`
+      : apiUrl("/messages/saved");
+  const response = await fetch(url, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+  return handleResponse<{
+    participant: RecipientDto;
+    messages: MessageResponse[];
+  }>(response);
+};
+
+export const toAbsoluteFileUrl = (fileUrl?: string) => {
+  if (!fileUrl || !fileUrl.startsWith("/")) return fileUrl;
+  const base = apiBaseUrl.replace(/\/$/, "");
+  return `${base}${fileUrl}`;
 };
 
 export const sendMessage = async (
@@ -148,7 +193,7 @@ export const sendMessage = async (
   receiver: RecipientDto;
 }> => {
   ensureRemoteApiBase();
-  const response = await fetch(`${apiBaseUrl}/api/messages`, {
+  const response = await fetch(apiUrl("/messages"), {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ receiverId, content }),
@@ -169,14 +214,11 @@ export const forwardMessage = async (
   receiver: RecipientDto;
 }> => {
   ensureRemoteApiBase();
-  const response = await fetch(
-    `${apiBaseUrl}/api/messages/${messageId}/forward`,
-    {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({ receiverId }),
-    }
-  );
+  const response = await fetch(apiUrl(`/messages/${messageId}/forward`), {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ receiverId }),
+  });
   return handleResponse<{
     message: MessageResponse;
     sender: RecipientDto;
@@ -186,7 +228,7 @@ export const forwardMessage = async (
 
 export const markMessageRead = async (messageId: string) => {
   ensureRemoteApiBase();
-  const response = await fetch(`${apiBaseUrl}/api/messages/${messageId}/read`, {
+  const response = await fetch(apiUrl(`/messages/${messageId}/read`), {
     method: "PATCH",
     headers: authHeaders(),
   });
@@ -194,6 +236,36 @@ export const markMessageRead = async (messageId: string) => {
 };
 
 export type MessageDto = MessageResponse;
+
+export const reactToMessage = async (
+  messageId: string,
+  emoji: string
+): Promise<{
+  messageId: string;
+  threadKey: string;
+  reactions: Array<{ emoji: string; users: string[] }>;
+}> => {
+  ensureRemoteApiBase();
+  const response = await fetch(apiUrl(`/messages/${messageId}/react`), {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ emoji }),
+  });
+  return handleResponse<{
+    messageId: string;
+    threadKey: string;
+    reactions: Array<{ emoji: string; users: string[] }>;
+  }>(response);
+};
+
+export const saveMessage = async (messageId: string) => {
+  ensureRemoteApiBase();
+  const response = await fetch(apiUrl(`/messages/${messageId}/save`), {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  return handleResponse<{ saved: boolean }>(response);
+};
 
 export const uploadMessageFile = async (
   file: File
@@ -207,7 +279,7 @@ export const uploadMessageFile = async (
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${apiBaseUrl}/api/messages/upload`, {
+  const response = await fetch(apiUrl("/messages/upload"), {
     method: "POST",
     headers: (() => {
       const token = getAuthToken();
@@ -223,5 +295,104 @@ export const uploadMessageFile = async (
     size: number;
   }>(response);
 
-  return data;
+  // Convert backend-relative file paths to absolute URL using API base
+  const normalized = { ...data };
+  if (
+    typeof normalized.fileUrl === "string" &&
+    normalized.fileUrl.startsWith("/")
+  ) {
+    const base = apiBaseUrl.replace(/\/$/, "");
+    normalized.fileUrl = `${base}${normalized.fileUrl}`;
+  }
+
+  return normalized;
+};
+
+export type UploadProgressHandler = (loaded: number, total: number) => void;
+
+export const uploadMessageFileWithProgress = (
+  file: File,
+  onProgress?: UploadProgressHandler,
+  signal?: AbortSignal
+): {
+  promise: Promise<{
+    fileUrl: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+  }>;
+  cancel: () => void;
+} => {
+  const url = apiUrl("/messages/upload");
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const xhr = new XMLHttpRequest();
+  const promise = new Promise<{
+    fileUrl: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+  }>((resolve, reject) => {
+    xhr.open("POST", url, true);
+    const token = getAuthToken();
+    if (token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    }
+    if (onProgress && xhr.upload) {
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable) {
+          onProgress(evt.loaded, evt.total);
+        }
+      };
+    }
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 4) {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const parsed = JSON.parse(xhr.responseText) as ApiResponse<{
+              fileUrl: string;
+              fileName: string;
+              mimeType: string;
+              size: number;
+            }>;
+            if (!parsed.success || !parsed.data) {
+              reject(new Error(parsed.message || "Upload failed"));
+              return;
+            }
+            const data = parsed.data;
+            const base = apiBaseUrl.replace(/\/$/, "");
+            const absoluteUrl = data.fileUrl.startsWith("/")
+              ? `${base}${data.fileUrl}`
+              : data.fileUrl;
+            resolve({
+              fileUrl: absoluteUrl,
+              fileName: data.fileName,
+              mimeType: data.mimeType,
+              size: data.size,
+            });
+          } catch (e) {
+            reject(new Error("Invalid upload response"));
+          }
+        } else {
+          reject(new Error("Upload failed"));
+        }
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.onabort = () => reject(new Error("Upload canceled"));
+    xhr.send(formData);
+    if (signal) {
+      if (signal.aborted) {
+        xhr.abort();
+      } else {
+        signal.addEventListener("abort", () => xhr.abort());
+      }
+    }
+  });
+
+  return {
+    promise,
+    cancel: () => xhr.abort(),
+  };
 };

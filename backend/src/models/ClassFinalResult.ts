@@ -49,7 +49,7 @@ const entrySchema = new Schema<IRankingEntry>(
 
 const finalResultSchema = new Schema<IClassFinalResult>(
   {
-    classId: { type: String, required: true, index: true, lowercase: true },
+    classId: { type: String, required: true, lowercase: true },
     grade: { type: String, required: true },
     section: { type: String, required: true },
     status: {

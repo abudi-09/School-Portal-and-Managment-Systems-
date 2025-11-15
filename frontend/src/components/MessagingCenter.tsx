@@ -1254,9 +1254,25 @@ const MessagingCenter = ({
                                     href={msg.fileUrl}
                                     target="_blank"
                                     rel="noreferrer noopener"
-                                    className="inline-block rounded-md bg-background/50 px-2 py-0.5 text-xs"
+                                    className="inline-flex items-center gap-2 rounded-md bg-background/50 px-3 py-2 text-sm hover:bg-background/70 transition-colors"
                                   >
-                                    {msg.fileName ?? "Download file"}
+                                    {(() => {
+                                      const Icon = pickFileIcon(
+                                        msg.mimeType,
+                                        msg.fileName
+                                      );
+                                      return <Icon className="h-4 w-4" />;
+                                    })()}
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">
+                                        {msg.fileName ?? "File"}
+                                      </span>
+                                      {msg.fileSize ? (
+                                        <span className="text-xs text-muted-foreground">
+                                          {formatFileSize(msg.fileSize)}
+                                        </span>
+                                      ) : null}
+                                    </div>
                                   </a>
                                 )
                               ) : null}

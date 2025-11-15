@@ -195,7 +195,11 @@ export const initSocket = (server: http.Server): Server => {
           const senderRole = sender.role as MessageRole;
           const receiverRole = receiver.role as MessageRole;
 
-          if (!hierarchyAllows(senderRole, receiverRole)) {
+          // Allow self-messaging for Saved Messages
+          if (
+            !receiverId.equals(senderId) &&
+            !hierarchyAllows(senderRole, receiverRole)
+          ) {
             callback?.({
               success: false,
               message: "Messaging hierarchy violation",

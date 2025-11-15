@@ -216,7 +216,10 @@ type OutgoingMessagePayload = {
   replyToMessageId?: string;
 };
 
-const sortContacts = (items: ContactItem[], currentUserId?: string): ContactItem[] => {
+const sortContacts = (
+  items: ContactItem[],
+  currentUserId?: string
+): ContactItem[] => {
   return [...items].sort((a, b) => {
     // Prioritize Saved Messages (self-chat) at the top
     if (currentUserId) {

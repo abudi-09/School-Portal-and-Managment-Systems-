@@ -317,47 +317,6 @@ router.post(
       emitToUser(currentUser._id.toString(), "message:new", payload);
       emitToUser(currentUser._id.toString(), "message:sent", payload);
 
-      // If saving own message, "move" it by deleting the original
-      if (original.sender.toString() === currentUser._id.toString()) {
-        const messageId = original._id.toString();
-        const participants = original.participants?.map((p: any) => p.toString()) ?? [original.sender.toString(), original.receiver.toString()];
-
-        // Mark as deleted for everyone
-        await Message.updateOne(
-          { _id: original._id },
-          {
-            deleted: true,
-            isDeletedForEveryone: true,
-            deletedAt: new Date(),
-            content: "",
-            fileUrl: undefined,
-            fileName: undefined,
-            hiddenFor: participants,
-          }
-        );
-
-        // Flag replies as deleted
-        const affectedReplies = await flagRepliesForDeletedOriginal(original._id as Types.ObjectId);
-        if (affectedReplies.length > 0) {
-          affectedReplies.forEach((reply) => {
-            reply.replyToDeleted = true;
-            const normalizedReply = normalizeMessage(reply);
-            const replyParticipants = reply.participants?.map((participant: any) => participant.toString()) ?? [reply.sender.toString(), reply.receiver.toString()];
-            replyParticipants.forEach((participantId) =>
-              emitToUser(participantId, "message:update", normalizedReply)
-            );
-          });
-        }
-
-        // Emit delete event
-        const deletePayload = {
-          messageId,
-          threadKey: original.threadKey,
-          mode: "everyone",
-        };
-        participants.forEach((id) => emitToUser(id, "message:deleted", deletePayload));
-      }
-
       return res.status(201).json({ success: true, data: { saved: true } });
     } catch (error) {
       console.error("Failed to save message", error);
@@ -421,7 +380,10 @@ router.post(
 
       const receiverRole = receiver.role as MessageRole;
       // Allow self-messaging for Saved Messages
-      if (!receiverId.equals(sender._id) && !hierarchyAllows(senderRole, receiverRole)) {
+      if (
+        !receiverId.equals(sender._id) &&
+        !hierarchyAllows(senderRole, receiverRole)
+      ) {
         return res
           .status(403)
           .json({ success: false, message: "Messaging hierarchy violation" });
@@ -622,10 +584,14 @@ router.post(
       );
       const senderRole = currentUser.role as MessageRole;
       const receiverRole = receiver.role as MessageRole;
-      if (!receiverId.equals(currentUser._id) && !hierarchyAllows(senderRole, receiverRole)) {
+      if (
+        !receiverId.equals(currentUser._id) &&
+        !hierarchyAllows(senderRole, receiverRole)
+      ) {
         return res.status(403).json({
           success: false,
-          message: "Cannot forward a message to this recipient due to role restrictions",
+          message:
+            "Cannot forward a message to this recipient due to role restrictions",
         });
       }
 
@@ -920,7 +886,9 @@ router.get("/inbox", async (req: express.Request, res: express.Response) => {
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
     // Ensure Saved Messages contact exists even if there is no self-thread yet
-    const hasSavedContact = contacts.some((c) => c.user.id === currentId.toString());
+    const hasSavedContact = contacts.some(
+      (c) => c.user.id === currentId.toString()
+    );
     if (!hasSavedContact) {
       // Find latest self-message, if any, to attach as lastMessage
       const selfThreadKey = getThreadKey(currentId, currentId);

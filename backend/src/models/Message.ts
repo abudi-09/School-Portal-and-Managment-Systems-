@@ -3,7 +3,14 @@ import mongoose, { Document, Schema, Types } from "mongoose";
 export type MessageStatus = "read" | "unread";
 export type MessageRole = "admin" | "head" | "teacher";
 
-export type MessageType = "text" | "image" | "file" | "doc" | "audio" | "video";
+export type MessageType =
+  | "text"
+  | "image"
+  | "file"
+  | "doc"
+  | "audio"
+  | "video"
+  | "voice"; // distinct voice message (recorded inline)
 
 export type ReplyToMessageType =
   | "text"
@@ -65,6 +72,14 @@ export interface IMessage extends Document {
     emoji: string;
     userId: string;
   }>;
+  // Voice message specific metadata
+  voiceUrl?: string; // URL to stored voice audio
+  duration?: number; // total length seconds (preferred new field)
+  waveform?: number[]; // 0-100 amplitude samples (preferred new field)
+  isPlayed?: boolean; // whether receiver has played it
+  voiceDuration?: number; // seconds
+  voiceWaveform?: number[]; // normalized amplitude samples 0..1 * 100 or 0..255
+  voicePlayedBy?: string[]; // userIds who have played the voice message
   createdAt: Date;
   updatedAt: Date;
 }
@@ -115,7 +130,7 @@ const MessageSchema = new Schema<IMessage>(
     },
     type: {
       type: String,
-      enum: ["text", "image", "file", "doc", "audio", "video"],
+      enum: ["text", "image", "file", "doc", "audio", "video", "voice"],
       default: "text",
     },
     fileUrl: {
@@ -209,6 +224,33 @@ const MessageSchema = new Schema<IMessage>(
       type: String,
       required: true,
       index: true,
+    },
+    voiceDuration: {
+      type: Number,
+      min: 0,
+    },
+    voiceWaveform: {
+      type: [Number],
+      default: [],
+    },
+    voicePlayedBy: {
+      type: [String],
+      default: [],
+    },
+    voiceUrl: {
+      type: String,
+    },
+    duration: {
+      type: Number,
+      min: 0,
+    },
+    waveform: {
+      type: [Number],
+      default: [],
+    },
+    isPlayed: {
+      type: Boolean,
+      default: false,
     },
   },
   {

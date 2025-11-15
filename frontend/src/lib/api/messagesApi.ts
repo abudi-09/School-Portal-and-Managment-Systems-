@@ -50,7 +50,7 @@ type MessageResponse = {
   threadKey: string;
   senderRole: "admin" | "head" | "teacher";
   receiverRole: "admin" | "head" | "teacher";
-  type: "text" | "image" | "file" | "doc";
+  type: "text" | "image" | "file" | "doc" | "voice";
   fileUrl?: string;
   fileName?: string;
   mimeType?: string;
@@ -68,6 +68,9 @@ type MessageResponse = {
   };
   replyToDeleted?: boolean;
   reactions?: Array<{ emoji: string; users: string[] }>;
+  voiceDuration?: number;
+  voiceWaveform?: number[];
+  voicePlayedBy?: string[];
 };
 
 export interface PresenceDto {
@@ -205,6 +208,40 @@ export const sendMessage = async (
   }>(response);
 };
 
+export const sendVoiceMessage = async (
+  receiverId: string,
+  fileUrl: string,
+  fileName: string,
+  mimeType: string,
+  voiceDuration: number,
+  voiceWaveform: number[]
+): Promise<{
+  message: MessageResponse;
+  sender: RecipientDto;
+  receiver: RecipientDto;
+}> => {
+  ensureRemoteApiBase();
+  const payload = {
+    receiverId,
+    type: "voice",
+    fileUrl,
+    fileName,
+    mimeType,
+    voiceDuration,
+    voiceWaveform,
+  };
+  const response = await fetch(apiUrl("/messages"), {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<{
+    message: MessageResponse;
+    sender: RecipientDto;
+    receiver: RecipientDto;
+  }>(response);
+};
+
 export const forwardMessage = async (
   messageId: string,
   receiverId: string
@@ -229,6 +266,17 @@ export const forwardMessage = async (
 export const markMessageRead = async (messageId: string) => {
   ensureRemoteApiBase();
   const response = await fetch(apiUrl(`/messages/${messageId}/read`), {
+    method: "PATCH",
+    headers: authHeaders(),
+  });
+  return handleResponse<{ message: MessageResponse }>(response);
+};
+
+export const markVoicePlayed = async (
+  messageId: string
+): Promise<{ message: MessageResponse }> => {
+  ensureRemoteApiBase();
+  const response = await fetch(apiUrl(`/messages/${messageId}/voice-played`), {
     method: "PATCH",
     headers: authHeaders(),
   });

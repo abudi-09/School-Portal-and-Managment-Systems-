@@ -99,6 +99,9 @@ export interface NormalizedMessage {
   threadKey: string;
   editCount?: number;
   reactions?: Array<{ emoji: string; users: string[] }>;
+  voiceDuration?: number;
+  voiceWaveform?: number[];
+  voicePlayedBy?: string[];
 }
 
 const toStringId = (value: ObjectIdLike): string => String(value);
@@ -273,6 +276,22 @@ export const normalizeMessage = (
         ([emoji, users]) => ({ emoji, users: Array.from(users) })
       );
     }
+  }
+
+  // Voice metadata normalization
+  const voiceDuration = (message as any).voiceDuration;
+  if (typeof voiceDuration === "number" && voiceDuration > 0) {
+    normalized.voiceDuration = voiceDuration;
+  }
+  const voiceWaveform = (message as any).voiceWaveform as number[] | undefined;
+  if (Array.isArray(voiceWaveform) && voiceWaveform.length > 0) {
+    normalized.voiceWaveform = voiceWaveform.map((v) =>
+      typeof v === "number" && !Number.isNaN(v) ? v : 0
+    );
+  }
+  const voicePlayedBy = (message as any).voicePlayedBy as string[] | undefined;
+  if (Array.isArray(voicePlayedBy) && voicePlayedBy.length > 0) {
+    normalized.voicePlayedBy = voicePlayedBy.map((id) => String(id));
   }
 
   return normalized;

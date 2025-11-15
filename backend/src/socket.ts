@@ -282,6 +282,7 @@ export const initSocket = (server: http.Server): Server => {
                 doc: "Document",
                 audio: "Audio",
                 video: "Video",
+                voice: "Voice",
               };
               snippet = typeLabelMap[referencedType];
             }

@@ -23,6 +23,9 @@ import {
   Image as ImageIcon,
   Video,
   Smile,
+  Mic,
+  Pause,
+  Play,
 } from "lucide-react";
 import {
   Card,
@@ -74,7 +77,7 @@ export interface MessageItem {
   timestamp: string;
   timestampIso: string;
   status: "read" | "unread";
-  type: "text" | "image" | "file" | "doc";
+  type: "text" | "image" | "file" | "doc" | "voice";
   fileUrl?: string;
   fileName?: string;
   mimeType?: string;
@@ -95,6 +98,11 @@ export interface MessageItem {
   replyToDeleted?: boolean;
   isPending?: boolean;
   reactions?: Array<{ emoji: string; users: string[] }>;
+  voiceDuration?: number;
+  voiceWaveform?: number[]; // 0..1 normalized values
+  voicePlayedBy?: string[];
+  isUploadError?: boolean; // local only for retry display
+  isUploading?: boolean; // local pending state
 }
 
 export interface ContactItem {
@@ -180,6 +188,24 @@ const getInitials = (value: string) =>
     .slice(0, 2)
     .toUpperCase();
 
+// Resolve avatar source from several possible fields to be tolerant
+const getAvatarSrc = (
+  contact: ContactItem | Record<string, unknown> | undefined
+) => {
+  if (!contact) return undefined;
+  const c = contact as Record<string, unknown>;
+  return (
+    (c["avatarUrl"] as string | undefined) ||
+    (c["avatar"] as string | undefined) ||
+    ((c["profile"] as Record<string, unknown> | undefined)?.["avatar"] as
+      | string
+      | undefined) ||
+    (c["photo"] as string | undefined) ||
+    (c["picture"] as string | undefined) ||
+    undefined
+  );
+};
+
 const formatRoleLabel = (role: UserRole) => {
   switch (role) {
     case "admin":
@@ -214,6 +240,9 @@ const formatFileSize = (size?: number) => {
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / (1024 * 1024)).toFixed(2)} MB`;
 };
+
+// Sidebar collapse state: used on small screens to toggle visibility
+const SIDEBAR_COLLAPSED_WIDTH = 64; // px when collapsed
 
 const isImageMime = (mime?: string) => {
   if (!mime) return false;
@@ -393,6 +422,238 @@ const MessagingCenter = ({
     null
   );
   const reactionEmojis = ["❤️", "👍", "😂", "😢", "😡", "🔥", "🎉"];
+  // Voice recording & playback state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordCanceled, setRecordCanceled] = useState(false);
+  const [recordStartX, setRecordStartX] = useState<number | null>(null);
+  const [pendingVoiceBlob, setPendingVoiceBlob] = useState<Blob | null>(null);
+  const [pendingVoiceDuration, setPendingVoiceDuration] = useState<number>(0);
+  const [pendingVoiceWaveform, setPendingVoiceWaveform] = useState<number[]>(
+    []
+  );
+  const [currentPlayingVoiceId, setCurrentPlayingVoiceId] = useState<
+    string | null
+  >(null);
+  const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const cancelThreshold = 80; // px slide left to cancel
+
+  const formatVoiceDuration = (seconds?: number) => {
+    if (!seconds || Number.isNaN(seconds)) return "0:00";
+    const s = Math.max(0, Math.round(seconds));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${r.toString().padStart(2, "0")}`;
+  };
+
+  // Lazy import hook to avoid SSR/undefined devices issues
+  // Voice recorder hook reference (dynamic import). Typed as unknown then narrowed.
+  const voiceRecorderRef = useRef<{
+    start: () => Promise<void>;
+    stop: () => Promise<void>;
+    cancel: () => void;
+    duration?: number;
+  } | null>(null);
+  const [pendingVoiceMessage, setPendingVoiceMessage] =
+    useState<MessageItem | null>(null);
+  const autoSendVoice = true;
+  useEffect(() => {
+    import("@/hooks/useVoiceRecorder").then((mod) => {
+      voiceRecorderRef.current = mod.useVoiceRecorder({
+        onData: (blob: Blob, duration: number, waveform: number[]) => {
+          setPendingVoiceBlob(blob);
+          setPendingVoiceDuration(duration);
+          setPendingVoiceWaveform(waveform);
+          setIsRecording(false);
+          setRecordCanceled(false);
+        },
+        onError: (err: Error) => {
+          console.error("Voice recorder error", err);
+        },
+      });
+    });
+  }, []);
+
+  const startVoiceRecording = async () => {
+    if (!voiceRecorderRef.current) return;
+    setPendingVoiceBlob(null);
+    setPendingVoiceDuration(0);
+    setPendingVoiceWaveform([]);
+    setRecordCanceled(false);
+    try {
+      await voiceRecorderRef.current.start();
+      setIsRecording(true);
+    } catch (e) {
+      console.error("Failed to start recording", e);
+      setIsRecording(false);
+    }
+  };
+
+  const stopVoiceRecording = async () => {
+    if (!voiceRecorderRef.current) return;
+    try {
+      await voiceRecorderRef.current.stop();
+    } catch (e) {
+      // ignore stop error
+    }
+  };
+
+  const cancelVoiceRecording = () => {
+    if (!voiceRecorderRef.current) return;
+    voiceRecorderRef.current.cancel();
+    setRecordCanceled(true);
+    setIsRecording(false);
+    setPendingVoiceBlob(null);
+    setPendingVoiceDuration(0);
+    setPendingVoiceWaveform([]);
+  };
+
+  const handleSendVoice = async () => {
+    if (!pendingVoiceBlob || !selectedConversationId || !onSendMessage) return;
+    // Upload voice blob using existing file upload logic
+    const voiceFile = new File([pendingVoiceBlob], `voice-${Date.now()}.webm`, {
+      type: pendingVoiceBlob.type || "audio/webm",
+    });
+    // Create local placeholder
+    const placeholderId = `pending-voice-${Date.now()}`;
+    const objectUrl = URL.createObjectURL(voiceFile);
+    const placeholder: MessageItem = {
+      id: placeholderId,
+      senderId: currentUserId || "me",
+      senderRole: currentUserRole,
+      receiverId: selectedConversationId,
+      receiverRole: selectedContact?.role || currentUserRole,
+      content: "",
+      timestamp: new Date().toLocaleTimeString(),
+      timestampIso: new Date().toISOString(),
+      status: "unread",
+      type: "voice",
+      fileUrl: objectUrl,
+      fileName: voiceFile.name,
+      mimeType: voiceFile.type,
+      fileSize: voiceFile.size,
+      deleted: false,
+      deliveredTo: [],
+      seenBy: [],
+      isPending: true,
+      isUploading: true,
+      voiceDuration: pendingVoiceDuration,
+      voiceWaveform: pendingVoiceWaveform,
+      voicePlayedBy: [],
+    };
+    setPendingVoiceMessage(placeholder);
+    const { uploadMessageFileWithProgress } = await import(
+      "@/lib/api/messagesApi"
+    );
+    const { sendVoiceMessage } = await import("@/lib/api/messagesApi");
+    let uploaded;
+    try {
+      const { promise } = uploadMessageFileWithProgress(voiceFile);
+      uploaded = await promise;
+    } catch (e) {
+      console.error("Voice upload failed", e);
+      toast({ title: "Voice message failed to send." });
+      setPendingVoiceMessage((prev) =>
+        prev ? { ...prev, isUploading: false, isUploadError: true } : prev
+      );
+      return;
+    }
+    try {
+      await sendVoiceMessage(
+        selectedConversationId,
+        uploaded.fileUrl,
+        uploaded.fileName,
+        uploaded.mimeType,
+        pendingVoiceDuration,
+        pendingVoiceWaveform
+      );
+      setPendingVoiceBlob(null);
+      setPendingVoiceDuration(0);
+      setPendingVoiceWaveform([]);
+      // Remove placeholder after short delay (server will emit real message)
+      setTimeout(() => setPendingVoiceMessage(null), 1200);
+    } catch (e) {
+      console.error("Send voice message failed", e);
+      toast({ title: "Voice message failed to send." });
+      setPendingVoiceMessage((prev) =>
+        prev ? { ...prev, isUploading: false, isUploadError: true } : prev
+      );
+    }
+  };
+
+  const handlePlayVoice = async (message: MessageItem) => {
+    if (!message.fileUrl) return;
+    // Pause previous
+    if (currentPlayingVoiceId && currentPlayingVoiceId !== message.id) {
+      const prev = audioRefs.current.get(currentPlayingVoiceId);
+      if (prev) {
+        prev.pause();
+      }
+    }
+    let audio = audioRefs.current.get(message.id);
+    if (!audio) {
+      audio = new Audio(message.fileUrl);
+      audioRefs.current.set(message.id, audio);
+      audio.onended = () => {
+        if (currentPlayingVoiceId === message.id) {
+          setCurrentPlayingVoiceId(null);
+        }
+      };
+      // Mark played if first time
+      if (
+        currentUserId &&
+        !message.voicePlayedBy?.includes(currentUserId) &&
+        message.senderId !== currentUserId
+      ) {
+        try {
+          const { markVoicePlayed } = await import("@/lib/api/messagesApi");
+          await markVoicePlayed(message.id);
+        } catch (e) {
+          console.error("Failed to mark voice played", e);
+        }
+      }
+    }
+    if (currentPlayingVoiceId === message.id) {
+      // Currently playing -> pause
+      audio.pause();
+      setCurrentPlayingVoiceId(null);
+    } else {
+      try {
+        await audio.play();
+        setCurrentPlayingVoiceId(message.id);
+      } catch (e) {
+        console.error("Play failed", e);
+      }
+    }
+  };
+
+  // Remove pending voice placeholder once a real voice message from self appears
+  useEffect(() => {
+    if (!pendingVoiceMessage || !pendingVoiceMessage.isPending) return;
+    const realVoice = messages.find(
+      (m) =>
+        m.type === "voice" &&
+        !m.isPending &&
+        m.senderId === pendingVoiceMessage.senderId &&
+        Math.abs(
+          new Date(m.timestampIso).getTime() -
+            new Date(pendingVoiceMessage.timestampIso).getTime()
+        ) < 15000 &&
+        Math.abs(
+          (m.voiceDuration || 0) - (pendingVoiceMessage.voiceDuration || 0)
+        ) < 2
+    );
+    if (realVoice) {
+      setPendingVoiceMessage(null);
+    }
+  }, [messages, pendingVoiceMessage]);
+
+  // Auto send when recording completes if enabled
+  useEffect(() => {
+    if (autoSendVoice && pendingVoiceBlob && !isRecording && !recordCanceled) {
+      handleSendVoice();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingVoiceBlob, isRecording, recordCanceled]);
 
   const { toast } = useToast();
 
@@ -510,6 +771,7 @@ const MessagingCenter = ({
   }, [selectedContact, currentUserId]);
 
   const [savedSearch, setSavedSearch] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   useEffect(() => {
     if (!isSavedConversation) return;
     if (!onSearchSavedMessages) return;
@@ -1003,10 +1265,52 @@ const MessagingCenter = ({
             </Button>
           ) : null}
         </header>
-        <div className="grid gap-6 md:grid-cols-[320px,1fr]">
+        <div className="grid gap-6 md:grid-cols-[320px,1fr] sm:grid-cols-[240px,1fr] lg:grid-cols-[360px,1fr]">
           <Card className="h-fit md:sticky md:top-24">
             <CardHeader>
-              <CardTitle>{listTitle}</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>{listTitle}</CardTitle>
+                <div className="sm:hidden">
+                  <button
+                    type="button"
+                    aria-label={
+                      sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                    }
+                    onClick={() => setSidebarCollapsed((s) => !s)}
+                    className="p-1 rounded hover:bg-muted/10"
+                  >
+                    {sidebarCollapsed ? (
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M15 19l-7-7 7-7"
+                        />
+                      </svg>
+                    ) : (
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
               {listDescription ? (
                 <CardDescription>{listDescription}</CardDescription>
               ) : null}
@@ -1061,9 +1365,9 @@ const MessagingCenter = ({
                       >
                         <div className="flex items-start gap-3">
                           <Avatar className="h-12 w-12 border border-border">
-                            {contact.avatarUrl ? (
+                            {getAvatarSrc(contact) ? (
                               <AvatarImage
-                                src={contact.avatarUrl}
+                                src={String(getAvatarSrc(contact))}
                                 alt={contact.name}
                               />
                             ) : null}
@@ -1075,33 +1379,37 @@ const MessagingCenter = ({
                               )}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
-                              <p className="font-medium">{contact.name}</p>
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <span
-                                  className={cn(
-                                    "h-2 w-2 rounded-full",
-                                    online ? "bg-green-500" : "bg-gray-400"
-                                  )}
-                                />
-                                <span>{statusLabel}</span>
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">
+                                  {contact.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatRoleLabel(contact.role)}
+                                </p>
+                              </div>
+                              <div className="flex flex-col items-end">
+                                <span className="text-xs text-muted-foreground">
+                                  {lastMessage
+                                    ? lastMessage.timestamp
+                                    : statusLabel}
+                                </span>
+                                {contact.unreadCount ? (
+                                  <span className="mt-1 inline-flex items-center justify-center rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-medium text-white">
+                                    {contact.unreadCount}
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                              {formatRoleLabel(contact.role)}
-                            </p>
                             {lastMessage ? (
-                              <div className="mt-1 text-xs">
+                              <div className="mt-1 text-xs text-muted-foreground">
                                 <p className="truncate">
                                   {lastMessage.content}
                                 </p>
-                                <p className="text-muted-foreground">
-                                  {lastMessage.timestamp}
-                                </p>
                               </div>
                             ) : (
-                              <p className="text-xs text-muted-foreground">
+                              <p className="mt-1 text-xs text-muted-foreground">
                                 No messages yet
                               </p>
                             )}
@@ -1125,10 +1433,10 @@ const MessagingCenter = ({
               <>
                 <CardHeader className="border-b border-border pb-4">
                   <div className="flex items-center gap-3">
-                    <Avatar className="h-12 w-12 border border-border">
-                      {selectedContact.avatarUrl ? (
+                    <Avatar className="min-w-[48px] min-h-[48px] h-12 w-12 border border-border">
+                      {getAvatarSrc(selectedContact) ? (
                         <AvatarImage
-                          src={selectedContact.avatarUrl}
+                          src={String(getAvatarSrc(selectedContact))}
                           alt={selectedContact.name}
                         />
                       ) : null}
@@ -1247,33 +1555,90 @@ const MessagingCenter = ({
                                           {formatFileSize(msg.fileSize)}
                                         </span>
                                       ) : null}
+                                      <a
+                                        href={msg.fileUrl}
+                                        download={msg.fileName || true}
+                                        target="_blank"
+                                        rel="noreferrer noopener"
+                                        className="text-xs underline hover:no-underline"
+                                      >
+                                        Download
+                                      </a>
                                     </div>
                                   </a>
+                                ) : msg.mimeType?.startsWith("video/") ||
+                                  msg.type === "video" ? (
+                                  <div className="inline-block rounded-md">
+                                    <video
+                                      src={msg.fileUrl}
+                                      controls
+                                      className="max-h-28 w-auto rounded-md"
+                                      preload="metadata"
+                                    />
+                                    <div className="mt-1 text-[11px] text-muted-foreground flex items-center gap-2">
+                                      <span className="font-medium">
+                                        {msg.fileName ?? "Video"}
+                                      </span>
+                                      {msg.fileSize ? (
+                                        <span>
+                                          {formatFileSize(msg.fileSize)}
+                                        </span>
+                                      ) : null}
+                                      <a
+                                        href={msg.fileUrl}
+                                        download={msg.fileName || true}
+                                        target="_blank"
+                                        rel="noreferrer noopener"
+                                        className="text-xs underline hover:no-underline"
+                                      >
+                                        Download
+                                      </a>
+                                    </div>
+                                  </div>
                                 ) : (
-                                  <a
-                                    href={msg.fileUrl}
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                    className="inline-flex items-center gap-2 rounded-md bg-background/50 px-3 py-2 text-sm hover:bg-background/70 transition-colors"
-                                  >
+                                  <div className="inline-flex items-center gap-3 rounded-lg border border-border bg-background/30 px-3 py-2 hover:bg-background/50 transition-colors">
                                     {(() => {
                                       const Icon = pickFileIcon(
                                         msg.mimeType,
                                         msg.fileName
                                       );
-                                      return <Icon className="h-4 w-4" />;
+                                      return (
+                                        <Icon className="h-5 w-5 text-muted-foreground" />
+                                      );
                                     })()}
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium text-sm truncate">
                                         {msg.fileName ?? "File"}
-                                      </span>
+                                      </div>
                                       {msg.fileSize ? (
-                                        <span className="text-xs text-muted-foreground">
+                                        <div className="text-xs text-muted-foreground">
                                           {formatFileSize(msg.fileSize)}
-                                        </span>
+                                        </div>
                                       ) : null}
                                     </div>
-                                  </a>
+                                    <a
+                                      href={msg.fileUrl}
+                                      download={msg.fileName || true}
+                                      target="_blank"
+                                      rel="noreferrer noopener"
+                                      className="p-1 rounded hover:bg-background/70 transition-colors"
+                                      title="Download"
+                                    >
+                                      <svg
+                                        className="h-4 w-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                        />
+                                      </svg>
+                                    </a>
+                                  </div>
                                 )
                               ) : null}
                               {msg.content ? (
@@ -1296,7 +1661,10 @@ const MessagingCenter = ({
                           {emptyStateMessage}
                         </p>
                       ) : (
-                        messages.map((message) => {
+                        (pendingVoiceMessage
+                          ? [...messages, pendingVoiceMessage]
+                          : messages
+                        ).map((message) => {
                           const isSelf =
                             message.senderId === currentUserId ||
                             (!currentUserId &&
@@ -1417,6 +1785,135 @@ const MessagingCenter = ({
                                             </p>
                                           </div>
                                         </button>
+                                      ) : null}
+                                      {/* Voice message rendering */}
+                                      {message.type === "voice" &&
+                                      message.fileUrl ? (
+                                        <div
+                                          className={cn(
+                                            "flex items-center gap-3",
+                                            isSelf
+                                              ? "justify-end"
+                                              : "justify-start"
+                                          )}
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handlePlayVoice(message)
+                                            }
+                                            className={cn(
+                                              "h-10 w-10 rounded-full flex items-center justify-center border border-border",
+                                              currentPlayingVoiceId ===
+                                                message.id
+                                                ? "bg-primary text-primary-foreground"
+                                                : "bg-background text-muted-foreground hover:text-foreground"
+                                            )}
+                                            aria-label={
+                                              currentPlayingVoiceId ===
+                                              message.id
+                                                ? "Pause voice message"
+                                                : "Play voice message"
+                                            }
+                                          >
+                                            {currentPlayingVoiceId ===
+                                            message.id ? (
+                                              <Pause className="h-5 w-5" />
+                                            ) : (
+                                              <Play className="h-5 w-5" />
+                                            )}
+                                          </button>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-1">
+                                              {(message.voiceWaveform &&
+                                              message.voiceWaveform.length > 0
+                                                ? message.voiceWaveform
+                                                : Array.from(
+                                                    { length: 32 },
+                                                    () => 0.2
+                                                  )
+                                              ).map((v, i) => (
+                                                <span
+                                                  key={i}
+                                                  className="inline-block rounded bg-primary/40"
+                                                  style={{
+                                                    width: "2px",
+                                                    height: `${Math.max(
+                                                      8,
+                                                      Math.round(v * 32)
+                                                    )}px`,
+                                                    opacity: 0.9,
+                                                  }}
+                                                />
+                                              ))}
+                                            </div>
+                                            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                                              <span>
+                                                {formatVoiceDuration(
+                                                  message.voiceDuration
+                                                )}
+                                              </span>
+                                              {!message.voicePlayedBy?.includes(
+                                                currentUserId || ""
+                                              ) &&
+                                              message.senderId !==
+                                                currentUserId ? (
+                                                <span
+                                                  className="h-2 w-2 rounded-full bg-blue-500"
+                                                  title="Unplayed"
+                                                />
+                                              ) : null}
+                                              {message.fileName ? (
+                                                <span className="truncate max-w-[140px]">
+                                                  {message.fileName}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                      {message.type === "voice" &&
+                                      message.isPending &&
+                                      message.isUploading ? (
+                                        <div className="text-[11px] italic text-muted-foreground ml-12">
+                                          Uploading…
+                                        </div>
+                                      ) : null}
+                                      {message.type === "voice" &&
+                                      message.isPending &&
+                                      message.isUploadError ? (
+                                        <div className="flex items-center gap-2 text-[11px] ml-12">
+                                          <span className="text-red-600">
+                                            Failed
+                                          </span>
+                                          <button
+                                            type="button"
+                                            className="rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700"
+                                            onClick={() => {
+                                              if (pendingVoiceBlob) {
+                                                setPendingVoiceMessage(null);
+                                                setPendingVoiceDuration(
+                                                  message.voiceDuration || 0
+                                                );
+                                                setPendingVoiceWaveform(
+                                                  message.voiceWaveform || []
+                                                );
+                                                handleSendVoice();
+                                              }
+                                            }}
+                                          >
+                                            Retry
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="rounded bg-muted px-2 py-0.5 hover:bg-muted/70"
+                                            onClick={() =>
+                                              setPendingVoiceMessage(null)
+                                            }
+                                          >
+                                            Dismiss
+                                          </button>
+                                        </div>
                                       ) : null}
                                       {/* File / image rendering */}
                                       {message.fileUrl ? (
@@ -1615,6 +2112,18 @@ const MessagingCenter = ({
                                     Text
                                   </ContextMenuItem>
                                 ) : null}
+                                {message.type === "voice" && message.fileUrl ? (
+                                  <ContextMenuItem
+                                    onClick={() => {
+                                      navigator.clipboard
+                                        .writeText(message.fileUrl!)
+                                        .catch(() => {});
+                                    }}
+                                  >
+                                    <Clipboard className="mr-2 h-4 w-4" /> Copy
+                                    Voice Link
+                                  </ContextMenuItem>
+                                ) : null}
                                 <ContextMenuItem
                                   onClick={() => handleForwardMessage(message)}
                                 >
@@ -1788,6 +2297,69 @@ const MessagingCenter = ({
                         >
                           <Paperclip className="h-4 w-4" />
                         </button>
+                        {/* Voice recording hold-to-record button */}
+                        <button
+                          type="button"
+                          aria-label={
+                            isRecording
+                              ? "Recording..."
+                              : "Hold to record voice message"
+                          }
+                          className={cn(
+                            "relative flex items-center justify-center rounded-full p-2 transition-colors",
+                            isRecording
+                              ? "bg-red-600 text-white"
+                              : "text-muted-foreground hover:text-foreground"
+                          )}
+                          onPointerDown={(e) => {
+                            if (e.button !== 0) return; // left click only
+                            setRecordStartX(e.clientX);
+                            startVoiceRecording();
+                          }}
+                          onPointerMove={(e) => {
+                            if (!isRecording || recordStartX === null) return;
+                            const delta = e.clientX - recordStartX;
+                            if (delta < -cancelThreshold) {
+                              cancelVoiceRecording();
+                            }
+                          }}
+                          onPointerUp={async () => {
+                            if (recordCanceled) return; // already canceled
+                            if (isRecording) {
+                              await stopVoiceRecording();
+                            } else if (pendingVoiceBlob) {
+                              await handleSendVoice();
+                            }
+                            setRecordStartX(null);
+                          }}
+                          onPointerLeave={async () => {
+                            // If pointer leaves while recording treat as release
+                            if (isRecording && !recordCanceled) {
+                              await stopVoiceRecording();
+                              setRecordStartX(null);
+                            }
+                          }}
+                        >
+                          {isRecording ? (
+                            <Mic className="h-4 w-4 animate-pulse" />
+                          ) : (
+                            <Mic className="h-4 w-4" />
+                          )}
+                        </button>
+                        {isRecording ? (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className="font-medium">Recording</span>
+                            <span className="tabular-nums">
+                              {formatVoiceDuration(
+                                voiceRecorderRef.current?.duration || 0
+                              )}
+                            </span>
+                            <span className="text-[10px]">
+                              Slide left to cancel
+                            </span>
+                          </div>
+                        ) : null}
+                        {/* Auto-send enabled: intermediate send UI removed */}
                         <button
                           type="button"
                           ref={emojiToggleRef}

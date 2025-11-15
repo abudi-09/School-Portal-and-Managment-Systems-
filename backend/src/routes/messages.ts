@@ -1,10 +1,8 @@
 import express from "express";
 import { body, param, validationResult } from "express-validator";
 import mongoose, { Types } from "mongoose";
-import fs from "fs";
-import path from "path";
+// Note: no local file system writes for uploads
 import multer from "multer";
-import { randomBytes } from "crypto";
 import { env } from "../config/env";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
 import Message, {
@@ -32,6 +30,8 @@ import {
   getPresenceForUser,
   isVisibleOnline,
 } from "../services/presence.service";
+import cloudinary, { isCloudinaryConfigured } from "../config/cloudinary";
+import { generateWaveform } from "../utils/generateWaveform";
 
 const mapPresenceDto = (
   user: Pick<IUser, "_id" | "lastSeenAt" | "privacy">
@@ -58,34 +58,8 @@ const router = express.Router();
 
 router.use(authMiddleware, authorizeRoles("admin", "head", "teacher"));
 
-const uploadsDir = path.join(__dirname, "..", "..", "uploads");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-// Store message attachments under /uploads/messages for organization
-const uploadsMessagesDir = path.join(uploadsDir, "messages");
-if (!fs.existsSync(uploadsMessagesDir)) {
-  fs.mkdirSync(uploadsMessagesDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (
-    _req: express.Request,
-    _file: Express.Multer.File,
-    cb: (error: Error | null, destination: string) => void
-  ) => {
-    cb(null, uploadsMessagesDir);
-  },
-  filename: (
-    _req: express.Request,
-    file: Express.Multer.File,
-    cb: (error: Error | null, fileName: string) => void
-  ) => {
-    const unique = randomBytes(8).toString("hex");
-    const extension = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${unique}${extension}`);
-  },
-});
+// Use memory storage to avoid writing files to local disk
+const storage = multer.memoryStorage();
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
@@ -94,6 +68,12 @@ const ALLOWED_MIME_TYPES = new Set([
   "video/mp4",
   "video/webm",
   "video/quicktime",
+  // common audio types
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/ogg",
+  "audio/wav",
+  "audio/webm",
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -122,6 +102,96 @@ const upload = multer({
 });
 
 router.post(
+  "/send-voice",
+  upload.single("voice"),
+  async (req: express.Request, res: express.Response) => {
+    const currentUser = req.user as IUser;
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Authentication required" });
+    }
+    const receiverIdRaw = req.body.receiverId as string | undefined;
+    if (!receiverIdRaw || !Types.ObjectId.isValid(receiverIdRaw)) {
+      return res.status(400).json({ success: false, message: "receiverId required" });
+    }
+    const receiver = await User.findById(receiverIdRaw);
+    if (!receiver) {
+      return res.status(404).json({ success: false, message: "Receiver not found" });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No voice file uploaded" });
+    }
+    const voiceFile = req.file as Express.Multer.File;
+    const allowedVoice = new Set(["audio/webm", "audio/mp3", "audio/mpeg"]);
+    if (!allowedVoice.has(voiceFile.mimetype)) {
+      return res.status(400).json({ success: false, message: "Unsupported voice mime type" });
+    }
+    if (!isCloudinaryConfigured) {
+      return res.status(500).json({ success: false, message: "Cloudinary not configured" });
+    }
+    let uploadResult: any;
+    try {
+      uploadResult = await new Promise((resolve, reject) => {
+        const cloudFolder = `${(env.cloudinary?.avatarFolder || "pathways")}/voices`;
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            resource_type: "auto",
+            folder: cloudFolder,
+            filename_override: voiceFile.originalname,
+          },
+          (error, result) => {
+            if (error || !result) return reject(error || new Error("Cloudinary upload failed"));
+            resolve(result);
+          }
+        );
+        stream.end(voiceFile.buffer);
+      });
+    } catch (err) {
+      console.error("Voice upload error", err);
+      return res.status(500).json({ success: false, message: "Failed to upload voice" });
+    }
+    // Generate waveform & duration
+    const { waveform, duration, error } = await generateWaveform(voiceFile.buffer);
+    const messageDoc = new Message({
+      sender: currentUser._id,
+      receiver: receiver._id,
+      participants: [currentUser._id, receiver._id],
+      senderRole: currentUser.role,
+      receiverRole: receiver.role,
+      content: "",
+      status: "unread",
+      type: "voice",
+      fileUrl: uploadResult.secure_url,
+      fileName: voiceFile.originalname,
+      mimeType: voiceFile.mimetype,
+      fileSize: voiceFile.size || uploadResult.bytes,
+      deleted: false,
+      voiceDuration: duration ?? undefined,
+      voiceWaveform: waveform,
+      voicePlayedBy: [],
+      voiceUrl: uploadResult.secure_url,
+      duration: duration ?? undefined,
+      waveform,
+      isPlayed: false,
+    } as Partial<IMessage>);
+    await messageDoc.save();
+    const normalized = normalizeMessage(messageDoc);
+    const payload = {
+      messageId: (messageDoc._id as any).toString(),
+      voiceUrl: uploadResult.secure_url,
+      duration,
+      waveform,
+      timestamp: messageDoc.createdAt.toISOString(),
+      ...(error ? { metaError: "waveform_generation_failed" } : {}),
+      message: normalized,
+    };
+    // Emit to participants
+    emitToUser(currentUser._id.toString(), "message:sendVoice", payload);
+    emitToUser(receiver._id.toString(), "message:sendVoice", payload);
+    return res.status(201).json({ success: true, ...payload });
+  }
+);
+
+router.patch(
   "/:id/react",
   [param("id").isMongoId().withMessage("Invalid message identifier")],
   async (req: express.Request, res: express.Response) => {
@@ -297,6 +367,13 @@ router.post(
         deliveredTo: [currentUser._id.toString()],
         seenBy: [currentUser._id.toString()],
         status: "read",
+        ...(original.type === "voice"
+          ? {
+              voiceDuration: (original as any).voiceDuration,
+              voiceWaveform: (original as any).voiceWaveform,
+              voicePlayedBy: [currentUser._id.toString()],
+            }
+          : {}),
       });
 
       const payload = {
@@ -334,7 +411,7 @@ router.post(
       .withMessage("receiverId must be a valid identifier"),
     body("type")
       .optional()
-      .isIn(["text", "image", "file", "doc", "audio", "video"])
+      .isIn(["text", "image", "file", "doc", "audio", "video", "voice"])
       .withMessage("Invalid message type"),
     body("content")
       .optional()
@@ -345,6 +422,8 @@ router.post(
     body("fileUrl").optional().isString(),
     body("fileName").optional().isString(),
     body("replyToMessageId").optional().isMongoId(),
+    body("voiceDuration").optional().isNumeric(),
+    body("voiceWaveform").optional().isArray(),
   ],
   async (req: express.Request, res: express.Response) => {
     const errors = validationResult(req);
@@ -405,6 +484,25 @@ router.post(
         });
       }
 
+      if (type === "voice") {
+        const durationRaw = req.body.voiceDuration;
+        const duration =
+          typeof durationRaw === "number" ? durationRaw : Number(durationRaw);
+        if (!duration || Number.isNaN(duration) || duration <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: "voiceDuration must be a positive number",
+          });
+        }
+        const waveformRaw = req.body.voiceWaveform;
+        if (!Array.isArray(waveformRaw) || waveformRaw.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: "voiceWaveform must be a non-empty array",
+          });
+        }
+      }
+
       // If replying, validate referenced message exists and belongs to same thread
       let replyToId: mongoose.Types.ObjectId | undefined;
       let replyToMeta: IMessage["replyToMeta"] | null = null;
@@ -452,6 +550,7 @@ router.post(
             doc: "Document",
             audio: "Audio",
             video: "Video",
+            voice: "Voice",
           };
           snippet = typeLabelMap[referencedType];
         }
@@ -495,6 +594,16 @@ router.post(
         messagePayload.replyToDeleted = replyToDeleted;
       } else {
         (messagePayload as any).replyToMeta = null; // enforce null for non-replies
+      }
+
+      if (type === "voice") {
+        (messagePayload as any).voiceDuration = Number(req.body.voiceDuration);
+        (messagePayload as any).voiceWaveform = Array.isArray(
+          req.body.voiceWaveform
+        )
+          ? req.body.voiceWaveform.map((v: any) => Number(v) || 0)
+          : [];
+        (messagePayload as any).voicePlayedBy = [sender._id.toString()];
       }
 
       const message = await Message.create(messagePayload);
@@ -630,6 +739,7 @@ router.post(
         type: original.type ?? "text",
         fileUrl: (original as any).fileUrl,
         fileName: (original as any).fileName,
+        mimeType: (original as any).mimeType,
         ...(forwardedReplyMeta
           ? {
               replyToMeta: forwardedReplyMeta,
@@ -645,6 +755,13 @@ router.post(
         forwardedAt: new Date(),
         deliveredTo: [currentUser._id.toString()],
         seenBy: [currentUser._id.toString()],
+        ...(original.type === "voice"
+          ? {
+              voiceDuration: (original as any).voiceDuration,
+              voiceWaveform: (original as any).voiceWaveform,
+              voicePlayedBy: [currentUser._id.toString()],
+            }
+          : {}),
       });
 
       const payload = {
@@ -690,6 +807,14 @@ router.post(
         .json({ success: false, message: "Authentication required" });
     }
 
+    if (!isCloudinaryConfigured) {
+      return res.status(503).json({
+        success: false,
+        message:
+          "File uploads are temporarily unavailable. Cloudinary is not configured.",
+      });
+    }
+
     if (!req.file) {
       return res
         .status(400)
@@ -697,16 +822,54 @@ router.post(
     }
 
     const uploadedFile = req.file as Express.Multer.File;
-    const fileUrl = `/uploads/messages/${uploadedFile.filename}`;
-    return res.status(201).json({
-      success: true,
-      data: {
-        fileUrl,
-        fileName: uploadedFile.originalname,
-        mimeType: uploadedFile.mimetype,
-        size: uploadedFile.size,
-      },
-    });
+    try {
+      const folder = "pathways/messages";
+      const useFilename = true;
+      const uniqueFilename = true;
+
+      const result = await new Promise<{
+        secure_url: string;
+        resource_type: string;
+        bytes: number;
+        original_filename?: string;
+        format?: string;
+      }>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            resource_type: "auto",
+            folder,
+            use_filename: useFilename,
+            unique_filename: uniqueFilename,
+            filename_override: uploadedFile.originalname,
+            // Keep original extension when possible
+            overwrite: false,
+          },
+          (error, uploadResult) => {
+            if (error || !uploadResult) {
+              reject(error || new Error("Cloudinary upload failed"));
+              return;
+            }
+            resolve(uploadResult as any);
+          }
+        );
+        stream.end(uploadedFile.buffer);
+      });
+
+      return res.status(201).json({
+        success: true,
+        data: {
+          fileUrl: result.secure_url,
+          fileName: uploadedFile.originalname,
+          mimeType: uploadedFile.mimetype,
+          size: uploadedFile.size ?? result.bytes,
+        },
+      });
+    } catch (err) {
+      console.error("Cloudinary upload error:", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Failed to upload file" });
+    }
   }
 );
 
@@ -1209,6 +1372,87 @@ router.patch(
       return res
         .status(500)
         .json({ success: false, message: "Failed to update message" });
+    }
+  }
+);
+
+// Mark voice message as played (removes unplayed indicator for this user)
+router.patch(
+  "/:id/voice-played",
+  [param("id").isMongoId().withMessage("Invalid message identifier")],
+  async (req: express.Request, res: express.Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
+    }
+
+    const currentUser = req.user as IUser;
+    if (!currentUser) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
+    }
+
+    try {
+      const message = await Message.findById<IMessage>(req.params.id);
+      if (!message) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Message not found" });
+      }
+
+      if (message.type !== "voice") {
+        return res.status(400).json({
+          success: false,
+          message: "Not a voice message",
+        });
+      }
+
+      const userId = currentUser._id.toString();
+      const participants = (
+        message.participants ?? [message.sender, message.receiver]
+      ).map((p: any) => p.toString());
+      if (!participants.includes(userId)) {
+        return res.status(403).json({
+          success: false,
+          message: "Not authorized to update this message",
+        });
+      }
+
+      // Track single receiver playback state
+      const isReceiver = message.receiver.toString() === userId;
+      if (isReceiver && !(message as any).isPlayed) {
+        (message as any).isPlayed = true;
+        // Maintain legacy array for compatibility
+        const playedSet = new Set<string>((message as any).voicePlayedBy ?? []);
+        if (!playedSet.has(userId)) {
+          playedSet.add(userId);
+          (message as any).voicePlayedBy = Array.from(playedSet);
+        }
+        await message.save();
+        const payload = {
+          messageId: (message._id as any).toString(),
+          threadKey: message.threadKey,
+          userId,
+          isPlayed: true,
+        };
+        participants.forEach((pid) => emitToUser(pid, "message:voicePlayed", payload));
+      }
+
+      return res.json({
+        success: true,
+        data: { message: normalizeMessage(message as any) },
+      });
+    } catch (error) {
+      console.error("Failed to mark voice message played", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update voice message state",
+      });
     }
   }
 );

@@ -45,7 +45,6 @@
     "axios": "^1.7.7",
     "socket.io-client": "^4.8.1",
     "typescript": "^5.9.3",
-    "music-metadata": "^7.14.0",
-    "ffmpeg-static": "^5.1.0"
+    "music-metadata": "^7.14.0"
   }
 }

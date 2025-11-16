@@ -31,6 +31,7 @@ import {
   isVisibleOnline,
 } from "../services/presence.service";
 import cloudinary, { isCloudinaryConfigured } from "../config/cloudinary";
+import { idToString } from "../utils/idToString";
 import { generateWaveform } from "../utils/generateWaveform";
 
 const mapPresenceDto = (
@@ -195,7 +196,7 @@ router.post(
     await messageDoc.save();
     const normalized = normalizeMessage(messageDoc);
     const payload = {
-      messageId: (messageDoc._id as any).toString(),
+      messageId: idToString((messageDoc as any)._id),
       voiceUrl: uploadResult.secure_url,
       duration,
       waveform,
@@ -204,8 +205,8 @@ router.post(
       message: normalized,
     };
     // Emit to participants
-    emitToUser(currentUser._id.toString(), "message:sendVoice", payload);
-    emitToUser(receiver._id.toString(), "message:sendVoice", payload);
+    emitToUser(idToString(currentUser._id), "message:sendVoice", payload);
+    emitToUser(idToString(receiver._id), "message:sendVoice", payload);
     return res.status(201).json({ success: true, ...payload });
   }
 );
@@ -254,13 +255,14 @@ router.patch(
       )
         .map((p: any) => p.toString())
         .filter(Boolean);
-      if (!participants.includes(currentUser._id.toString())) {
+      const { idToString } = await import("../utils/idToString");
+      if (!participants.includes(idToString(currentUser._id))) {
         return res
           .status(403)
           .json({ success: false, message: "Not authorized" });
       }
 
-      const userId = currentUser._id.toString();
+      const userId = idToString(currentUser._id);
       const reactions = Array.isArray((message as any).reactions)
         ? ((message as any).reactions as Array<{
             emoji: string;
@@ -343,17 +345,17 @@ router.post(
         const payload = {
           message: normalizeMessage(original as any),
           sender: {
-            id: String(original.sender),
+            id: idToString(original.sender),
             name: "",
             role: original.senderRole as MessageRole,
           },
           receiver: {
-            id: String(original.receiver),
+            id: idToString(original.receiver),
             name: "",
             role: original.receiverRole as MessageRole,
           },
         };
-        emitToUser(currentUser._id.toString(), "message:saved:ack", payload);
+        emitToUser(idToString(currentUser._id), "message:saved:ack", payload);
         return res.json({ success: true, data: { saved: true } });
       }
 
@@ -383,14 +385,14 @@ router.post(
             }
           : {}),
         // Mark as immediately delivered and seen by current user
-        deliveredTo: [currentUser._id.toString()],
-        seenBy: [currentUser._id.toString()],
+        deliveredTo: [idToString(currentUser._id)],
+        seenBy: [idToString(currentUser._id)],
         status: "read",
         ...(original.type === "voice"
           ? {
               voiceDuration: (original as any).voiceDuration,
               voiceWaveform: (original as any).voiceWaveform,
-              voicePlayedBy: [currentUser._id.toString()],
+              voicePlayedBy: [idToString(currentUser._id)],
             }
           : {}),
       });
@@ -398,20 +400,20 @@ router.post(
       const payload = {
         message: normalizeMessage(newMessage as any),
         sender: {
-          id: currentUser._id.toString(),
+          id: idToString(currentUser._id),
           name: formatUserName(currentUser as any),
           role: currentUser.role as MessageRole,
         },
         receiver: {
-          id: currentUser._id.toString(),
+          id: idToString(currentUser._id),
           name: "Saved Messages",
           role: currentUser.role as MessageRole,
         },
       };
 
       // Emit both as new and sent so existing flows update instantly
-      emitToUser(currentUser._id.toString(), "message:new", payload);
-      emitToUser(currentUser._id.toString(), "message:sent", payload);
+      emitToUser(idToString(currentUser._id), "message:new", payload);
+      emitToUser(idToString(currentUser._id), "message:sent", payload);
 
       return res.status(201).json({ success: true, data: { saved: true } });
     } catch (error) {
@@ -574,7 +576,7 @@ router.post(
           snippet = typeLabelMap[referencedType];
         }
         replyToMeta = {
-          messageId: referenced._id.toString(),
+          messageId: idToString((referenced as any)._id),
           senderName: referencedSenderName,
           type: referencedType === "image" ? "photo" : (referencedType as any),
           snippet,
@@ -603,8 +605,8 @@ router.post(
         mimeType: req.body.mimeType,
         fileSize:
           typeof req.body.fileSize === "number" ? req.body.fileSize : undefined,
-        deliveredTo: [sender._id.toString()],
-        seenBy: [sender._id.toString()],
+        deliveredTo: [idToString(sender._id)],
+        seenBy: [idToString(sender._id)],
       };
 
       if (replyToId && replyToMeta) {
@@ -622,7 +624,7 @@ router.post(
         )
           ? req.body.voiceWaveform.map((v: any) => Number(v) || 0)
           : [];
-        (messagePayload as any).voicePlayedBy = [sender._id.toString()];
+        (messagePayload as any).voicePlayedBy = [idToString(sender._id)];
       }
 
       const message = await Message.create(messagePayload);
@@ -630,23 +632,23 @@ router.post(
       const payload = {
         message: normalizeMessage(message),
         sender: {
-          id: sender._id.toString(),
+          id: idToString(sender._id),
           name: formatUserName(senderDoc),
           role: senderRole,
         },
         receiver: {
-          id: receiver._id.toString(),
+          id: idToString(receiver._id),
           name: formatUserName(receiver),
           role: receiverRole,
         },
       };
 
-      emitToUser(receiver._id.toString(), "message:new", payload);
-      emitToUser(sender._id.toString(), "message:sent", payload);
+      emitToUser(idToString(receiver._id), "message:new", payload);
+      emitToUser(idToString(sender._id), "message:sent", payload);
 
       await Message.updateOne(
         { _id: message._id },
-        { $addToSet: { deliveredTo: receiver._id.toString() } }
+        { $addToSet: { deliveredTo: idToString(receiver._id) } }
       );
 
       return res.status(201).json({
@@ -772,13 +774,13 @@ router.post(
           originalSentAt: (original as any).createdAt,
         },
         forwardedAt: new Date(),
-        deliveredTo: [currentUser._id.toString()],
-        seenBy: [currentUser._id.toString()],
+        deliveredTo: [idToString(currentUser._id)],
+        seenBy: [idToString(currentUser._id)],
         ...(original.type === "voice"
           ? {
               voiceDuration: (original as any).voiceDuration,
               voiceWaveform: (original as any).voiceWaveform,
-              voicePlayedBy: [currentUser._id.toString()],
+              voicePlayedBy: [idToString(currentUser._id)],
             }
           : {}),
       });

@@ -13,7 +13,37 @@ const getEnv = (key: string, fallback?: string): string => {
   throw new Error(`Missing required environment variable: ${key}`);
 };
 
-export const env = {
+export type Env = {
+  nodeEnv: string;
+  port: number;
+  frontendUrl: string;
+  mongoUri: string;
+  jwtSecret: string;
+  jwtExpiresIn: string;
+  messaging: {
+    maxEditCount: number;
+    editWindowMs: number;
+  };
+  policy: {
+    allowMultiClassHead: boolean;
+    allowTeacherMultiSubjects: boolean;
+    allowTeacherMultiSections: boolean;
+  };
+  cloudinary: {
+    cloudName: string;
+    apiKey: string;
+    apiSecret: string;
+    avatarFolder: string;
+  };
+  superAdmin: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+  };
+};
+
+export const env: Env = {
   nodeEnv: getEnv("NODE_ENV", "development"),
   port: Number(getEnv("PORT", "5000")),
   frontendUrl: getEnv("FRONTEND_URL", "http://localhost:5173"),

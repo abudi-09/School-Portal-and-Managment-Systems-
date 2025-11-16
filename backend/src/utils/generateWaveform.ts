@@ -1,4 +1,6 @@
 import { parseBuffer } from "music-metadata";
+import { spawn } from "child_process";
+import ffmpegPath from "ffmpeg-static";
 
 /**
  * Generate a waveform (10-60 samples, values 0-100) from an audio buffer.
@@ -8,7 +10,92 @@ export async function generateWaveform(
   audioBuffer: Buffer
 ): Promise<{ waveform: number[]; duration: number | null; error?: string }> {
   try {
-    // Attempt to parse duration using music-metadata (container level)
+    // First try: decode to PCM using ffmpeg for accurate amplitude extraction
+    if (ffmpegPath) {
+      try {
+        const ff = spawn(ffmpegPath, [
+          "-i",
+          "pipe:0",
+          "-f",
+          "s16le",
+          "-acodec",
+          "pcm_s16le",
+          "-ac",
+          "1",
+          "-ar",
+          "16000",
+          "pipe:1",
+        ]);
+
+        const stdoutChunks: Buffer[] = [];
+        const stderrChunks: Buffer[] = [];
+        ff.stdout.on("data", (c) => stdoutChunks.push(Buffer.from(c)));
+        ff.stderr.on("data", (c) => stderrChunks.push(Buffer.from(c)));
+
+        ff.stdin.write(audioBuffer);
+        ff.stdin.end();
+
+        const exitCode: number = (await new Promise((resolve, reject) => {
+          ff.on("close", resolve);
+          ff.on("error", reject);
+        })) as number;
+
+        const stderr = Buffer.concat(stderrChunks).toString("utf8");
+        const pcm = Buffer.concat(stdoutChunks);
+        if (exitCode === 0 && pcm.length > 0) {
+          // pcm is 16-bit signed little-endian
+          const samples = new Int16Array(
+            pcm.buffer,
+            pcm.byteOffset,
+            Math.floor(pcm.length / 2)
+          );
+          const totalSamples = samples.length;
+          const targetSamples = Math.min(
+            60,
+            Math.max(10, Math.round(totalSamples / 1600))
+          );
+          const segment = Math.max(1, Math.floor(totalSamples / targetSamples));
+          const peaks: number[] = [];
+          let globalMax = 0;
+          for (let i = 0; i < targetSamples; i++) {
+            const start = i * segment;
+            const end = Math.min(totalSamples, start + segment);
+            let peak = 0;
+            for (let s = start; s < end; s++) {
+              const v = Math.abs(samples[s]);
+              if (v > peak) peak = v;
+            }
+            peaks.push(peak);
+            if (peak > globalMax) globalMax = peak;
+          }
+          const normalized = peaks.map((p) =>
+            Math.round((p / (globalMax || 1)) * 100)
+          );
+          // Smooth
+          for (let k = 1; k < normalized.length - 1; k++) {
+            const a = normalized[k - 1] ?? 0;
+            const b = normalized[k] ?? 0;
+            const c = normalized[k + 1] ?? 0;
+            normalized[k] = Math.round((a + b + c) / 3);
+          }
+          // Try to extract duration from stderr (ffmpeg prints duration info)
+          const durMatch = stderr.match(
+            /Duration: (\d\d):(\d\d):(\d\d)\.(\d\d)/
+          );
+          const duration = durMatch
+            ? Number(durMatch[1]) * 3600 +
+              Number(durMatch[2]) * 60 +
+              Number(durMatch[3])
+            : null;
+          return { waveform: normalized, duration };
+        }
+        // If ffmpeg produced no PCM, fall through to metadata heuristic
+      } catch (ffErr: any) {
+        // continue to fallback
+      }
+    }
+
+    // Fallback: Attempt to parse duration using music-metadata (container level)
     const metadata = await parseBuffer(audioBuffer, undefined, {
       duration: true,
     });
@@ -16,13 +103,12 @@ export async function generateWaveform(
       ? Math.round(metadata.format.duration)
       : null;
 
-    // Simple amplitude heuristic: sample raw bytes and treat absolute deviation from 128 as amplitude (for compressed formats this is approximate)
+    // Simple amplitude heuristic: sample raw bytes and treat absolute deviation from 128 as amplitude (approximate for compressed formats)
     const byteData = new Uint8Array(audioBuffer);
-    // Decide sample count based on size (clamped 24-48 typical, ensure within 10-60)
     const targetSamples = Math.min(
       60,
       Math.max(10, Math.round(byteData.length / 4000))
-    ); // heuristic
+    );
     const segmentSize = Math.max(
       1,
       Math.floor(byteData.length / targetSamples)
@@ -37,22 +123,19 @@ export async function generateWaveform(
       }
       let peak = 0;
       for (let j = start; j < end; j += 4) {
-        // stride for performance
-        const v = byteData[j];
-        const amp = Math.abs(v - 128); // center around midpoint
+        const v = byteData[j] ?? 128;
+        const amp = Math.abs(v - 128);
         if (amp > peak) peak = amp;
       }
-      // Normalize peak (0..128) to 0..100
       const normalized = Math.min(100, Math.round((peak / 128) * 100));
       samples.push(normalized);
     }
-    // Smooth slight spikes by simple averaging pass
     for (let k = 1; k < samples.length - 1; k++) {
-      samples[k] = Math.round(
-        (samples[k - 1] + samples[k] + samples[k + 1]) / 3
-      );
+      const a = samples[k - 1] ?? 0;
+      const b = samples[k] ?? 0;
+      const c = samples[k + 1] ?? 0;
+      samples[k] = Math.round((a + b + c) / 3);
     }
-
     return { waveform: samples, duration };
   } catch (err: any) {
     // Fallback random waveform

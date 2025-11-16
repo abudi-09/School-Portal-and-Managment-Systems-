@@ -11,6 +11,7 @@
     "list-missing-streams": "ts-node src/scripts/listTeachersMissingStream.ts",
     "set-teacher-stream": "ts-node src/scripts/setTeacherStream.ts",
     "exercise:messages": "ts-node scripts/exerciseMessages.ts",
+    "test:generate-waveform": "ts-node src/scripts/testGenerateWaveform.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -44,6 +45,7 @@
     "axios": "^1.7.7",
     "socket.io-client": "^4.8.1",
     "typescript": "^5.9.3",
-    "music-metadata": "^7.14.0"
+    "music-metadata": "^7.14.0",
+    "ffmpeg-static": "^5.1.0"
   }
 }

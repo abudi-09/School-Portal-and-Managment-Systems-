@@ -55,6 +55,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import { cn } from "@/lib/utils";
 import ForwardMessageDialog from "./messaging/ForwardMessageDialog";
 import {
@@ -445,42 +446,35 @@ const MessagingCenter = ({
     return `${m}:${r.toString().padStart(2, "0")}`;
   };
 
-  // Lazy import hook to avoid SSR/undefined devices issues
-  // Voice recorder hook reference (dynamic import). Typed as unknown then narrowed.
-  const voiceRecorderRef = useRef<{
-    start: () => Promise<void>;
-    stop: () => Promise<void>;
-    cancel: () => void;
-    duration?: number;
-  } | null>(null);
   const [pendingVoiceMessage, setPendingVoiceMessage] =
     useState<MessageItem | null>(null);
   const autoSendVoice = true;
-  useEffect(() => {
-    import("@/hooks/useVoiceRecorder").then((mod) => {
-      voiceRecorderRef.current = mod.useVoiceRecorder({
-        onData: (blob: Blob, duration: number, waveform: number[]) => {
-          setPendingVoiceBlob(blob);
-          setPendingVoiceDuration(duration);
-          setPendingVoiceWaveform(waveform);
-          setIsRecording(false);
-          setRecordCanceled(false);
-        },
-        onError: (err: Error) => {
-          console.error("Voice recorder error", err);
-        },
-      });
-    });
-  }, []);
+
+  const {
+    start: startRecording,
+    stop: stopRecording,
+    cancel: cancelRecording,
+    duration: recordingDuration,
+  } = useVoiceRecorder({
+    onData: (blob: Blob, duration: number, waveform: number[]) => {
+      setPendingVoiceBlob(blob);
+      setPendingVoiceDuration(duration);
+      setPendingVoiceWaveform(waveform);
+      setIsRecording(false);
+      setRecordCanceled(false);
+    },
+    onError: (err: Error) => {
+      console.error("Voice recorder error", err);
+    },
+  });
 
   const startVoiceRecording = async () => {
-    if (!voiceRecorderRef.current) return;
     setPendingVoiceBlob(null);
     setPendingVoiceDuration(0);
     setPendingVoiceWaveform([]);
     setRecordCanceled(false);
     try {
-      await voiceRecorderRef.current.start();
+      await startRecording();
       setIsRecording(true);
     } catch (e) {
       console.error("Failed to start recording", e);
@@ -489,17 +483,15 @@ const MessagingCenter = ({
   };
 
   const stopVoiceRecording = async () => {
-    if (!voiceRecorderRef.current) return;
     try {
-      await voiceRecorderRef.current.stop();
+      await stopRecording();
     } catch (e) {
       // ignore stop error
     }
   };
 
   const cancelVoiceRecording = () => {
-    if (!voiceRecorderRef.current) return;
-    voiceRecorderRef.current.cancel();
+    cancelRecording();
     setRecordCanceled(true);
     setIsRecording(false);
     setPendingVoiceBlob(null);
@@ -2350,9 +2342,7 @@ const MessagingCenter = ({
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <span className="font-medium">Recording</span>
                             <span className="tabular-nums">
-                              {formatVoiceDuration(
-                                voiceRecorderRef.current?.duration || 0
-                              )}
+                              {formatVoiceDuration(recordingDuration || 0)}
                             </span>
                             <span className="text-[10px]">
                               Slide left to cancel

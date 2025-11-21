@@ -260,6 +260,7 @@ const MessageSchema = new Schema<IMessage>(
 
 MessageSchema.index({ participants: 1, createdAt: -1 });
 MessageSchema.index({ receiver: 1, status: 1 });
+MessageSchema.index({ isPlayed: 1 });
 
 function buildThreadKey(a: Types.ObjectId, b: Types.ObjectId): string {
   const [first, second] = [a, b]

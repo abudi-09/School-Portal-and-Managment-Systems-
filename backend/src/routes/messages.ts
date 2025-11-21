@@ -130,7 +130,13 @@ router.post(
         .json({ success: false, message: "No voice file uploaded" });
     }
     const voiceFile = req.file as Express.Multer.File;
-    const allowedVoice = new Set(["audio/webm", "audio/mp3", "audio/mpeg"]);
+    const allowedVoice = new Set([
+      "audio/webm",
+      "audio/mp3",
+      "audio/mpeg",
+      "audio/wav",
+      "audio/ogg",
+    ]);
     if (!allowedVoice.has(voiceFile.mimetype)) {
       return res
         .status(400)
@@ -142,30 +148,41 @@ router.post(
         .json({ success: false, message: "Cloudinary not configured" });
     }
     let uploadResult: any;
-    try {
-      uploadResult = await new Promise((resolve, reject) => {
-        const cloudFolder = `${
-          env.cloudinary?.avatarFolder || "pathways"
-        }/voices`;
-        const stream = cloudinary.uploader.upload_stream(
-          {
-            resource_type: "auto",
-            folder: cloudFolder,
-            filename_override: voiceFile.originalname,
-          },
-          (error, result) => {
-            if (error || !result)
-              return reject(error || new Error("Cloudinary upload failed"));
-            resolve(result);
-          }
-        );
-        stream.end(voiceFile.buffer);
-      });
-    } catch (err) {
-      console.error("Voice upload error", err);
-      return res
-        .status(500)
-        .json({ success: false, message: "Failed to upload voice" });
+    const maxRetries = 3;
+    let attempt = 0;
+    while (attempt < maxRetries) {
+      try {
+        uploadResult = await new Promise((resolve, reject) => {
+          const cloudFolder = `${
+            env.cloudinary?.avatarFolder || "pathways"
+          }/voices`;
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              resource_type: "auto",
+              folder: cloudFolder,
+              filename_override: voiceFile.originalname,
+            },
+            (error: any, result: any) => {
+              if (error || !result)
+                return reject(error || new Error("Cloudinary upload failed"));
+              resolve(result);
+            }
+          );
+          stream.end(voiceFile.buffer);
+        });
+        break; // Success
+      } catch (err) {
+        attempt++;
+        if (attempt >= maxRetries) {
+          console.error("Voice upload error after retries", err);
+          return res
+            .status(500)
+            .json({ success: false, message: "Failed to upload voice" });
+        }
+        // Exponential backoff: 500ms, 1000ms, 2000ms...
+        const delay = 500 * Math.pow(2, attempt - 1);
+        await new Promise((r) => setTimeout(r, delay));
+      }
     }
     // Generate waveform & duration
     const { waveform, duration, error } = await generateWaveform(
@@ -865,7 +882,7 @@ router.post(
             // Keep original extension when possible
             overwrite: false,
           },
-          (error, uploadResult) => {
+          (error: any, uploadResult: any) => {
             if (error || !uploadResult) {
               reject(error || new Error("Cloudinary upload failed"));
               return;

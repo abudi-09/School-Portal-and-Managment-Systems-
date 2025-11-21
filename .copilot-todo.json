@@ -2,12 +2,12 @@
   {
     "id": 1,
     "title": "Inspect current voice recording frontend implementation",
-    "status": "pending"
+    "status": "complete"
   },
   {
     "id": 2,
     "title": "Inspect backend voice upload endpoint",
-    "status": "pending"
+    "status": "complete"
   },
   {
     "id": 3,

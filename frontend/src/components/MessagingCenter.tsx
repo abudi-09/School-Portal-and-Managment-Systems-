@@ -78,7 +78,7 @@ export interface MessageItem {
   timestamp: string;
   timestampIso: string;
   status: "read" | "unread";
-  type: "text" | "image" | "file" | "doc" | "voice";
+  type: "text" | "image" | "file" | "doc" | "voice" | "video";
   fileUrl?: string;
   fileName?: string;
   mimeType?: string;
@@ -436,7 +436,94 @@ const MessagingCenter = ({
     string | null
   >(null);
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const playbackRafRef = useRef<number | null>(null);
+  const [voicePlaybackStatus, setVoicePlaybackStatus] = useState<{
+    id: string | null;
+    progress: number;
+    currentTime: number;
+    duration: number;
+  }>({ id: null, progress: 0, currentTime: 0, duration: 0 });
   const cancelThreshold = 80; // px slide left to cancel
+
+  const stopPlaybackTracking = useCallback(() => {
+    if (playbackRafRef.current !== null) {
+      cancelAnimationFrame(playbackRafRef.current);
+      playbackRafRef.current = null;
+    }
+  }, []);
+
+  const startPlaybackTracking = useCallback(
+    (
+      audioEl: HTMLAudioElement,
+      messageId: string,
+      fallbackDuration?: number
+    ) => {
+      stopPlaybackTracking();
+      const step = () => {
+        const duration =
+          Number.isFinite(audioEl.duration) && audioEl.duration > 0
+            ? audioEl.duration
+            : fallbackDuration ?? 0;
+        const progress =
+          duration > 0
+            ? Math.max(0, Math.min(1, audioEl.currentTime / duration))
+            : 0;
+        setVoicePlaybackStatus({
+          id: messageId,
+          progress,
+          currentTime: audioEl.currentTime || 0,
+          duration,
+        });
+        if (audioEl.paused || audioEl.ended) {
+          playbackRafRef.current = null;
+          return;
+        }
+        playbackRafRef.current = requestAnimationFrame(step);
+      };
+      step();
+    },
+    [stopPlaybackTracking]
+  );
+
+  const setupAudioEvents = useCallback(
+    (audioEl: HTMLAudioElement, message: MessageItem) => {
+      audioEl.onplay = () => {
+        startPlaybackTracking(audioEl, message.id, message.voiceDuration);
+      };
+      audioEl.onpause = () => {
+        stopPlaybackTracking();
+        setVoicePlaybackStatus((prev) => {
+          if (prev.id !== message.id) return prev;
+          const duration =
+            Number.isFinite(audioEl.duration) && audioEl.duration > 0
+              ? audioEl.duration
+              : message.voiceDuration ?? prev.duration ?? 0;
+          const progress =
+            duration > 0
+              ? Math.max(0, Math.min(1, audioEl.currentTime / duration))
+              : prev.progress;
+          return {
+            id: message.id,
+            progress,
+            currentTime: audioEl.currentTime || prev.currentTime,
+            duration,
+          };
+        });
+      };
+      audioEl.onended = () => {
+        audioEl.currentTime = 0;
+        stopPlaybackTracking();
+        setVoicePlaybackStatus({
+          id: null,
+          progress: 0,
+          currentTime: 0,
+          duration: 0,
+        });
+        setCurrentPlayingVoiceId((prev) => (prev === message.id ? null : prev));
+      };
+    },
+    [startPlaybackTracking, stopPlaybackTracking]
+  );
 
   const formatVoiceDuration = (seconds?: number) => {
     if (!seconds || Number.isNaN(seconds)) return "0:00";
@@ -457,8 +544,9 @@ const MessagingCenter = ({
     duration: recordingDuration,
   } = useVoiceRecorder({
     onData: (blob: Blob, duration: number, waveform: number[]) => {
+      const safeDuration = Math.max(1, Math.round(duration));
       setPendingVoiceBlob(blob);
-      setPendingVoiceDuration(duration);
+      setPendingVoiceDuration(safeDuration);
       setPendingVoiceWaveform(waveform);
       setIsRecording(false);
       setRecordCanceled(false);
@@ -502,6 +590,7 @@ const MessagingCenter = ({
   const handleSendVoice = async () => {
     if (!pendingVoiceBlob || !selectedConversationId || !onSendMessage) return;
     // Upload voice blob using existing file upload logic
+    const safeDuration = Math.max(1, Math.round(pendingVoiceDuration || 0));
     const voiceFile = new File([pendingVoiceBlob], `voice-${Date.now()}.webm`, {
       type: pendingVoiceBlob.type || "audio/webm",
     });
@@ -528,7 +617,7 @@ const MessagingCenter = ({
       seenBy: [],
       isPending: true,
       isUploading: true,
-      voiceDuration: pendingVoiceDuration,
+      voiceDuration: safeDuration,
       voiceWaveform: pendingVoiceWaveform,
       voicePlayedBy: [],
     };
@@ -555,7 +644,7 @@ const MessagingCenter = ({
         uploaded.fileUrl,
         uploaded.fileName,
         uploaded.mimeType,
-        pendingVoiceDuration,
+        safeDuration,
         pendingVoiceWaveform
       );
       setPendingVoiceBlob(null);
@@ -574,24 +663,46 @@ const MessagingCenter = ({
 
   const handlePlayVoice = async (message: MessageItem) => {
     if (!message.fileUrl) return;
-    // Pause previous
     if (currentPlayingVoiceId && currentPlayingVoiceId !== message.id) {
       const prev = audioRefs.current.get(currentPlayingVoiceId);
       if (prev) {
         prev.pause();
+        prev.currentTime = 0;
       }
     }
     let audio = audioRefs.current.get(message.id);
+    let created = false;
     if (!audio) {
       audio = new Audio(message.fileUrl);
       audioRefs.current.set(message.id, audio);
-      audio.onended = () => {
-        if (currentPlayingVoiceId === message.id) {
-          setCurrentPlayingVoiceId(null);
-        }
-      };
-      // Mark played if first time
+      created = true;
+    }
+    setupAudioEvents(audio, message);
+    if (currentPlayingVoiceId === message.id && !audio.paused) {
+      audio.pause();
+      setCurrentPlayingVoiceId(null);
+      stopPlaybackTracking();
+      return;
+    }
+    try {
+      const duration =
+        Number.isFinite(audio.duration) && audio.duration > 0
+          ? audio.duration
+          : message.voiceDuration ?? 0;
+      const progress =
+        duration > 0
+          ? Math.max(0, Math.min(1, audio.currentTime / duration))
+          : 0;
+      setVoicePlaybackStatus({
+        id: message.id,
+        progress,
+        currentTime: audio.currentTime || 0,
+        duration,
+      });
+      await audio.play();
+      setCurrentPlayingVoiceId(message.id);
       if (
+        created &&
         currentUserId &&
         !message.voicePlayedBy?.includes(currentUserId) &&
         message.senderId !== currentUserId
@@ -603,18 +714,8 @@ const MessagingCenter = ({
           console.error("Failed to mark voice played", e);
         }
       }
-    }
-    if (currentPlayingVoiceId === message.id) {
-      // Currently playing -> pause
-      audio.pause();
-      setCurrentPlayingVoiceId(null);
-    } else {
-      try {
-        await audio.play();
-        setCurrentPlayingVoiceId(message.id);
-      } catch (e) {
-        console.error("Play failed", e);
-      }
+    } catch (e) {
+      console.error("Play failed", e);
     }
   };
 
@@ -646,6 +747,17 @@ const MessagingCenter = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingVoiceBlob, isRecording, recordCanceled]);
+
+  useEffect(() => {
+    const audioMap = audioRefs.current;
+    return () => {
+      stopPlaybackTracking();
+      audioMap.forEach((audio) => {
+        audio.pause();
+        audio.currentTime = 0;
+      });
+    };
+  }, [stopPlaybackTracking]);
 
   const { toast } = useToast();
 
@@ -873,16 +985,6 @@ const MessagingCenter = ({
     setPendingDeleteMessage(message);
   };
 
-  const handleCopyMessage = async (message: MessageItem) => {
-    try {
-      if (message.content) {
-        await navigator.clipboard.writeText(message.content);
-      }
-    } catch {
-      /* noop */
-    }
-  };
-
   const handlePinMessage = (message: MessageItem) => {
     setPendingPinMessage(message);
   };
@@ -950,6 +1052,22 @@ const MessagingCenter = ({
 
   const handleReplyMessage = (message: MessageItem) => {
     setReplyToMessageId(message.id);
+  };
+
+  const handleCopyMessage = (message: MessageItem) => {
+    const text = (message.content || "").trim();
+    if (!text) return;
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        toast({
+          title: "Copied",
+          description: "Message copied to clipboard.",
+        });
+      })
+      .catch((err) => {
+        console.error("Copy message failed", err);
+      });
   };
 
   const handleSaveMessage = async (message: MessageItem) => {
@@ -1780,90 +1898,137 @@ const MessagingCenter = ({
                                       ) : null}
                                       {/* Voice message rendering */}
                                       {message.type === "voice" &&
-                                      message.fileUrl ? (
-                                        <div
-                                          className={cn(
-                                            "flex items-center gap-3",
-                                            isSelf
-                                              ? "justify-end"
-                                              : "justify-start"
-                                          )}
-                                        >
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              handlePlayVoice(message)
-                                            }
-                                            className={cn(
-                                              "h-10 w-10 rounded-full flex items-center justify-center border border-border",
-                                              currentPlayingVoiceId ===
-                                                message.id
-                                                ? "bg-primary text-primary-foreground"
-                                                : "bg-background text-muted-foreground hover:text-foreground"
-                                            )}
-                                            aria-label={
-                                              currentPlayingVoiceId ===
-                                              message.id
-                                                ? "Pause voice message"
-                                                : "Play voice message"
-                                            }
-                                          >
-                                            {currentPlayingVoiceId ===
-                                            message.id ? (
-                                              <Pause className="h-5 w-5" />
-                                            ) : (
-                                              <Play className="h-5 w-5" />
-                                            )}
-                                          </button>
-                                          <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-1">
-                                              {(message.voiceWaveform &&
+                                      message.fileUrl
+                                        ? (() => {
+                                            const waveformBars =
+                                              message.voiceWaveform &&
                                               message.voiceWaveform.length > 0
                                                 ? message.voiceWaveform
                                                 : Array.from(
                                                     { length: 32 },
                                                     () => 0.2
+                                                  );
+                                            const playbackState =
+                                              voicePlaybackStatus.id ===
+                                              message.id
+                                                ? voicePlaybackStatus
+                                                : null;
+                                            const highlightedBars =
+                                              playbackState
+                                                ? Math.min(
+                                                    waveformBars.length,
+                                                    Math.floor(
+                                                      playbackState.progress *
+                                                        waveformBars.length
+                                                    )
                                                   )
-                                              ).map((v, i) => (
-                                                <span
-                                                  key={i}
-                                                  className="inline-block rounded bg-primary/40"
-                                                  style={{
-                                                    width: "2px",
-                                                    height: `${Math.max(
-                                                      8,
-                                                      Math.round(v * 32)
-                                                    )}px`,
-                                                    opacity: 0.9,
-                                                  }}
-                                                />
-                                              ))}
-                                            </div>
-                                            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                                              <span>
-                                                {formatVoiceDuration(
-                                                  message.voiceDuration
+                                                : 0;
+                                            const currentSeconds =
+                                              playbackState?.currentTime ?? 0;
+                                            const totalSeconds =
+                                              playbackState?.duration ??
+                                              message.voiceDuration ??
+                                              (playbackState
+                                                ? Math.max(currentSeconds, 0)
+                                                : 0);
+                                            return (
+                                              <div
+                                                className={cn(
+                                                  "flex items-center gap-3",
+                                                  isSelf
+                                                    ? "justify-end"
+                                                    : "justify-start"
                                                 )}
-                                              </span>
-                                              {!message.voicePlayedBy?.includes(
-                                                currentUserId || ""
-                                              ) &&
-                                              message.senderId !==
-                                                currentUserId ? (
-                                                <span
-                                                  className="h-2 w-2 rounded-full bg-blue-500"
-                                                  title="Unplayed"
-                                                />
-                                              ) : null}
-                                              {message.fileName ? (
-                                                <span className="truncate max-w-[140px]">
-                                                  {message.fileName}
-                                                </span>
-                                              ) : null}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ) : null}
+                                              >
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    handlePlayVoice(message)
+                                                  }
+                                                  className={cn(
+                                                    "h-10 w-10 rounded-full flex items-center justify-center border border-border",
+                                                    currentPlayingVoiceId ===
+                                                      message.id
+                                                      ? "bg-primary text-primary-foreground"
+                                                      : "bg-background text-muted-foreground hover:text-foreground"
+                                                  )}
+                                                  aria-label={
+                                                    currentPlayingVoiceId ===
+                                                    message.id
+                                                      ? "Pause voice message"
+                                                      : "Play voice message"
+                                                  }
+                                                >
+                                                  {currentPlayingVoiceId ===
+                                                  message.id ? (
+                                                    <Pause className="h-5 w-5" />
+                                                  ) : (
+                                                    <Play className="h-5 w-5" />
+                                                  )}
+                                                </button>
+                                                <div className="flex-1 min-w-0">
+                                                  <div className="flex items-center gap-[2px]">
+                                                    {waveformBars.map(
+                                                      (v, i) => {
+                                                        const height = Math.max(
+                                                          8,
+                                                          Math.round(v * 32)
+                                                        );
+                                                        const isActive =
+                                                          playbackState
+                                                            ? i <
+                                                              highlightedBars
+                                                            : currentPlayingVoiceId ===
+                                                              message.id;
+                                                        return (
+                                                          <span
+                                                            key={i}
+                                                            className={cn(
+                                                              "inline-block w-[2px] rounded transition-[background-color,opacity,height] duration-150 ease-linear",
+                                                              isActive
+                                                                ? "bg-primary"
+                                                                : "bg-primary/40"
+                                                            )}
+                                                            style={{
+                                                              height: `${height}px`,
+                                                              opacity: isActive
+                                                                ? 1
+                                                                : 0.6,
+                                                            }}
+                                                          />
+                                                        );
+                                                      }
+                                                    )}
+                                                  </div>
+                                                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                                                    <span className="tabular-nums">
+                                                      {`${formatVoiceDuration(
+                                                        currentSeconds
+                                                      )} / ${formatVoiceDuration(
+                                                        totalSeconds
+                                                      )}`}
+                                                    </span>
+                                                    {!message.voicePlayedBy?.includes(
+                                                      currentUserId || ""
+                                                    ) &&
+                                                    message.senderId !==
+                                                      currentUserId ? (
+                                                      <span
+                                                        className="h-2 w-2 rounded-full bg-blue-500"
+                                                        title="Unplayed"
+                                                      />
+                                                    ) : null}
+                                                    {message.fileName ? (
+                                                      <span className="truncate max-w-[140px]">
+                                                        {message.fileName}
+                                                      </span>
+                                                    ) : null}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })()
+                                        : null}
                                       {message.type === "voice" &&
                                       message.isPending &&
                                       message.isUploading ? (

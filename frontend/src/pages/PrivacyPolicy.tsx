@@ -1,47 +1,49 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Shield, Lock, FileText, Eye, Cookie, Server } from "lucide-react";
 import Navbar from "@/components/public/Navbar";
 import Footer from "@/components/public/Footer";
-import SectionTitle from "@/components/public/SectionTitle";
 import { usePageMetadata } from "@/hooks/usePageMetadata";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 const corePolicies = [
   {
     title: "Information Collection",
+    icon: FileText,
     content:
       "We collect student, teacher, guardian, and class data including names, contact details, academic records, assignments, and activity logs to provide personalized services.",
   },
   {
     title: "Data Usage",
+    icon: Server,
     content:
       "Collected information powers school management features such as enrollment tracking, grade reporting, scheduling, complaint handling, and analytics dashboards.",
   },
   {
     title: "Data Protection",
+    icon: Lock,
     content:
       "We apply encryption in transit and at rest, enforce role-based access controls, and maintain audit logs to detect unusual activities.",
   },
   {
     title: "User Rights",
+    icon: Shield,
     content:
       "Students, teachers, heads, and administrators may request copies of their data, corrections, or deletion by contacting the system administrator or privacy officer.",
-  },
-  {
-    title: "Policy Updates",
-    content:
-      "Any changes to this policy will be communicated through the portal dashboard, email notifications, and release notes prior to taking effect.",
   },
 ];
 
 const extendedPolicies = [
   {
     title: "Cookies & Tracking",
+    icon: Cookie,
     content:
       "The portal uses session cookies to maintain secure logins, remember role-based preferences, and capture anonymized analytics to improve usability. You can disable non-essential cookies in your browser settings.",
   },
   {
     title: "Third-Party Services",
+    icon: Eye,
     content:
       "We may integrate cloud storage providers, messaging gateways, analytics services, or ministry-approved APIs. Partner services must comply with educational data regulations and contractual confidentiality agreements.",
   },
@@ -49,42 +51,46 @@ const extendedPolicies = [
 
 const PrivacyPolicy = () => {
   usePageMetadata({
-    title: "Student Portal | Privacy & Policy",
-    description:
-      "Understand how the student portal collects, uses, and protects user information.",
-    keywords: [
-      "student portal privacy",
-      "school data protection",
-      "education compliance",
-      "cookies policy",
-    ],
+    title: "Privacy Policy | Pathways",
+    description: "Understand how the student portal collects, uses, and protects user information.",
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-background selection:bg-primary/20">
       <Navbar />
 
       <main className="flex-1">
-        <section className="mx-auto max-w-5xl px-4 py-20 sm:px-6 lg:px-8">
-          <SectionTitle
-            title="Privacy & Policy"
-            description="We protect every learner’s data while supporting operational excellence for schools and administrators."
-          >
-            <p className="text-sm font-medium uppercase tracking-wide text-primary">
+        {/* Hero Section */}
+        <section className="relative py-20 lg:py-28 overflow-hidden bg-muted/30">
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-primary/10 via-background to-background"></div>
+          
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
+            <Badge variant="outline" className="mb-6 px-4 py-1.5 text-sm font-medium rounded-full border-primary/20 bg-primary/5 text-primary">
               Last Updated: October 2025
+            </Badge>
+            
+            <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl mb-6">
+              Privacy & <span className="text-primary">Policy</span>
+            </h1>
+            
+            <p className="text-lg leading-8 text-muted-foreground">
+              We protect every learner’s data while supporting operational excellence for schools and administrators. Transparency is our core value.
             </p>
-          </SectionTitle>
+          </div>
+        </section>
 
-          <div className="mt-12 space-y-8">
+        <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 -mt-12 relative z-10">
+          <div className="grid gap-6 md:grid-cols-2">
             {corePolicies.map((section) => (
-              <Card key={section.title} className="border-border shadow-sm">
+              <Card key={section.title} className="border-border/50 shadow-lg bg-card/95 backdrop-blur hover:shadow-xl transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="text-xl text-primary">
-                    {section.title}
-                  </CardTitle>
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-3 text-primary">
+                    <section.icon className="h-5 w-5" />
+                  </div>
+                  <CardTitle className="text-xl">{section.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground sm:text-base">
+                  <p className="text-muted-foreground leading-relaxed">
                     {section.content}
                   </p>
                 </CardContent>
@@ -92,78 +98,57 @@ const PrivacyPolicy = () => {
             ))}
           </div>
 
-          <SectionTitle
-            className="mt-20"
-            eyebrow="Extended Policies"
-            title="Additional information"
-            description="Transparency about cookies, tracking, and partner services."
-            align="left"
-          />
+          <div className="mt-20">
+            <div className="text-center mb-10">
+              <h2 className="text-3xl font-bold tracking-tight mb-4">Extended Policies</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Additional details regarding technical implementation and third-party integrations.
+              </p>
+            </div>
 
-          <div className="mt-12 grid gap-6 lg:grid-cols-2">
-            {extendedPolicies.map((policy) => (
-              <Card key={policy.title} className="border-border shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg font-semibold text-foreground">
-                    {policy.title}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    {policy.content}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
+            <div className="grid gap-6 md:grid-cols-2">
+              {extendedPolicies.map((policy) => (
+                <Card key={policy.title} className="border-border/50 shadow-sm">
+                  <CardHeader>
+                    <div className="flex items-center gap-3 mb-2">
+                      <policy.icon className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">{policy.title}</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {policy.content}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
 
-          <SectionTitle
-            className="mt-20"
-            eyebrow="Support"
-            title="Contact for privacy inquiries"
-            description="Reach our privacy team with questions, data requests, or feedback on this policy."
-            align="left"
-          />
+          <div className="mt-20 bg-primary/5 rounded-2xl p-8 border border-primary/10 text-center">
+            <h3 className="text-2xl font-bold mb-4">Have questions about your data?</h3>
+            <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
+              Our privacy team is available to answer any questions regarding data access requests, corrections, or general inquiries.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link to="/contact">
+                <Button size="lg" className="gap-2">
+                  Contact Support
+                </Button>
+              </Link>
+              <a href="mailto:privacy@pathways.edu.et">
+                <Button variant="outline" size="lg" className="gap-2">
+                  Email Privacy Team
+                </Button>
+              </a>
+            </div>
+          </div>
 
-          <Card className="mt-12 border-border shadow-sm">
-            <CardContent className="space-y-4 p-6 sm:p-8">
-              <p className="text-sm text-muted-foreground">
-                Email us at
-                <a
-                  href="mailto:privacy@schoolportal.com"
-                  className="ml-2 font-medium text-primary hover:underline"
-                >
-                  privacy@schoolportal.com
-                </a>
-                for privacy concerns, data access requests, or clarifications
-                about this policy.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Prefer a form? Submit details through our
-                <Link
-                  to="/contact"
-                  className="ml-1 font-medium text-primary hover:underline"
-                >
-                  contact page
-                </Link>
-                and select "Privacy & Compliance" as the inquiry type.
-              </p>
-            </CardContent>
-          </Card>
-
-          <div className="mt-16 flex flex-col gap-3 sm:flex-row sm:justify-start">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-2 justify-center rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground shadow-sm border border-border/40 hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Home
-            </Link>
-            <Link
-              to="/about"
-              className="inline-flex items-center justify-center rounded-full border border-primary/60 px-6 py-3 text-sm font-semibold text-primary transition hover:bg-primary/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            >
-              Learn About the Portal
+          <div className="mt-12 flex justify-center">
+            <Link to="/">
+              <Button variant="ghost" className="gap-2 text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="h-4 w-4" /> Back to Home
+              </Button>
             </Link>
           </div>
         </section>

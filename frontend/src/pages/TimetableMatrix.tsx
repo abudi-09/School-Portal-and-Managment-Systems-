@@ -2,8 +2,17 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Download, Printer } from 'lucide-react';
+import { Download, Printer, Calendar, Clock, MapPin } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/patterns';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 const TimetableMatrix = () => {
   const [activeTab, setActiveTab] = useState('class');
@@ -72,160 +81,146 @@ const TimetableMatrix = () => {
     Geography: 'bg-cyan-500/10 text-cyan-600 border-cyan-200',
     'Physical Education': 'bg-red-500/10 text-red-600 border-red-200',
     'Computer Science': 'bg-indigo-500/10 text-indigo-600 border-indigo-200',
-    'Lunch Break': 'bg-secondary',
+    'Lunch Break': 'bg-secondary text-muted-foreground',
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Timetable</h1>
-          <p className="text-muted-foreground">
-            View your class schedule and upcoming exams
-          </p>
-        </div>
+    <div className="p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
+      <PageHeader
+        title="Timetable Matrix"
+        description="Detailed view of your class and exam schedules."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Timetable" }]}
+      >
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2">
-            <Printer className="h-4 w-4" />
-            Print
+          <Button variant="outline" size="sm" className="gap-2">
+            <Printer className="h-4 w-4" /> Print
           </Button>
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            Export PDF
+          <Button variant="outline" size="sm" className="gap-2">
+            <Download className="h-4 w-4" /> Export PDF
           </Button>
         </div>
-      </div>
+      </PageHeader>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
-          <TabsTrigger value="class">Class Schedule</TabsTrigger>
-          <TabsTrigger value="exam">Exam Schedule</TabsTrigger>
+          <TabsTrigger value="class" className="gap-2"><Calendar className="h-4 w-4" /> Class Schedule</TabsTrigger>
+          <TabsTrigger value="exam" className="gap-2"><Clock className="h-4 w-4" /> Exam Schedule</TabsTrigger>
         </TabsList>
 
-        {/* Class Schedule Tab */}
-        <TabsContent value="class" className="space-y-6">
+        <TabsContent value="class">
           <Card>
             <CardHeader>
               <CardTitle>Weekly Class Schedule</CardTitle>
-              <CardDescription>
-                Your class timetable for the current semester
-              </CardDescription>
+              <CardDescription>Your class timetable for the current semester</CardDescription>
             </CardHeader>
             <CardContent>
               {/* Color Legend */}
               <div className="mb-6 flex flex-wrap gap-2">
-                <span className="text-sm text-muted-foreground mr-2">Legend:</span>
-                {Object.keys(subjectColors).slice(0, 5).map((subject) => (
+                {Object.keys(subjectColors).slice(0, 6).map((subject) => (
                   <Badge key={subject} variant="outline" className={subjectColors[subject]}>
                     {subject}
                   </Badge>
                 ))}
-                <span className="text-sm text-muted-foreground">+ more</span>
+                <Badge variant="outline" className="bg-secondary text-muted-foreground">+ more</Badge>
               </div>
 
               {/* Timetable Matrix */}
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-secondary">
-                      <th className="border border-border p-3 text-left font-semibold min-w-[120px]">
-                        Time / Day
-                      </th>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-[120px] font-bold">Time / Day</TableHead>
                       {Object.keys(classSchedule).map((day) => (
-                        <th key={day} className="border border-border p-3 text-center font-semibold min-w-[180px]">
-                          {day}
-                        </th>
+                        <TableHead key={day} className="text-center font-bold min-w-[180px]">{day}</TableHead>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {classSchedule.Monday.map((_, periodIndex) => (
-                      <tr key={periodIndex}>
-                        <td className="border border-border p-3 bg-secondary/50 font-medium text-sm">
+                      <TableRow key={periodIndex}>
+                        <TableCell className="font-medium bg-muted/20 text-xs">
                           {classSchedule.Monday[periodIndex].period}
-                        </td>
+                        </TableCell>
                         {Object.keys(classSchedule).map((day) => {
                           const slot = classSchedule[day as keyof typeof classSchedule][periodIndex];
                           const isBreak = slot.subject === 'Lunch Break';
                           
                           return (
-                            <td 
+                            <TableCell 
                               key={day} 
-                              className={`border border-border p-3 ${
-                                isBreak ? 'bg-secondary/50' : subjectColors[slot.subject] || 'bg-background'
-                              }`}
+                              className={`p-2 border-l ${isBreak ? 'bg-secondary/30' : ''}`}
                             >
-                              <div className="space-y-1">
-                                <p className="font-semibold text-sm">{slot.subject}</p>
+                              <div className={`p-3 rounded-lg h-full flex flex-col gap-1 ${
+                                isBreak ? 'items-center justify-center text-muted-foreground' : 
+                                subjectColors[slot.subject] || 'bg-background border'
+                              }`}>
+                                <span className="font-semibold text-sm line-clamp-1">{slot.subject}</span>
                                 {!isBreak && (
                                   <>
-                                    <p className="text-xs text-muted-foreground">{slot.teacher}</p>
-                                    <p className="text-xs text-muted-foreground">{slot.room}</p>
+                                    <span className="text-xs opacity-80 line-clamp-1">{slot.teacher}</span>
+                                    <span className="text-xs opacity-70 flex items-center gap-1">
+                                      <MapPin className="h-3 w-3" /> {slot.room}
+                                    </span>
                                   </>
                                 )}
                               </div>
-                            </td>
+                            </TableCell>
                           );
                         })}
-                      </tr>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Exam Schedule Tab */}
-        <TabsContent value="exam" className="space-y-6">
+        <TabsContent value="exam">
           <Card>
             <CardHeader>
               <CardTitle>Examination Schedule</CardTitle>
-              <CardDescription>
-                Final exam timetable for this semester
-              </CardDescription>
+              <CardDescription>Final exam timetable for this semester</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left p-4 font-semibold">Date</th>
-                      <th className="text-left p-4 font-semibold">Day</th>
-                      <th className="text-left p-4 font-semibold">Subject</th>
-                      <th className="text-left p-4 font-semibold">Time</th>
-                      <th className="text-left p-4 font-semibold">Duration</th>
-                      <th className="text-left p-4 font-semibold">Venue</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+            <CardContent className="space-y-6">
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead>Date</TableHead>
+                      <TableHead>Day</TableHead>
+                      <TableHead>Subject</TableHead>
+                      <TableHead>Time</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead>Venue</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {examSchedule.map((exam, index) => (
-                      <tr key={index} className="border-b border-border hover:bg-secondary/50 transition-colors">
-                        <td className="p-4 font-medium">
-                          {new Date(exam.date).toLocaleDateString()}
-                        </td>
-                        <td className="p-4">{exam.day}</td>
-                        <td className="p-4">
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{new Date(exam.date).toLocaleDateString()}</TableCell>
+                        <TableCell>{exam.day}</TableCell>
+                        <TableCell>
                           <Badge variant="outline" className={subjectColors[exam.subject]}>
                             {exam.subject}
                           </Badge>
-                        </td>
-                        <td className="p-4 text-sm">{exam.time}</td>
-                        <td className="p-4 text-sm">{exam.duration}</td>
-                        <td className="p-4 text-sm font-medium">{exam.room}</td>
-                      </tr>
+                        </TableCell>
+                        <TableCell className="text-sm">{exam.time}</TableCell>
+                        <TableCell className="text-sm">{exam.duration}</TableCell>
+                        <TableCell className="text-sm font-medium flex items-center gap-2">
+                          <MapPin className="h-3 w-3 text-muted-foreground" /> {exam.room}
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
-              <div className="mt-6 p-4 bg-secondary/50 rounded-lg">
-                <p className="text-sm text-muted-foreground">
-                  <strong>Important Notes:</strong>
-                </p>
-                <ul className="list-disc list-inside text-sm text-muted-foreground mt-2 space-y-1">
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <h4 className="font-semibold text-yellow-700 mb-2 flex items-center gap-2">
+                  <Clock className="h-4 w-4" /> Important Notes
+                </h4>
+                <ul className="list-disc list-inside text-sm text-yellow-700/80 space-y-1">
                   <li>Students must arrive 15 minutes before the exam starts</li>
                   <li>Bring your student ID card and necessary stationery</li>
                   <li>Electronic devices are not permitted in the exam hall</li>

@@ -8,7 +8,10 @@ import {
   Send,
   RotateCcw,
   ShieldCheck,
+  ArrowLeft,
+  MessageSquare,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import Navbar from "@/components/public/Navbar";
 import Footer from "@/components/public/Footer";
 import { usePageMetadata } from "@/hooks/usePageMetadata";
@@ -35,16 +38,12 @@ import {
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Badge } from "@/components/ui/badge";
 
 const contactSchema = z.object({
   name: z.string().trim().min(1, "Full name is required"),
   email: z.string().trim().email("Enter a valid email address"),
-  role: z
-    .union([
-      z.literal(""),
-      z.enum(["student", "teacher", "head", "admin", "parent", "visitor"]),
-    ])
-    .optional(),
+  role: z.union([z.literal(""), z.enum(["student", "teacher", "head", "admin", "parent", "visitor"])]).optional(),
   subject: z.string().trim().min(1, "Subject is required"),
   message: z.string().trim().min(10, "Message must be at least 10 characters"),
 });
@@ -63,13 +62,13 @@ type ContactFormValues = z.infer<typeof contactSchema>;
 const contactCards = [
   {
     title: "Phone Support",
-    description: "+251-xxx-xxx-xxx",
+    description: "+251-911-234-567",
     detail: "Weekday hotline for urgent technical issues.",
     icon: Phone,
   },
   {
     title: "Email",
-    description: "support@schoolportal.edu",
+    description: "support@pathways.edu.et",
     detail: "Reach out for feature requests or detailed feedback.",
     icon: Mail,
   },
@@ -87,26 +86,13 @@ const contactCards = [
   },
 ];
 
-const scenarioItems = [
-  "A student reports a grade mismatch via the Contact form.",
-  "A teacher requests account reset through the Contact page.",
-  "An admin receives the submitted messages in their inbox or admin panel.",
-];
-
 const Contact = () => {
   const { user } = useAuth();
   const { toast } = useToast();
 
   usePageMetadata({
-    title: "Student Portal | Contact",
-    description:
-      "Contact the Student Portal support team for help, feedback, or technical issues.",
-    keywords: [
-      "contact student portal",
-      "school management support",
-      "ict help desk",
-      "grade 9-12 portal assistance",
-    ],
+    title: "Contact Support | Pathways",
+    description: "Contact the Student Portal support team for help, feedback, or technical issues.",
   });
 
   const initialValues = useMemo<ContactFormValues>(
@@ -126,20 +112,13 @@ const Contact = () => {
     mode: "onBlur",
   });
 
-  const {
-    handleSubmit,
-    control,
-    register,
-    reset,
-    formState: { errors, isSubmitting },
-  } = form;
+  const { handleSubmit, control, register, reset, formState: { errors, isSubmitting } } = form;
 
   useEffect(() => {
     reset(initialValues);
   }, [initialValues, reset]);
 
-  const apiBaseUrl =
-    import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
 
   const onSubmit = async (values: ContactFormValues) => {
     try {
@@ -158,284 +137,170 @@ const Contact = () => {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok || !data?.success) {
-        throw new Error(
-          data?.message ?? "Unable to send message. Please try again later."
-        );
+        throw new Error(data?.message ?? "Unable to send message. Please try again later.");
       }
 
-      toast({
-        title: "Message sent",
-        description: "Your message has been sent successfully.",
-      });
-
-      reset({
-        ...initialValues,
-        subject: "",
-        message: "",
-      });
+      toast({ title: "Message sent", description: "Your message has been sent successfully." });
+      reset({ ...initialValues, subject: "", message: "" });
     } catch (error) {
-      const description =
-        error instanceof Error
-          ? error.message
-          : "Unable to send message. Please try again later.";
-      toast({
-        title: "Submission failed",
-        description,
-        variant: "destructive",
-      });
+      const description = error instanceof Error ? error.message : "Unable to send message. Please try again later.";
+      toast({ title: "Submission failed", description, variant: "destructive" });
     }
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-background selection:bg-primary/20">
       <Navbar />
+      
       <main className="flex-1">
-        <section className="border-b border-border/60 bg-card">
-          <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-16 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-            <div className="flex items-center gap-4 rounded-2xl border border-border bg-background/80 p-4 shadow-sm">
-              <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <GraduationCap className="h-8 w-8" aria-hidden="true" />
-              </span>
-              <div>
-                <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
-                  Student Portal &amp; School Management System
-                </p>
-                <h1 className="text-3xl font-bold text-foreground sm:text-4xl">
-                  Contact Us
-                </h1>
-                <p className="mt-2 text-base text-muted-foreground">
-                  We&apos;re here to help. Reach out for technical support,
-                  feedback, or inquiries.
-                </p>
-              </div>
+        {/* Hero Section */}
+        <section className="relative py-20 lg:py-28 overflow-hidden bg-muted/30">
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-primary/10 via-background to-background"></div>
+          
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+            <div className="mb-8 flex justify-center">
+              <Link to="/">
+                <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
+                  <ArrowLeft className="h-4 w-4" /> Back to Home
+                </Button>
+              </Link>
             </div>
-            <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground shadow-sm">
-              <div className="flex items-center gap-3 text-primary">
-                <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-                <span className="font-semibold">Secure assistance</span>
-              </div>
-              <p className="mt-2 leading-relaxed">
-                Our ICT support team for Grades 9–12 responds within one
-                business day. Logged-in users get personalized follow-up based
-                on their role.
-              </p>
-            </div>
+            
+            <Badge variant="outline" className="mb-6 px-4 py-1.5 text-sm font-medium rounded-full border-primary/20 bg-primary/5 text-primary">
+              Support Center
+            </Badge>
+            
+            <h1 className="mx-auto max-w-4xl text-4xl font-bold tracking-tight text-foreground sm:text-6xl mb-6">
+              How can we <span className="text-primary">help you?</span>
+            </h1>
+            
+            <p className="mx-auto max-w-2xl text-lg leading-8 text-muted-foreground">
+              We're here to help with technical support, feedback, or inquiries. Our team typically responds within one business day.
+            </p>
           </div>
         </section>
 
-        <section id="support" className="py-16">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        {/* Contact Info Grid */}
+        <section className="py-12 -mt-16 relative z-10">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
               {contactCards.map((card) => (
-                <div
-                  key={card.title}
-                  className="flex h-full flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-lg"
-                >
-                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <card.icon className="h-6 w-6" aria-hidden="true" />
-                  </span>
-                  <div>
-                    <h2 className="text-lg font-semibold text-card-foreground">
-                      {card.title}
-                    </h2>
-                    <p className="text-base font-medium text-foreground">
-                      {card.description}
-                    </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {card.detail}
-                    </p>
-                  </div>
-                </div>
+                <Card key={card.title} className="border-border/50 shadow-lg bg-card/95 backdrop-blur hover:-translate-y-1 transition-transform duration-300">
+                  <CardHeader className="pb-2">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 text-primary">
+                      <card.icon className="h-6 w-6" />
+                    </div>
+                    <CardTitle className="text-lg">{card.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="font-medium text-foreground mb-1">{card.description}</p>
+                    <p className="text-sm text-muted-foreground">{card.detail}</p>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="bg-muted/30 py-16">
-          <div className="mx-auto grid max-w-6xl gap-8 px-4 sm:px-6 lg:grid-cols-[1fr_1.2fr] lg:px-8">
-            <div className="space-y-6">
-              <h2 className="text-2xl font-semibold text-foreground">
-                Send a message to our support team
-              </h2>
-              <p className="text-base leading-relaxed text-muted-foreground">
-                Complete the form and our administrators will review your
-                message. Please provide exact course names, class sections, or
-                error details so we can respond quickly.
-              </p>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                {scenarioItems.map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="mt-1 inline-flex h-2 w-2 shrink-0 rounded-full bg-primary"></span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
+        {/* Contact Form Section */}
+        <section className="py-20">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="grid lg:grid-cols-[1fr_1.5fr] gap-12 items-start">
+              <div className="space-y-8">
+                <div>
+                  <h2 className="text-3xl font-bold mb-4">Send us a message</h2>
+                  <p className="text-lg text-muted-foreground leading-relaxed">
+                    Complete the form and our administrators will review your message. Please provide exact details so we can respond quickly.
+                  </p>
+                </div>
+                
+                <div className="p-6 rounded-2xl bg-primary/5 border border-primary/10">
+                  <div className="flex items-center gap-3 text-primary mb-4">
+                    <ShieldCheck className="h-6 w-6" />
+                    <span className="font-semibold text-lg">Secure Assistance</span>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Our ICT support team for Grades 9–12 prioritizes security. Logged-in users get personalized follow-up based on their role.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-foreground">Common Topics</h3>
+                  <ul className="space-y-3">
+                    {["Grade mismatch reporting", "Account access issues", "Feature suggestions", "Technical bug reports"].map((item) => (
+                      <li key={item} className="flex items-center gap-3 text-muted-foreground">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <Card className="shadow-xl border-border/50">
+                <CardHeader>
+                  <div className="flex items-center gap-3 mb-2">
+                    <MessageSquare className="h-5 w-5 text-primary" />
+                    <CardTitle>Contact Form</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Fill out the details below. We'll get back to you via email.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Full Name</Label>
+                        <Input id="name" placeholder="John Doe" {...register("name")} />
+                        {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email Address</Label>
+                        <Input id="email" type="email" placeholder="john@example.com" {...register("email")} />
+                        {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="role">Role (Optional)</Label>
+                        <Controller
+                          control={control}
+                          name="role"
+                          render={({ field }) => (
+                            <Select value={field.value || "none"} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
+                              <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Not specified</SelectItem>
+                                {roleOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="subject">Subject</Label>
+                        <Input id="subject" placeholder="Brief summary of issue" {...register("subject")} />
+                        {errors.subject && <p className="text-sm text-destructive">{errors.subject.message}</p>}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="message">Message</Label>
+                      <Textarea id="message" rows={6} placeholder="Describe your issue or feedback in detail..." {...register("message")} />
+                      {errors.message && <p className="text-sm text-destructive">{errors.message.message}</p>}
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                      <Button type="button" variant="outline" onClick={() => reset(initialValues)} disabled={isSubmitting}>
+                        <RotateCcw className="mr-2 h-4 w-4" /> Reset
+                      </Button>
+                      <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? "Sending..." : <><Send className="mr-2 h-4 w-4" /> Send Message</>}
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
             </div>
-
-            <Card className="shadow-xl">
-              <CardHeader>
-                <CardTitle>Contact form</CardTitle>
-                <CardDescription>
-                  All fields are required except role. We&apos;ll reply via the
-                  email you provide.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form
-                  className="space-y-6"
-                  onSubmit={handleSubmit(onSubmit)}
-                  noValidate
-                >
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Full name</Label>
-                      <Input
-                        id="name"
-                        placeholder="Enter your full name"
-                        autoComplete="name"
-                        {...register("name")}
-                      />
-                      {errors.name && (
-                        <p className="text-sm text-destructive" role="alert">
-                          {errors.name.message}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email address</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="you@example.com"
-                        autoComplete="email"
-                        {...register("email")}
-                      />
-                      {errors.email && (
-                        <p className="text-sm text-destructive" role="alert">
-                          {errors.email.message}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="role">Role (optional)</Label>
-                      <Controller
-                        control={control}
-                        name="role"
-                        render={({ field }) => (
-                          <Select
-                            value={field.value ?? ""}
-                            onValueChange={(value) =>
-                              // Map the sentinel "none" back to empty string
-                              // so the form field stays empty when the user
-                              // selects the "Not specified" option.
-                              field.onChange(value === "none" ? "" : value)
-                            }
-                          >
-                            <SelectTrigger id="role">
-                              <SelectValue placeholder="Select your role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {/* Use a non-empty sentinel value to avoid runtime
-                  errors from the Select implementation which
-                  forbids empty string item values. */}
-                              <SelectItem value="none">
-                                Not specified
-                              </SelectItem>
-                              {roleOptions.map((option) => (
-                                <SelectItem
-                                  key={option.value}
-                                  value={option.value}
-                                >
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                      {errors.role && (
-                        <p className="text-sm text-destructive" role="alert">
-                          {errors.role.message}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="subject">Subject</Label>
-                      <Input
-                        id="subject"
-                        placeholder="Short summary"
-                        {...register("subject")}
-                      />
-                      {errors.subject && (
-                        <p className="text-sm text-destructive" role="alert">
-                          {errors.subject.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="message">Message</Label>
-                    <Textarea
-                      id="message"
-                      rows={6}
-                      placeholder="Describe the issue or feedback in detail"
-                      {...register("message")}
-                    />
-                    {errors.message && (
-                      <p className="text-sm text-destructive" role="alert">
-                        {errors.message.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex items-center gap-2"
-                      onClick={() => reset(initialValues)}
-                      disabled={isSubmitting}
-                    >
-                      <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                      Reset
-                    </Button>
-                    <Button
-                      type="submit"
-                      className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? (
-                        <svg
-                          className="h-4 w-4 animate-spin"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          aria-hidden="true"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                          ></path>
-                        </svg>
-                      ) : (
-                        <Send className="h-4 w-4" aria-hidden="true" />
-                      )}
-                      Submit
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
           </div>
         </section>
       </main>

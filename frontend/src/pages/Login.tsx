@@ -4,11 +4,11 @@ import {
   GraduationCap,
   Eye,
   EyeOff,
-  ArrowLeft,
   Mail,
   Lock,
   User,
   Loader2,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,7 +50,7 @@ type StaffLoginForm = z.infer<typeof staffLoginSchema>;
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login, user, getRoleBasedRedirect } = useAuth();
+  const { login, getRoleBasedRedirect } = useAuth();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -65,25 +66,41 @@ const Login = () => {
     defaultValues: { email: "", password: "", rememberMe: false },
   });
 
-  const handleStudentLogin = async (data: StudentLoginForm) => {
+  const handleLogin = async (
+    data: StudentLoginForm | StaffLoginForm,
+    type: "student" | "staff"
+  ) => {
     setLoading(true);
     try {
-      const normalizedStudentId = data.studentId.trim().toUpperCase();
-      const result = await login({
-        studentId: normalizedStudentId,
-        password: data.password,
-      });
+      let credentials;
+      if (type === "student") {
+        const sData = data as StudentLoginForm;
+        credentials = {
+          studentId: sData.studentId.trim().toUpperCase(),
+          password: sData.password,
+        };
+      } else {
+        const sData = data as StaffLoginForm;
+        credentials = {
+          email: sData.email,
+          password: sData.password,
+        };
+      }
+
+      const result = await login(credentials);
+
       if (result.success && result.user) {
-        toast({ title: "Login successful", description: "Welcome back!" });
+        toast({ title: "Welcome back!", description: `Logged in as ${result.user.firstName}` });
         const redirectPath = getRoleBasedRedirect(result.user.role);
         navigate(redirectPath);
       } else {
         toast({
           title: "Login failed",
-          description: result.message || "Invalid student ID or password.",
+          description: result.message || "Invalid credentials.",
           variant: "destructive",
         });
-        // Auto-switch to Staff login when backend indicates admin must use email
+        
+        // Auto-switch hint
         const hint = (result.message || "").toLowerCase();
         if (
           result.code === "EMAIL_ONLY_LOGIN" ||
@@ -103,123 +120,35 @@ const Login = () => {
     }
   };
 
-  const handleStaffLogin = async (data: StaffLoginForm) => {
-    setLoading(true);
-    try {
-      const result = await login({
-        email: data.email,
-        password: data.password,
-      });
-      if (result.success && result.user) {
-        toast({ title: "Login successful", description: "Welcome back!" });
-        const redirectPath = getRoleBasedRedirect(result.user.role);
-        navigate(redirectPath);
-      } else if (result.pending) {
-        toast({
-          title: "Account pending approval",
-          description:
-            result.message ||
-            "Your account is awaiting approval. You'll be able to log in once approved.",
-        });
-        navigate("/pending-approval", { state: { email: data.email } });
-      } else {
-        toast({
-          title: "Login failed",
-          description: "Invalid credentials. Try the demo emails.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 animate-in fade-in duration-500">
-      {/* Left Panel - Branding */}
-      <div className="hidden lg:flex flex-col justify-center items-center bg-gradient-to-br from-primary via-primary/90 to-primary/80 p-12 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent"></div>
-        <div className="max-w-md text-center space-y-6 relative z-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/10 backdrop-blur-sm mb-4 animate-pulse">
-            <GraduationCap className="h-10 w-10 text-white" />
+    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
+      <div className="w-full max-w-md space-y-8">
+        {/* Logo & Header */}
+        <div className="text-center space-y-2">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-primary-foreground mb-4 shadow-lg shadow-primary/20">
+            <GraduationCap className="h-6 w-6" />
           </div>
-          <h1 className="text-4xl font-bold text-white animate-in slide-in-from-bottom-4 duration-700">
-            Student Portal System
-          </h1>
-          <p className="text-lg text-white/90 animate-in slide-in-from-bottom-4 duration-700 delay-100">
-            A comprehensive school management platform designed for modern
-            education
+          <h1 className="text-3xl font-bold tracking-tight">Pathways UI</h1>
+          <p className="text-muted-foreground">
+            Sign in to access your educational portal
           </p>
-          <div className="pt-8 space-y-3 text-sm text-white/80 animate-in slide-in-from-bottom-4 duration-700 delay-200">
-            <p className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-white/60 rounded-full"></span> Secure
-              access for students, teachers, and administrators
-            </p>
-            <p className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-white/60 rounded-full"></span>{" "}
-              Real-time attendance and grade tracking
-            </p>
-            <p className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-white/60 rounded-full"></span>{" "}
-              Streamlined assignment and schedule management
-            </p>
-          </div>
         </div>
-      </div>
 
-      {/* Right Panel - Login Form */}
-      <div className="flex items-center justify-center p-8 bg-background">
-        <Card className="w-full max-w-md shadow-2xl animate-in slide-in-from-right-4 duration-500">
-          <CardHeader className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2 lg:hidden">
-                <GraduationCap className="h-6 w-6 text-primary" />
-                <span className="font-bold text-xl">Student Portal</span>
-              </div>
-              <CardTitle className="text-2xl">Welcome back</CardTitle>
-              <CardDescription>Sign in to access your portal</CardDescription>
-            </div>
-            <div className="shrink-0">
-              <Button
-                type="button"
-                className="px-3 py-1 text-sm h-8 bg-white text-primary hover:bg-gray-50 shadow-sm border border-gray-100"
-                onClick={() => navigate("/")}
-                aria-label="Go to home"
-              >
-                <span className="flex items-center gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  <span>Home</span>
-                </span>
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
+        <Card className="border-none shadow-xl bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <CardHeader>
             <Tabs
               value={tab}
-              onValueChange={(v: string) =>
-                setTab(v === "staff" ? "staff" : "student")
-              }
+              onValueChange={(v) => setTab(v as "student" | "staff")}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
                 <TabsTrigger value="student">Student</TabsTrigger>
                 <TabsTrigger value="staff">Staff</TabsTrigger>
               </TabsList>
 
-              <TabsContent
-                value="student"
-                className="animate-in fade-in duration-300"
-              >
-                <form
-                  onSubmit={studentForm.handleSubmit(handleStudentLogin)}
-                  className="space-y-4"
-                >
+              {/* Student Login */}
+              <TabsContent value="student">
+                <form onSubmit={studentForm.handleSubmit((d) => handleLogin(d, "student"))} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="studentId">Student ID</Label>
                     <div className="relative">
@@ -227,24 +156,17 @@ const Login = () => {
                       <Input
                         id="studentId"
                         placeholder="STU-2024-0001"
-                        className="pl-10"
+                        className="pl-9"
                         {...studentForm.register("studentId")}
-                        aria-describedby={
-                          studentForm.formState.errors.studentId
-                            ? "studentId-error"
-                            : undefined
-                        }
                       />
                     </div>
                     {studentForm.formState.errors.studentId && (
-                      <p
-                        id="studentId-error"
-                        className="text-sm text-destructive"
-                      >
+                      <p className="text-sm text-destructive">
                         {studentForm.formState.errors.studentId.message}
                       </p>
                     )}
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="student-password">Password</Label>
                     <div className="relative">
@@ -252,110 +174,83 @@ const Login = () => {
                       <Input
                         id="student-password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="Enter your password"
-                        className="pl-10 pr-10"
+                        placeholder="••••••••"
+                        className="pl-9 pr-9"
                         {...studentForm.register("password")}
-                        aria-describedby={
-                          studentForm.formState.errors.password
-                            ? "student-password-error"
-                            : undefined
-                        }
                       />
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-1 top-1 h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 h-4 w-4 text-muted-foreground hover:text-foreground"
-                        aria-label={
-                          showPassword ? "Hide password" : "Show password"
-                        }
                       >
                         {showPassword ? (
                           <EyeOff className="h-4 w-4" />
                         ) : (
                           <Eye className="h-4 w-4" />
                         )}
-                      </button>
+                      </Button>
                     </div>
                     {studentForm.formState.errors.password && (
-                      <p
-                        id="student-password-error"
-                        className="text-sm text-destructive"
-                      >
+                      <p className="text-sm text-destructive">
                         {studentForm.formState.errors.password.message}
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="student-remember"
-                      {...studentForm.register("rememberMe")}
-                    />
-                    <Label htmlFor="student-remember" className="text-sm">
-                      Remember me
-                    </Label>
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Signing in...
-                      </>
-                    ) : (
-                      "Sign In"
-                    )}
-                  </Button>
-                  <div className="text-center">
-                    <button
-                      type="button"
-                      className="text-sm text-primary hover:underline"
-                      onClick={() =>
-                        toast({
-                          title: "Forgot Password",
-                          description:
-                            "Contact your administrator for password reset.",
-                        })
-                      }
-                    >
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="student-remember"
+                        checked={studentForm.watch("rememberMe")}
+                        onCheckedChange={(c) => studentForm.setValue("rememberMe", c as boolean)}
+                      />
+                      <label
+                        htmlFor="student-remember"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Remember me
+                      </label>
+                    </div>
+                    <Button variant="link" size="sm" className="px-0 font-normal">
                       Forgot password?
-                    </button>
+                    </Button>
                   </div>
-                  <p className="text-xs text-center text-muted-foreground">
-                    Demo: Ask admin for your generated student credentials.
-                  </p>
+
+                  <Button className="w-full" type="submit" disabled={loading}>
+                    {loading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <ArrowRight className="mr-2 h-4 w-4" />
+                    )}
+                    Sign In as Student
+                  </Button>
                 </form>
               </TabsContent>
 
-              <TabsContent
-                value="staff"
-                className="animate-in fade-in duration-300"
-              >
-                <form
-                  onSubmit={staffForm.handleSubmit(handleStaffLogin)}
-                  className="space-y-4"
-                >
+              {/* Staff Login */}
+              <TabsContent value="staff">
+                <form onSubmit={staffForm.handleSubmit((d) => handleLogin(d, "staff"))} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">Email Address</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="email"
                         type="email"
-                        placeholder="Enter your email"
-                        className="pl-10"
+                        placeholder="teacher@school.edu"
+                        className="pl-9"
                         {...staffForm.register("email")}
-                        aria-describedby={
-                          staffForm.formState.errors.email
-                            ? "email-error"
-                            : undefined
-                        }
                       />
                     </div>
                     {staffForm.formState.errors.email && (
-                      <p id="email-error" className="text-sm text-destructive">
+                      <p className="text-sm text-destructive">
                         {staffForm.formState.errors.email.message}
                       </p>
                     )}
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="staff-password">Password</Label>
                     <div className="relative">
@@ -363,88 +258,77 @@ const Login = () => {
                       <Input
                         id="staff-password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="Enter your password"
-                        className="pl-10 pr-10"
+                        placeholder="••••••••"
+                        className="pl-9 pr-9"
                         {...staffForm.register("password")}
-                        aria-describedby={
-                          staffForm.formState.errors.password
-                            ? "staff-password-error"
-                            : undefined
-                        }
                       />
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-1 top-1 h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 h-4 w-4 text-muted-foreground hover:text-foreground"
-                        aria-label={
-                          showPassword ? "Hide password" : "Show password"
-                        }
                       >
                         {showPassword ? (
                           <EyeOff className="h-4 w-4" />
                         ) : (
                           <Eye className="h-4 w-4" />
                         )}
-                      </button>
+                      </Button>
                     </div>
                     {staffForm.formState.errors.password && (
-                      <p
-                        id="staff-password-error"
-                        className="text-sm text-destructive"
-                      >
+                      <p className="text-sm text-destructive">
                         {staffForm.formState.errors.password.message}
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="staff-remember"
-                      {...staffForm.register("rememberMe")}
-                    />
-                    <Label htmlFor="staff-remember" className="text-sm">
-                      Remember me
-                    </Label>
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Signing in...
-                      </>
-                    ) : (
-                      "Sign In"
-                    )}
-                  </Button>
-                  <div className="text-center space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => navigate("/signup")}
-                      className="text-sm text-primary hover:underline"
-                    >
-                      Need an account? Sign up
-                    </button>
-                    <br />
-                    <button
-                      type="button"
-                      className="text-sm text-primary hover:underline"
-                      onClick={() =>
-                        toast({
-                          title: "Forgot Password",
-                          description:
-                            "Contact your administrator for password reset.",
-                        })
-                      }
-                    >
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="staff-remember"
+                        checked={staffForm.watch("rememberMe")}
+                        onCheckedChange={(c) => staffForm.setValue("rememberMe", c as boolean)}
+                      />
+                      <label
+                        htmlFor="staff-remember"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Remember me
+                      </label>
+                    </div>
+                    <Button variant="link" size="sm" className="px-0 font-normal">
                       Forgot password?
-                    </button>
+                    </Button>
                   </div>
-                  <p className="text-xs text-center text-muted-foreground">
-                    Demo: teacher, head, or admin @school.edu
-                  </p>
+
+                  <Button className="w-full" type="submit" disabled={loading}>
+                    {loading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <ArrowRight className="mr-2 h-4 w-4" />
+                    )}
+                    Sign In as Staff
+                  </Button>
                 </form>
               </TabsContent>
             </Tabs>
-          </CardContent>
+          </CardHeader>
+          <CardFooter className="flex flex-col space-y-4 text-center text-sm text-muted-foreground border-t pt-6">
+            <p>
+              Don't have an account?{" "}
+              <Button variant="link" className="p-0 h-auto font-semibold" onClick={() => navigate("/signup")}>
+                Sign up
+              </Button>
+            </p>
+            <div className="flex items-center justify-center gap-4 text-xs">
+              <a href="#" className="hover:underline">Privacy Policy</a>
+              <span>•</span>
+              <a href="#" className="hover:underline">Terms of Service</a>
+              <span>•</span>
+              <a href="#" className="hover:underline">Help Center</a>
+            </div>
+          </CardFooter>
         </Card>
       </div>
     </div>

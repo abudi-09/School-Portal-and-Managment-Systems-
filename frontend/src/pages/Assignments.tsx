@@ -7,6 +7,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,39 +19,32 @@ import {
   Clock,
   AlertCircle,
   Download,
+  BookOpen,
+  FileText,
+  GraduationCap,
 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { PageHeader, StatCard, FilterBar, EmptyState } from "@/components/patterns";
 
 const Assignments = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [filterSubject, setFilterSubject] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleDownload = (fileName: string, fileUrl: string) => {
-    // In a real application, this would download the actual file from the server
     toast({
       title: "Download Started",
       description: `Downloading ${fileName}...`,
     });
-
-    // Simulate download delay
     setTimeout(() => {
-      // Create a mock download by creating a blob and triggering download
       const link = document.createElement("a");
       link.href = fileUrl;
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
       toast({
         title: "Download Complete",
         description: `${fileName} has been downloaded successfully.`,
@@ -164,11 +158,11 @@ const Assignments = () => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "submitted":
-        return <CheckCircle2 className="h-5 w-5 text-success" />;
+        return <CheckCircle2 className="h-5 w-5 text-green-500" />;
       case "pending":
-        return <Clock className="h-5 w-5 text-warning" />;
+        return <Clock className="h-5 w-5 text-yellow-500" />;
       case "graded":
-        return <CheckCircle2 className="h-5 w-5 text-accent" />;
+        return <CheckCircle2 className="h-5 w-5 text-blue-500" />;
       case "late":
         return <AlertCircle className="h-5 w-5 text-destructive" />;
       default:
@@ -177,215 +171,237 @@ const Assignments = () => {
   };
 
   const getStatusBadge = (status: string, grade?: number) => {
-    const variants: Record<
-      string,
-      "default" | "secondary" | "destructive" | "outline"
-    > = {
-      submitted: "default",
-      pending: "secondary",
+    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+      submitted: "secondary",
+      pending: "outline",
       graded: "default",
       late: "destructive",
     };
 
     return (
-      <Badge variant={variants[status] || "outline"}>
+      <Badge variant={variants[status] || "outline"} className="capitalize">
         {status === "graded" && grade ? `Graded: ${grade}%` : status}
       </Badge>
     );
   };
 
-  const filteredAssignments = assignments.filter((assignment) => {
-    const matchesSubject =
-      filterSubject === "all" || assignment.subject === filterSubject;
-    const matchesStatus =
-      filterStatus === "all" || assignment.status === filterStatus;
-    return matchesSubject && matchesStatus;
-  });
+  const filterItems = (items: any[]) => {
+    return items.filter((item) => {
+      const matchesSubject = filterSubject === "all" || item.subject === filterSubject;
+      const matchesStatus = filterStatus === "all" || item.status === filterStatus;
+      const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            item.subject.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesSubject && matchesStatus && matchesSearch;
+    });
+  };
+
+  const filteredAssignments = filterItems(assignments);
+  const filteredHomework = filterItems(homework);
+
+  // Stats Calculation
+  const pendingCount = assignments.filter(a => a.status === "pending").length + homework.filter(h => h.status === "pending").length;
+  const submittedCount = assignments.filter(a => a.status === "submitted").length + homework.filter(h => h.status === "submitted").length;
+  const gradedCount = assignments.filter(a => a.status === "graded").length;
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Assignments</h1>
-        <p className="text-muted-foreground mt-1">
-          Track and manage your assignments and homework
-        </p>
+    <div className="p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
+      <PageHeader
+        title="Assignments"
+        description="Track and manage your academic tasks and homework."
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Assignments" }]}
+      />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          title="Pending Tasks"
+          value={pendingCount}
+          icon={<Clock className="h-4 w-4 text-yellow-500" />}
+          description="Assignments & homework due soon"
+        />
+        <StatCard
+          title="Submitted"
+          value={submittedCount}
+          icon={<CheckCircle2 className="h-4 w-4 text-green-500" />}
+          description="Waiting for grading"
+        />
+        <StatCard
+          title="Graded"
+          value={gradedCount}
+          icon={<GraduationCap className="h-4 w-4 text-blue-500" />}
+          description="Completed assignments"
+        />
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="assignments" className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="assignments">Assignments</TabsTrigger>
-          <TabsTrigger value="homework">Homework</TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <TabsList>
+            <TabsTrigger value="assignments" className="gap-2">
+              <FileText className="h-4 w-4" /> Assignments
+            </TabsTrigger>
+            <TabsTrigger value="homework" className="gap-2">
+              <BookOpen className="h-4 w-4" /> Homework
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        {/* Assignments Tab */}
+        <FilterBar
+          onSearch={setSearchQuery}
+          filters={[
+            {
+              key: "subject",
+              label: "Subject",
+              options: [
+                { label: "All Subjects", value: "all" },
+                { label: "Mathematics", value: "Mathematics" },
+                { label: "Physics", value: "Physics" },
+                { label: "Chemistry", value: "Chemistry" },
+                { label: "English", value: "English" },
+                { label: "History", value: "History" },
+              ],
+              value: filterSubject,
+              onChange: setFilterSubject,
+            },
+            {
+              key: "status",
+              label: "Status",
+              options: [
+                { label: "All Status", value: "all" },
+                { label: "Pending", value: "pending" },
+                { label: "Submitted", value: "submitted" },
+                { label: "Graded", value: "graded" },
+                { label: "Late", value: "late" },
+              ],
+              value: filterStatus,
+              onChange: setFilterStatus,
+            },
+          ]}
+        />
+
         <TabsContent value="assignments" className="space-y-6">
-          {/* Filters */}
-          <div className="flex flex-wrap gap-4">
-            <Select value={filterSubject} onValueChange={setFilterSubject}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Filter by subject" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Subjects</SelectItem>
-                <SelectItem value="Mathematics">Mathematics</SelectItem>
-                <SelectItem value="Physics">Physics</SelectItem>
-                <SelectItem value="Chemistry">Chemistry</SelectItem>
-                <SelectItem value="English">English</SelectItem>
-                <SelectItem value="History">History</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="submitted">Submitted</SelectItem>
-                <SelectItem value="graded">Graded</SelectItem>
-                <SelectItem value="late">Late</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Assignments List */}
-          <div className="grid gap-4">
-            {filteredAssignments.map((assignment) => (
-              <Card
-                key={assignment.id}
-                className="hover:shadow-md transition-shadow"
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        {getStatusIcon(assignment.status)}
-                        <CardTitle className="text-lg">
-                          {assignment.title}
-                        </CardTitle>
+          {filteredAssignments.length > 0 ? (
+            <div className="grid gap-4">
+              {filteredAssignments.map((assignment) => (
+                <Card key={assignment.id} className="hover:shadow-md transition-all duration-200 border-l-4 border-l-primary">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(assignment.status)}
+                          <CardTitle className="text-lg font-semibold">{assignment.title}</CardTitle>
+                        </div>
+                        <CardDescription className="line-clamp-1">{assignment.description}</CardDescription>
                       </div>
-                      <CardDescription>
-                        {assignment.description}
-                      </CardDescription>
+                      {getStatusBadge(assignment.status, assignment.grade)}
                     </div>
-                    {getStatusBadge(assignment.status, assignment.grade)}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-6 text-sm">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Badge variant="outline">{assignment.subject}</Badge>
-                      </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
+                  </CardHeader>
+                  <CardContent className="pb-3">
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                      <Badge variant="secondary" className="font-normal">
+                        {assignment.subject}
+                      </Badge>
+                      <div className="flex items-center gap-1.5">
                         <Calendar className="h-4 w-4" />
-                        <span>
-                          Due:{" "}
-                          {new Date(assignment.deadline).toLocaleDateString()}
-                        </span>
+                        <span>Due: {new Date(assignment.deadline).toLocaleDateString()}</span>
                       </div>
                       {assignment.hasAttachment && (
-                        <div className="flex items-center gap-2 text-muted-foreground">
+                        <div className="flex items-center gap-1.5">
                           <Paperclip className="h-4 w-4" />
-                          <span>
-                            {assignment.attachments.length} attachment
-                            {assignment.attachments.length !== 1 ? "s" : ""}
-                          </span>
+                          <span>{assignment.attachments.length} attachment{assignment.attachments.length !== 1 ? "s" : ""}</span>
                         </div>
                       )}
                     </div>
+                  </CardContent>
+                  <CardFooter className="pt-3 border-t bg-muted/20 flex justify-between items-center">
                     <div className="flex gap-2">
-                      {assignment.attachments.map((attachment, index) => (
+                      {assignment.attachments.map((attachment: any, index: number) => (
                         <Button
                           key={index}
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            handleDownload(attachment.name, attachment.url)
-                          }
-                          className="gap-2"
+                          onClick={() => handleDownload(attachment.name, attachment.url)}
+                          className="h-8 px-2 text-xs gap-1.5"
                         >
-                          <Download className="h-4 w-4" />
-                          Download
+                          <Download className="h-3.5 w-3.5" />
+                          {attachment.name.length > 20 ? attachment.name.substring(0, 20) + "..." : attachment.name}
                         </Button>
                       ))}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigate(`/assignment/${assignment.id}`)}
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Details
-                      </Button>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    <Button size="sm" onClick={() => navigate(`/assignment/${assignment.id}`)} className="gap-2">
+                      View Details <Eye className="h-4 w-4" />
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="No assignments found"
+              description="Try adjusting your filters or search query."
+              icon={FileText}
+            />
+          )}
         </TabsContent>
 
-        {/* Homework Tab */}
         <TabsContent value="homework" className="space-y-6">
-          <div className="grid gap-4">
-            {homework.map((item) => (
-              <Card key={item.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        {getStatusIcon(item.status)}
-                        <CardTitle className="text-lg">{item.title}</CardTitle>
+          {filteredHomework.length > 0 ? (
+            <div className="grid gap-4">
+              {filteredHomework.map((item) => (
+                <Card key={item.id} className="hover:shadow-md transition-all duration-200 border-l-4 border-l-blue-500">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(item.status)}
+                          <CardTitle className="text-lg font-semibold">{item.title}</CardTitle>
+                        </div>
+                        <CardDescription className="line-clamp-1">{item.pages}</CardDescription>
                       </div>
-                      <CardDescription>{item.pages}</CardDescription>
+                      {getStatusBadge(item.status)}
                     </div>
-                    {getStatusBadge(item.status)}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-6 text-sm">
-                      <Badge variant="outline">{item.subject}</Badge>
-                      <div className="flex items-center gap-2 text-muted-foreground">
+                  </CardHeader>
+                  <CardContent className="pb-3">
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                      <Badge variant="secondary" className="font-normal">
+                        {item.subject}
+                      </Badge>
+                      <div className="flex items-center gap-1.5">
                         <Calendar className="h-4 w-4" />
-                        <span>
-                          Due: {new Date(item.deadline).toLocaleDateString()}
-                        </span>
+                        <span>Due: {new Date(item.deadline).toLocaleDateString()}</span>
                       </div>
                       {item.hasAttachment && (
-                        <div className="flex items-center gap-2 text-muted-foreground">
+                        <div className="flex items-center gap-1.5">
                           <Paperclip className="h-4 w-4" />
-                          <span>
-                            {item.attachments.length} attachment
-                            {item.attachments.length !== 1 ? "s" : ""}
-                          </span>
+                          <span>{item.attachments.length} attachment{item.attachments.length !== 1 ? "s" : ""}</span>
                         </div>
                       )}
                     </div>
+                  </CardContent>
+                  <CardFooter className="pt-3 border-t bg-muted/20 flex justify-end">
                     <div className="flex gap-2">
-                      {item.attachments.map((attachment, index) => (
+                      {item.attachments.map((attachment: any, index: number) => (
                         <Button
                           key={index}
                           variant="outline"
                           size="sm"
-                          onClick={() =>
-                            handleDownload(attachment.name, attachment.url)
-                          }
-                          className="gap-2"
+                          onClick={() => handleDownload(attachment.name, attachment.url)}
+                          className="h-8 gap-1.5"
                         >
-                          <Download className="h-4 w-4" />
+                          <Download className="h-3.5 w-3.5" />
                           Download
                         </Button>
                       ))}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="No homework found"
+              description="Try adjusting your filters or search query."
+              icon={BookOpen}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>

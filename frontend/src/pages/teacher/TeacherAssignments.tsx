@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Plus, Upload, Calendar, FileText, Download } from "lucide-react";
+import { Plus, Upload, Calendar, FileText, Download, BookOpen, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,10 +31,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import TablePagination from "@/components/shared/TablePagination";
-import { SkeletonWrapper, SkeletonGrid } from "@/components/skeleton";
+import { PageHeader, FilterBar, EmptyState, StatCard } from "@/components/patterns";
 
 const TeacherAssignments = () => {
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("assignments");
 
   const assignments = [
     {
@@ -45,6 +47,7 @@ const TeacherAssignments = () => {
       submissions: 28,
       totalStudents: 30,
       status: "ongoing",
+      description: "Complete exercises 1-20 from Chapter 4. Show all working out.",
     },
     {
       id: 2,
@@ -55,6 +58,7 @@ const TeacherAssignments = () => {
       submissions: 15,
       totalStudents: 32,
       status: "ongoing",
+      description: "Solve the trigonometric identities provided in the worksheet.",
     },
     {
       id: 3,
@@ -65,6 +69,7 @@ const TeacherAssignments = () => {
       submissions: 25,
       totalStudents: 25,
       status: "closed",
+      description: "Differentiation practice problems for the upcoming test.",
     },
   ];
 
@@ -76,6 +81,7 @@ const TeacherAssignments = () => {
       class: "10A",
       dueDate: "2024-11-18",
       status: "ongoing",
+      description: "Read Chapter 5 and complete the review questions.",
     },
     {
       id: 2,
@@ -84,50 +90,44 @@ const TeacherAssignments = () => {
       class: "11A",
       dueDate: "2024-11-22",
       status: "ongoing",
+      description: "Prepare for the quiz by solving these practice problems.",
     },
   ];
 
   const ROWS_PER_PAGE = 6;
   const [assignmentsPage, setAssignmentsPage] = useState(1);
   const [homeworkPage, setHomeworkPage] = useState(1);
-  const [assignmentsQuery, setAssignmentsQuery] = useState("");
-  const [homeworkQuery, setHomeworkQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
   // filtered lists computed from queries
-  const filteredAssignments = assignments.filter((a) => {
-    if (!assignmentsQuery) return true;
-    const q = assignmentsQuery.toLowerCase();
-    return (
-      String(a.title).toLowerCase().includes(q) ||
-      String(a.subject).toLowerCase().includes(q) ||
-      String(a.class).toLowerCase().includes(q)
-    );
-  });
+  const filterItems = (items: any[]) => {
+    return items.filter((item) => {
+      const matchesSearch = 
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.class.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesStatus = statusFilter === "all" || item.status === statusFilter;
 
-  const filteredHomework = homework.filter((h) => {
-    if (!homeworkQuery) return true;
-    const q = homeworkQuery.toLowerCase();
-    return (
-      String(h.title).toLowerCase().includes(q) ||
-      String(h.subject).toLowerCase().includes(q) ||
-      String(h.class).toLowerCase().includes(q)
-    );
-  });
+      return matchesSearch && matchesStatus;
+    });
+  };
 
-  const assignmentsTotal = Math.max(
-    1,
-    Math.ceil(filteredAssignments.length / ROWS_PER_PAGE)
-  );
-  const homeworkTotal = Math.max(
-    1,
-    Math.ceil(filteredHomework.length / ROWS_PER_PAGE)
-  );
+  const filteredAssignments = filterItems(assignments);
+  const filteredHomework = filterItems(homework);
+
+  const assignmentsTotal = Math.max(1, Math.ceil(filteredAssignments.length / ROWS_PER_PAGE));
+  const homeworkTotal = Math.max(1, Math.ceil(filteredHomework.length / ROWS_PER_PAGE));
+
   useEffect(() => {
-    if (assignmentsPage > assignmentsTotal)
-      setAssignmentsPage(assignmentsTotal);
+    if (assignmentsPage > assignmentsTotal) setAssignmentsPage(assignmentsTotal);
   }, [assignmentsPage, assignmentsTotal]);
+
   useEffect(() => {
     if (homeworkPage > homeworkTotal) setHomeworkPage(homeworkTotal);
   }, [homeworkPage, homeworkTotal]);
+
   const pagedAssignments = filteredAssignments.slice(
     (assignmentsPage - 1) * ROWS_PER_PAGE,
     assignmentsPage * ROWS_PER_PAGE
@@ -139,230 +139,238 @@ const TeacherAssignments = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "ongoing":
-        return "secondary";
-      case "closed":
-        return "outline";
-      case "pending":
-        return "destructive";
-      default:
-        return "secondary";
+      case "ongoing": return "default";
+      case "closed": return "secondary";
+      case "pending": return "warning";
+      default: return "outline";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "ongoing": return Clock;
+      case "closed": return CheckCircle2;
+      case "pending": return AlertCircle;
+      default: return FileText;
     }
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            Assignments
-          </h1>
-          <p className="text-muted-foreground">
-            Manage assignments and homework for your classes
-          </p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              New Assignment
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create New Assignment</DialogTitle>
-              <DialogDescription>
-                Add a new assignment or homework for your class
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="type">Type</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="assignment">Assignment</SelectItem>
-                      <SelectItem value="homework">Homework</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="class">Class</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select class" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10a">10A - Mathematics</SelectItem>
-                      <SelectItem value="11a">11A - Mathematics</SelectItem>
-                      <SelectItem value="11b">11B - Mathematics</SelectItem>
-                      <SelectItem value="12a">12A - Mathematics</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
-                <Input id="title" placeholder="Enter assignment title" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Enter assignment description and instructions"
-                  rows={4}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dueDate">Due Date</Label>
-                <Input id="dueDate" type="date" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="file">Attach Files</Label>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" className="w-full gap-2">
-                    <Upload className="h-4 w-4" />
-                    Upload Files
-                  </Button>
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>
-                Cancel
+    <div className="p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
+      <PageHeader
+        title="Assignments"
+        description="Manage assignments and homework for your classes"
+        actions={
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" /> New Assignment
               </Button>
-              <Button onClick={() => setOpen(false)}>Create Assignment</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create New Assignment</DialogTitle>
+                <DialogDescription>Add a new assignment or homework for your class</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Type</Label>
+                    <Select>
+                      <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="assignment">Assignment</SelectItem>
+                        <SelectItem value="homework">Homework</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="class">Class</Label>
+                    <Select>
+                      <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10a">10A - Mathematics</SelectItem>
+                        <SelectItem value="11a">11A - Mathematics</SelectItem>
+                        <SelectItem value="11b">11B - Mathematics</SelectItem>
+                        <SelectItem value="12a">12A - Mathematics</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input id="title" placeholder="Enter assignment title" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea id="description" placeholder="Enter assignment description and instructions" rows={4} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dueDate">Due Date</Label>
+                  <Input id="dueDate" type="date" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="file">Attach Files</Label>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" className="w-full gap-2">
+                      <Upload className="h-4 w-4" /> Upload Files
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button onClick={() => setOpen(false)}>Create Assignment</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        }
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard label="Active Assignments" value={assignments.filter(a => a.status === 'ongoing').length} icon={BookOpen} variant="default" />
+        <StatCard label="Pending Grading" value={12} icon={AlertCircle} variant="warning" />
+        <StatCard label="Completed This Term" value={45} icon={CheckCircle2} variant="success" />
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="assignments" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="assignments">Assignments</TabsTrigger>
-          <TabsTrigger value="homework">Homework</TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <TabsList>
+            <TabsTrigger value="assignments">Assignments</TabsTrigger>
+            <TabsTrigger value="homework">Homework</TabsTrigger>
+          </TabsList>
+          <FilterBar
+            searchPlaceholder="Search by title, subject..."
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            filters={
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="ongoing">Ongoing</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                </SelectContent>
+              </Select>
+            }
+          />
+        </div>
 
-        <TabsContent value="assignments" className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="Search assignments by title, subject, or class"
-              value={assignmentsQuery}
-              onChange={(e) => {
-                setAssignmentsQuery(e.target.value);
-                setAssignmentsPage(1);
-              }}
+        <TabsContent value="assignments" className="space-y-6">
+          {pagedAssignments.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title="No assignments found"
+              description="Try adjusting your filters or create a new assignment."
+              action={<Button onClick={() => setOpen(true)}>Create Assignment</Button>}
             />
-          </div>
-          <SkeletonWrapper
-            isLoading={false}
-            skeleton={<SkeletonGrid columns={2} count={6} />}
-          >
-            {pagedAssignments.map((assignment) => (
-              <Card
-                key={assignment.id}
-                className="hover:shadow-md transition-shadow"
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <CardTitle>{assignment.title}</CardTitle>
-                      <CardDescription>
-                        {assignment.subject} • Class {assignment.class}
-                      </CardDescription>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {pagedAssignments.map((assignment) => (
+                <Card key={assignment.id} className="flex flex-col hover:shadow-md transition-shadow cursor-pointer group">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start gap-2">
+                      <Badge variant="outline" className="mb-2">{assignment.class}</Badge>
+                      <Badge variant={getStatusColor(assignment.status)} className="capitalize">
+                        {assignment.status}
+                      </Badge>
                     </div>
-                    <Badge variant={getStatusColor(assignment.status)}>
-                      {assignment.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Due:</span>
-                      <span className="font-medium">{assignment.dueDate}</span>
+                    <CardTitle className="text-lg group-hover:text-primary transition-colors line-clamp-1" title={assignment.title}>
+                      {assignment.title}
+                    </CardTitle>
+                    <CardDescription className="line-clamp-1">{assignment.subject}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-1 pb-3">
+                    <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
+                      {assignment.description}
+                    </p>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground flex items-center gap-2">
+                          <Calendar className="h-4 w-4" /> Due Date
+                        </span>
+                        <span className="font-medium">{assignment.dueDate}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground flex items-center gap-2">
+                          <FileText className="h-4 w-4" /> Submissions
+                        </span>
+                        <span className="font-medium">{assignment.submissions}/{assignment.totalStudents}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">
-                        Submissions:
-                      </span>
-                      <span className="font-medium">
-                        {assignment.submissions}/{assignment.totalStudents}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </SkeletonWrapper>
+                  </CardContent>
+                  <CardFooter className="pt-3 border-t bg-muted/5">
+                    <Button variant="ghost" className="w-full text-xs h-8">View Details</Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          )}
+          {pagedAssignments.length > 0 && (
+            <div className="mt-4">
+              <TablePagination
+                currentPage={assignmentsPage}
+                totalPages={assignmentsTotal}
+                onPageChange={setAssignmentsPage}
+              />
+            </div>
+          )}
         </TabsContent>
 
-        <TabsContent value="homework" className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="Search homework by title, subject, or class"
-              value={homeworkQuery}
-              onChange={(e) => {
-                setHomeworkQuery(e.target.value);
-                setHomeworkPage(1);
-              }}
+        <TabsContent value="homework" className="space-y-6">
+          {pagedHomework.length === 0 ? (
+            <EmptyState
+              icon={BookOpen}
+              title="No homework found"
+              description="Try adjusting your filters or create new homework."
+              action={<Button onClick={() => setOpen(true)}>Create Homework</Button>}
             />
-          </div>
-          <SkeletonWrapper
-            isLoading={false}
-            skeleton={<SkeletonGrid columns={2} count={6} />}
-          >
-            {pagedHomework.map((item) => (
-              <Card key={item.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <CardTitle>{item.title}</CardTitle>
-                      <CardDescription>
-                        {item.subject} • Class {item.class}
-                      </CardDescription>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {pagedHomework.map((item) => (
+                <Card key={item.id} className="flex flex-col hover:shadow-md transition-shadow cursor-pointer group">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start gap-2">
+                      <Badge variant="outline" className="mb-2">{item.class}</Badge>
+                      <Badge variant={getStatusColor(item.status)} className="capitalize">
+                        {item.status}
+                      </Badge>
                     </div>
-                    <Badge variant={getStatusColor(item.status)}>
-                      {item.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Due:</span>
-                    <span className="font-medium">{item.dueDate}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </SkeletonWrapper>
+                    <CardTitle className="text-lg group-hover:text-primary transition-colors line-clamp-1" title={item.title}>
+                      {item.title}
+                    </CardTitle>
+                    <CardDescription className="line-clamp-1">{item.subject}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-1 pb-3">
+                    <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
+                      {item.description}
+                    </p>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground flex items-center gap-2">
+                        <Calendar className="h-4 w-4" /> Due Date
+                      </span>
+                      <span className="font-medium">{item.dueDate}</span>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="pt-3 border-t bg-muted/5">
+                    <Button variant="ghost" className="w-full text-xs h-8">View Details</Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          )}
+          {pagedHomework.length > 0 && (
+            <div className="mt-4">
+              <TablePagination
+                currentPage={homeworkPage}
+                totalPages={homeworkTotal}
+                onPageChange={setHomeworkPage}
+              />
+            </div>
+          )}
         </TabsContent>
-        <div className="flex justify-center">
-          {assignments.length > 0 && (
-            <TablePagination
-              currentPage={assignmentsPage}
-              totalPages={assignmentsTotal}
-              onPageChange={setAssignmentsPage}
-            />
-          )}
-        </div>
-        <div className="flex justify-center">
-          {homework.length > 0 && (
-            <TablePagination
-              currentPage={homeworkPage}
-              totalPages={homeworkTotal}
-              onPageChange={setHomeworkPage}
-            />
-          )}
-        </div>
       </Tabs>
     </div>
   );

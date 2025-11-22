@@ -29,7 +29,7 @@ import {
 import { useState, useEffect, useCallback } from "react";
 import { StatCardSkeleton } from "@/components/shared/LoadingSkeletons";
 import { useNavigate } from "react-router-dom";
-import StatCard from "@/components/StatCard";
+import { StatCard } from "@/components/patterns";
 import StatsGrid from "@/components/admin/StatsGrid";
 import { getAuthToken } from "@/lib/utils";
 

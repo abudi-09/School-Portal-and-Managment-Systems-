@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Download, Calendar, User, FileText } from "lucide-react";
+import { ArrowLeft, Download, Calendar, User, FileText, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -7,10 +7,12 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { PageHeader } from "@/components/patterns";
 
 const AssignmentDetail = () => {
   const navigate = useNavigate();
@@ -18,23 +20,17 @@ const AssignmentDetail = () => {
   const { toast } = useToast();
 
   const handleDownload = (fileName: string, fileUrl: string) => {
-    // In a real application, this would download the actual file from the server
-    // For now, we'll simulate the download with a toast notification
     toast({
       title: "Download Started",
       description: `Downloading ${fileName}...`,
     });
-
-    // Simulate download delay
     setTimeout(() => {
-      // Create a mock download by creating a blob and triggering download
       const link = document.createElement("a");
       link.href = fileUrl;
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
       toast({
         title: "Download Complete",
         description: `${fileName} has been downloaded successfully.`,
@@ -47,47 +43,42 @@ const AssignmentDetail = () => {
       title: "Download Started",
       description: `Downloading all ${assignment.attachments.length} files...`,
     });
-
-    // Download all files sequentially with a small delay between each
     assignment.attachments.forEach((file, index) => {
       setTimeout(() => {
         handleDownload(file.name, file.url);
-      }, index * 500); // 500ms delay between downloads
+      }, index * 500);
     });
   };
 
-  // Mock assignment data - would come from API/context in production
+  // Mock assignment data
   const assignment = {
     id: id || "1",
     subject: "Mathematics",
     title: "Calculus Problem Set 5",
-    description:
-      "Complete problems 1-20 from Chapter 5 on Derivatives and Applications",
-    detailedInstructions: `
-      This assignment focuses on understanding derivatives and their real-world applications.
-      
-      **Topics Covered:**
-      - Basic derivative rules
-      - Chain rule and product rule
-      - Applications of derivatives in motion
-      - Optimization problems
-      
-      **Instructions:**
-      1. Show all your work clearly
-      2. Use proper mathematical notation
-      3. Explain your reasoning for word problems
-      4. Double-check your calculations
-      
-      **Grading Rubric:**
-      - Correct answers: 60%
-      - Clear working and methodology: 30%
-      - Presentation and neatness: 10%
-      
-      **Resources:**
-      - Textbook Chapter 5 (pages 120-145)
-      - Khan Academy videos on derivatives
-      - Practice problems available on the course website
-    `,
+    description: "Complete problems 1-20 from Chapter 5 on Derivatives and Applications",
+    detailedInstructions: `This assignment focuses on understanding derivatives and their real-world applications.
+
+**Topics Covered:**
+- Basic derivative rules
+- Chain rule and product rule
+- Applications of derivatives in motion
+- Optimization problems
+
+**Instructions:**
+1. Show all your work clearly
+2. Use proper mathematical notation
+3. Explain your reasoning for word problems
+4. Double-check your calculations
+
+**Grading Rubric:**
+- Correct answers: 60%
+- Clear working and methodology: 30%
+- Presentation and neatness: 10%
+
+**Resources:**
+- Textbook Chapter 5 (pages 120-145)
+- Khan Academy videos on derivatives
+- Practice problems available on the course website`,
     teacher: "Mrs. Johnson",
     dueDate: "2024-03-25",
     submittedDate: null,
@@ -99,175 +90,159 @@ const AssignmentDetail = () => {
     ],
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "submitted":
-        return "default";
-      case "graded":
-        return "secondary";
-      case "late":
-        return "destructive";
-      default:
-        return "outline";
-    }
+  const getStatusBadge = (status: string) => {
+    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+      submitted: "secondary",
+      pending: "outline",
+      graded: "default",
+      late: "destructive",
+    };
+    return <Badge variant={variants[status] || "outline"} className="capitalize">{status}</Badge>;
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/assignments")}
-          className="gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Assignments
-        </Button>
-      </div>
+    <div className="p-6 lg:p-8 space-y-8 max-w-5xl mx-auto">
+      <PageHeader
+        title="Assignment Details"
+        description="View assignment instructions, resources, and submit your work."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Assignments", href: "/assignments" },
+          { label: assignment.title },
+        ]}
+      />
 
-      {/* Main Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">{assignment.subject}</Badge>
-                <Badge variant={getStatusColor(assignment.status)}>
-                  {assignment.status}
-                </Badge>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Main Content */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{assignment.subject}</Badge>
+                    {getStatusBadge(assignment.status)}
+                  </div>
+                  <CardTitle className="text-2xl">{assignment.title}</CardTitle>
+                </div>
               </div>
-              <CardTitle className="text-3xl">{assignment.title}</CardTitle>
-            </div>
-            <div className="text-right space-y-1">
-              <p className="text-sm text-muted-foreground">Worth</p>
-              <p className="text-2xl font-bold text-primary">
-                {assignment.points} pts
-              </p>
-            </div>
-          </div>
-        </CardHeader>
-
-        <Separator />
-
-        <CardContent className="space-y-6 pt-6">
-          {/* Assignment Description */}
-          <div className="space-y-3">
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              Assignment Description
-            </h3>
-            <div className="bg-gradient-to-r from-primary/5 to-secondary/5 p-6 rounded-lg border border-primary/10">
-              <p className="text-muted-foreground leading-relaxed text-base">
-                {assignment.description}
-              </p>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Meta Information */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-secondary">
-                <User className="h-5 w-5 text-accent" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Teacher</p>
-                <p className="font-medium">{assignment.teacher}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-secondary">
-                <Calendar className="h-5 w-5 text-accent" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Due Date</p>
-                <p className="font-medium">
-                  {new Date(assignment.dueDate).toLocaleDateString()}
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-primary" /> Description
+                </h3>
+                <p className="text-muted-foreground leading-relaxed bg-muted/30 p-4 rounded-lg border border-border/50">
+                  {assignment.description}
                 </p>
               </div>
-            </div>
 
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-secondary">
-                <FileText className="h-5 w-5 text-accent" />
+              <Separator />
+
+              <div className="space-y-2">
+                <h3 className="font-semibold">Detailed Instructions</h3>
+                <div className="prose prose-sm max-w-none text-muted-foreground">
+                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                    {assignment.detailedInstructions}
+                  </pre>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Attachments</p>
-                <p className="font-medium">
-                  {assignment.attachments.length} files
-                </p>
-              </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <Separator />
-
-          {/* Detailed Instructions */}
-          <div className="space-y-3">
-            <h3 className="text-lg font-semibold">Detailed Instructions</h3>
-            <div className="prose prose-sm max-w-none bg-secondary/30 p-6 rounded-lg">
-              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                {assignment.detailedInstructions}
-              </pre>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Attachments */}
-          <div className="space-y-3">
-            <h3 className="text-lg font-semibold">Attachments</h3>
-            <div className="space-y-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Attachments</CardTitle>
+              <CardDescription>Resources provided by your teacher</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
               {assignment.attachments.map((file, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary/50 transition-colors"
+                  className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded bg-primary/10">
-                      <FileText className="h-5 w-5 text-primary" />
+                    <div className="p-2 rounded bg-primary/10 text-primary">
+                      <FileText className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="font-medium">{file.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {file.size}
-                      </p>
+                      <p className="font-medium text-sm">{file.name}</p>
+                      <p className="text-xs text-muted-foreground">{file.size}</p>
                     </div>
                   </div>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="gap-2"
+                    className="h-8 w-8 p-0"
                     onClick={() => handleDownload(file.name, file.url)}
                   >
                     <Download className="h-4 w-4" />
-                    Download
                   </Button>
                 </div>
               ))}
-            </div>
-          </div>
+            </CardContent>
+            <CardFooter>
+              <Button variant="outline" size="sm" className="w-full gap-2" onClick={handleDownloadAll}>
+                <Download className="h-4 w-4" /> Download All
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-4">
-            {assignment.status === "pending" && (
-              <Button className="gap-2">Submit Assignment</Button>
-            )}
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={handleDownloadAll}
-            >
-              <Download className="h-4 w-4" />
-              Download All Files
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Sidebar */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Submission Info</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Points</span>
+                <span className="font-bold text-lg">{assignment.points}</span>
+              </div>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 text-sm">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">{assignment.teacher}</span>
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span>Due: {new Date(assignment.dueDate).toLocaleDateString()}</span>
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span>Status: <span className="capitalize">{assignment.status}</span></span>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter>
+              {assignment.status === "pending" ? (
+                <Button className="w-full gap-2">
+                  <CheckCircle2 className="h-4 w-4" /> Submit Assignment
+                </Button>
+              ) : (
+                <Button variant="secondary" className="w-full" disabled>
+                  Submitted
+                </Button>
+              )}
+            </CardFooter>
+          </Card>
+
+          <Card className="bg-primary/5 border-primary/10">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-primary" /> Important
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Late submissions may be subject to a grade penalty. Please ensure you upload all required files before the deadline.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };

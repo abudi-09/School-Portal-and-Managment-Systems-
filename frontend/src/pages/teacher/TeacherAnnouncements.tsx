@@ -1,18 +1,18 @@
 import { useState, useEffect, useContext } from "react";
-import { SkeletonGrid, SkeletonWrapper } from "@/components/skeleton";
 import {
   getAnnouncements,
   type AnnouncementItem,
   createAnnouncement as apiCreate,
   updateAnnouncement as apiUpdate,
 } from "@/lib/api/announcementsApi";
-import { Plus, Bell, Paperclip, Filter, Edit2 } from "lucide-react";
+import { Plus, Bell, Paperclip, Edit2, Calendar, User, Tag } from "lucide-react";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,9 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import TablePagination from "@/components/shared/TablePagination";
+import { AuthContext } from "@/contexts/AuthContext";
+import { PageHeader, FilterBar, EmptyState } from "@/components/patterns";
+import { SkeletonGrid, SkeletonWrapper } from "@/components/skeleton";
 
 interface Announcement {
   id: string;
@@ -51,16 +54,13 @@ interface Announcement {
   hasAttachment: boolean;
 }
 
-import { AuthContext } from "@/contexts/AuthContext";
-
 const TeacherAnnouncements = () => {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("all");
   const auth = useContext(AuthContext);
   const currentUser = auth?.user;
   const [isEditing, setIsEditing] = useState(false);
-  const [editingAnnouncement, setEditingAnnouncement] =
-    useState<Announcement | null>(null);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     audience: "",
@@ -78,12 +78,7 @@ const TeacherAnnouncements = () => {
   const handleNewAnnouncement = () => {
     setIsEditing(false);
     setEditingAnnouncement(null);
-    setFormData({
-      title: "",
-      audience: "",
-      category: "",
-      content: "",
-    });
+    setFormData({ title: "", audience: "", category: "", content: "" });
     setOpen(true);
   };
 
@@ -100,12 +95,7 @@ const TeacherAnnouncements = () => {
   };
 
   const handleSubmit = async () => {
-    if (
-      !formData.title ||
-      !formData.audience ||
-      !formData.category ||
-      !formData.content
-    ) {
+    if (!formData.title || !formData.audience || !formData.category || !formData.content) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -117,10 +107,7 @@ const TeacherAnnouncements = () => {
           audience: formData.audience
             ? {
                 scope: formData.audience === "All My Classes" ? "all" : "class",
-                classId:
-                  formData.audience === "All My Classes"
-                    ? undefined
-                    : formData.audience,
+                classId: formData.audience === "All My Classes" ? undefined : formData.audience,
               }
             : undefined,
         });
@@ -133,10 +120,7 @@ const TeacherAnnouncements = () => {
           audience: formData.audience
             ? {
                 scope: formData.audience === "All My Classes" ? "all" : "class",
-                classId:
-                  formData.audience === "All My Classes"
-                    ? undefined
-                    : formData.audience,
+                classId: formData.audience === "All My Classes" ? undefined : formData.audience,
               }
             : { scope: "all" },
         });
@@ -145,11 +129,46 @@ const TeacherAnnouncements = () => {
       setOpen(false);
       setFormData({ title: "", audience: "", category: "", content: "" });
       // Refresh list
-      const res = await getAnnouncements({
-        type: "teacher",
-        page,
-        pageSize: PAGE_SIZE,
-      });
+      fetchAnnouncements();
+      // Notify other tabs
+      try {
+        if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+          const bc = new BroadcastChannel("announcements");
+          bc.postMessage({ type: "announcements:updated" });
+          bc.close();
+        }
+      } catch (e) { /* ignore */ }
+    } catch (e) {
+      toast.error("Failed to save announcement");
+    }
+  };
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case "exam": return "destructive";
+      case "homework": return "secondary";
+      case "assignment": return "default";
+      case "event": return "outline";
+      case "meeting": return "secondary";
+      default: return "secondary";
+    }
+  };
+
+  const filteredAnnouncements = filter === "all"
+    ? announcements
+    : filter === "head"
+    ? announcements.filter((a) => a.authorRole === "head")
+    : filter === "admin"
+    ? announcements.filter((a) => a.authorRole === "admin")
+    : filter === "others"
+    ? announcements.filter((a) => a.authorRole === "teacher" && a.authorId !== currentUser?.id)
+    : announcements.filter((a) => a.authorId === currentUser?.id);
+
+  const fetchAnnouncements = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getAnnouncements({ type: "teacher", page, pageSize: PAGE_SIZE });
       const items = res.items.map((i: AnnouncementItem) => ({
         id: i._id,
         title: i.title,
@@ -164,110 +183,34 @@ const TeacherAnnouncements = () => {
       }));
       setAnnouncements(items);
       setTotal(res.total);
-      // Notify other tabs/pages that announcements updated
-      try {
-        if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-          const bc = new BroadcastChannel("announcements");
-          bc.postMessage({ type: "announcements:updated" });
-          bc.close();
-        }
-      } catch (e) {
-        // ignore
+    } catch (err: unknown) {
+      let message = "Failed to load announcements";
+      if (err && typeof err === "object" && "response" in err) {
+        const r = (err as { response?: { data?: { message?: string } } }).response;
+        message = r?.data?.message || message;
       }
-    } catch (e) {
-      toast.error("Failed to save announcement");
+      setError(message);
+    } finally {
+      setLoading(false);
     }
   };
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case "exam":
-        return "destructive";
-      case "homework":
-        return "secondary";
-      case "assignment":
-        return "default";
-      case "event":
-        return "outline";
-      case "meeting":
-        return "secondary";
-      default:
-        return "secondary";
-    }
-  };
-
-  const filteredAnnouncements =
-    filter === "all"
-      ? announcements
-      : filter === "head"
-      ? announcements.filter((a) => a.authorRole === "head")
-      : filter === "admin"
-      ? announcements.filter((a) => a.authorRole === "admin")
-      : filter === "others"
-      ? announcements.filter(
-          (a) => a.authorRole === "teacher" && a.authorId !== currentUser?.id
-        )
-      : // sent / my posts
-        announcements.filter((a) => a.authorId === currentUser?.id);
-
-  // pagination constants (PAGE_SIZE used for server requests)
-  useEffect(() => setPage(1), [filter, setPage]);
 
   useEffect(() => {
-    // Fetch announcements for teacher audience from server
+    setPage(1);
+  }, [filter]);
+
+  useEffect(() => {
     let cancelled = false;
-    let interval: number | undefined;
-    const bc =
-      typeof window !== "undefined" && "BroadcastChannel" in window
-        ? new BroadcastChannel("announcements")
-        : null;
+    const bc = typeof window !== "undefined" && "BroadcastChannel" in window ? new BroadcastChannel("announcements") : null;
 
     const doFetch = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await getAnnouncements({
-          type: "teacher",
-          page,
-          pageSize: PAGE_SIZE,
-        });
-        if (cancelled) return;
-        const items = res.items.map((i: AnnouncementItem) => ({
-          id: i._id,
-          title: i.title,
-          author: i.postedBy?.name || "Unknown",
-          authorId: i.postedBy?.user || undefined,
-          authorRole: i.postedBy?.role || undefined,
-          audience: "All Teachers",
-          date: new Date(i.date).toISOString().split("T")[0],
-          category:
-            (i as unknown as { category?: string }).category || "general",
-          content: i.message,
-          hasAttachment: (i.attachments || []).length > 0,
-        }));
-        setAnnouncements(items);
-        setTotal(res.total);
-      } catch (err: unknown) {
-        let message = "Failed to load announcements";
-        if (err && typeof err === "object" && "response" in err) {
-          const r = (err as { response?: { data?: { message?: string } } })
-            .response;
-          message = r?.data?.message || message;
-        }
-        setError(message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      if (!cancelled) await fetchAnnouncements();
     };
 
     void doFetch();
 
-    // Poll for updates every 15s
-    const intervalId = window.setInterval(() => {
-      void doFetch();
-    }, 15000);
+    const intervalId = window.setInterval(() => { void doFetch(); }, 15000);
 
-    // Listen for inter-window updates via BroadcastChannel
     if (bc) {
       bc.addEventListener("message", (ev) => {
         if (ev.data && ev.data.type === "announcements:updated") {
@@ -286,233 +229,164 @@ const TeacherAnnouncements = () => {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages, setPage]);
-  const pagedAnnouncements = filteredAnnouncements;
+  }, [page, totalPages]);
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            Announcements
-          </h1>
-          <p className="text-muted-foreground">
-            Manage announcements for your classes and view school updates
-          </p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2" onClick={handleNewAnnouncement}>
-              <Plus className="h-4 w-4" />
-              New Announcement
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {isEditing ? "Edit Announcement" : "Create Announcement"}
-              </DialogTitle>
-              <DialogDescription>
-                {isEditing
-                  ? "Update your announcement details"
-                  : "Post a new announcement for your class or students"}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="audience">Audience</Label>
-                <Select
-                  value={formData.audience}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, audience: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select class" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Class 10A">Class 10A</SelectItem>
-                    <SelectItem value="Class 11A">Class 11A</SelectItem>
-                    <SelectItem value="Class 11B">Class 11B</SelectItem>
-                    <SelectItem value="Class 12A">Class 12A</SelectItem>
-                    <SelectItem value="All My Classes">
-                      All My Classes
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, category: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="homework">Homework</SelectItem>
-                    <SelectItem value="assignment">Assignment</SelectItem>
-                    <SelectItem value="exam">Exam Info</SelectItem>
-                    <SelectItem value="event">Event</SelectItem>
-                    <SelectItem value="general">General</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
-                <Input
-                  id="title"
-                  placeholder="Enter announcement title"
-                  value={formData.title}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, title: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="content">Message</Label>
-                <Textarea
-                  id="content"
-                  placeholder="Write your announcement message"
-                  rows={6}
-                  value={formData.content}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      content: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Attachment (optional)</Label>
-                <Button variant="outline" className="w-full gap-2">
-                  <Paperclip className="h-4 w-4" />
-                  Attach File
-                </Button>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>
-                Cancel
+    <div className="p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
+      <PageHeader
+        title="Announcements"
+        description="Manage announcements for your classes and view school updates"
+        actions={
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2" onClick={handleNewAnnouncement}>
+                <Plus className="h-4 w-4" /> New Announcement
               </Button>
-              <Button onClick={handleSubmit}>
-                {isEditing ? "Update Announcement" : "Post Announcement"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Filter / Tabs by poster */}
-      <div className="flex items-center gap-4">
-        <Filter className="h-4 w-4 text-muted-foreground" />
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant={filter === "all" ? "default" : "ghost"}
-            onClick={() => setFilter("all")}
-          >
-            All
-          </Button>
-          <Button
-            size="sm"
-            variant={filter === "head" ? "default" : "ghost"}
-            onClick={() => setFilter("head")}
-          >
-            Head
-          </Button>
-          <Button
-            size="sm"
-            variant={filter === "admin" ? "default" : "ghost"}
-            onClick={() => setFilter("admin")}
-          >
-            Admin
-          </Button>
-          <Button
-            size="sm"
-            variant={filter === "others" ? "default" : "ghost"}
-            onClick={() => setFilter("others")}
-          >
-            Other Teachers
-          </Button>
-          <Button
-            size="sm"
-            variant={filter === "sent" ? "default" : "ghost"}
-            onClick={() => setFilter("sent")}
-          >
-            My Posts
-          </Button>
-        </div>
-      </div>
-
-      {/* Announcements List */}
-      <div className="space-y-4">
-        {pagedAnnouncements.map((announcement) => (
-          <Card
-            key={announcement.id}
-            className="hover:shadow-md transition-shadow"
-          >
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Bell className="h-4 w-4 text-muted-foreground" />
-                    <CardTitle className="text-lg">
-                      {announcement.title}
-                    </CardTitle>
-                  </div>
-                  <CardDescription>
-                    Posted by{" "}
-                    {announcement.authorId === currentUser?.id
-                      ? "You"
-                      : announcement.author}{" "}
-                    • {announcement.date}
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={getCategoryColor(announcement.category)}>
-                    {announcement.category}
-                  </Badge>
-                  {announcement.hasAttachment && (
-                    <Badge variant="outline">
-                      <Paperclip className="h-3 w-3" />
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <p className="text-foreground">{announcement.content}</p>
-                <div className="flex items-center justify-between pt-2 border-t">
-                  <Badge variant="secondary">{announcement.audience}</Badge>
-                  {announcement.authorId === currentUser?.id && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEditAnnouncement(announcement)}
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{isEditing ? "Edit Announcement" : "Create Announcement"}</DialogTitle>
+                <DialogDescription>
+                  {isEditing ? "Update your announcement details" : "Post a new announcement for your class or students"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="audience">Audience</Label>
+                    <Select
+                      value={formData.audience}
+                      onValueChange={(value) => setFormData((prev) => ({ ...prev, audience: value }))}
                     >
-                      Edit
-                    </Button>
-                  )}
+                      <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Class 10A">Class 10A</SelectItem>
+                        <SelectItem value="Class 11A">Class 11A</SelectItem>
+                        <SelectItem value="Class 11B">Class 11B</SelectItem>
+                        <SelectItem value="Class 12A">Class 12A</SelectItem>
+                        <SelectItem value="All My Classes">All My Classes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category</Label>
+                    <Select
+                      value={formData.category}
+                      onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="homework">Homework</SelectItem>
+                        <SelectItem value="assignment">Assignment</SelectItem>
+                        <SelectItem value="exam">Exam Info</SelectItem>
+                        <SelectItem value="event">Event</SelectItem>
+                        <SelectItem value="general">General</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input
+                    id="title"
+                    placeholder="Enter announcement title"
+                    value={formData.title}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="content">Message</Label>
+                  <Textarea
+                    id="content"
+                    placeholder="Write your announcement message"
+                    rows={6}
+                    value={formData.content}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Attachment (optional)</Label>
+                  <Button variant="outline" className="w-full gap-2">
+                    <Paperclip className="h-4 w-4" /> Attach File
+                  </Button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-        {filteredAnnouncements.length > 0 && (
-          <TablePagination
-            currentPage={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button onClick={handleSubmit}>{isEditing ? "Update" : "Post"}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        }
+      />
+
+      <FilterBar
+        filters={
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant={filter === "all" ? "default" : "outline"} onClick={() => setFilter("all")}>All</Button>
+            <Button size="sm" variant={filter === "head" ? "default" : "outline"} onClick={() => setFilter("head")}>Head</Button>
+            <Button size="sm" variant={filter === "admin" ? "default" : "outline"} onClick={() => setFilter("admin")}>Admin</Button>
+            <Button size="sm" variant={filter === "others" ? "default" : "outline"} onClick={() => setFilter("others")}>Other Teachers</Button>
+            <Button size="sm" variant={filter === "sent" ? "default" : "outline"} onClick={() => setFilter("sent")}>My Posts</Button>
+          </div>
+        }
+      />
+
+      <SkeletonWrapper isLoading={loading} skeleton={<SkeletonGrid columns={1} count={3} />}>
+        {filteredAnnouncements.length === 0 ? (
+          <EmptyState
+            icon={Bell}
+            title="No announcements found"
+            description="There are no announcements matching your filter."
+            action={<Button onClick={handleNewAnnouncement}>Create Announcement</Button>}
           />
+        ) : (
+          <div className="space-y-4">
+            {filteredAnnouncements.map((announcement) => (
+              <Card key={announcement.id} className="hover:shadow-md transition-shadow">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <CardTitle className="text-lg">{announcement.title}</CardTitle>
+                        <Badge variant={getCategoryColor(announcement.category)} className="capitalize">
+                          {announcement.category}
+                        </Badge>
+                        {announcement.hasAttachment && (
+                          <Badge variant="outline" className="w-6 h-6 p-0 flex items-center justify-center">
+                            <Paperclip className="h-3 w-3" />
+                          </Badge>
+                        )}
+                      </div>
+                      <CardDescription className="flex items-center gap-3 text-xs">
+                        <span className="flex items-center gap-1"><User className="h-3 w-3" /> {announcement.authorId === currentUser?.id ? "You" : announcement.author}</span>
+                        <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {announcement.date}</span>
+                        <span className="flex items-center gap-1"><Tag className="h-3 w-3" /> {announcement.audience}</span>
+                      </CardDescription>
+                    </div>
+                    {announcement.authorId === currentUser?.id && (
+                      <Button variant="ghost" size="icon" onClick={() => handleEditAnnouncement(announcement)}>
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                    {announcement.content}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         )}
-      </div>
+      </SkeletonWrapper>
+
+      {filteredAnnouncements.length > 0 && (
+        <div className="mt-6">
+          <TablePagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
+      )}
     </div>
   );
 };

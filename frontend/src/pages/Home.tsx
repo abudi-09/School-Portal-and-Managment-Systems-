@@ -1,290 +1,228 @@
 import { Link } from "react-router-dom";
 import Navbar from "@/components/public/Navbar";
 import Footer from "@/components/public/Footer";
-import SectionTitle from "@/components/public/SectionTitle";
-import InfoCard from "@/components/public/InfoCard";
 import { usePageMetadata } from "@/hooks/usePageMetadata";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-
-const features = [
-  {
-    title: "Student Management",
-    content:
-      "Register students, manage enrollment status, and review academic progress in one place.",
-  },
-  {
-    title: "Teacher & Head Assignment",
-    content:
-      "Assign head teachers and subject instructors quickly, ensuring every class has the right leader.",
-  },
-  {
-    title: "Class Management",
-    content:
-      "Coordinate grades, sections, schedules, and subjects with an intuitive interface.",
-  },
-  {
-    title: "Reports & Analytics",
-    content:
-      "Generate insights on attendance, grades, and trends to support data-driven decisions.",
-  },
-];
-
-const workflow = [
-  {
-    title: "Step 1",
-    content:
-      "Admin adds students and teachers to the portal with complete academic profiles.",
-  },
-  {
-    title: "Step 2",
-    content:
-      "Assign head teachers and subject specialists to grades and sections.",
-  },
-  {
-    title: "Step 3",
-    content:
-      "Track student grades, attendance, and subject coverage in real time.",
-  },
-  {
-    title: "Step 4",
-    content:
-      "Generate reports and share analytics with leadership and guardians.",
-  },
-];
-
-const benefits = [
-  {
-    title: "Centralized Records",
-    content:
-      "Keep students, teachers, and guardians aligned with a single source of truth.",
-  },
-  {
-    title: "Secure & Compliant",
-    content:
-      "Role-based access, encryption, and audit logs protect sensitive information.",
-  },
-  {
-    title: "Responsive Experience",
-    content:
-      "Access the portal on any device with layouts optimized for mobile and desktop.",
-  },
-  {
-    title: "Actionable Insights",
-    content:
-      "Monitor trends and intervene early with up-to-date analytics and reporting.",
-  },
-];
-
-const faqs = [
-  {
-    question: "How do I add new students?",
-    answer:
-      "Go to Student Management, choose 'Add Student', and complete the required fields. Bulk CSV imports are supported for large intakes.",
-  },
-  {
-    question: "Can I assign multiple heads per grade?",
-    answer:
-      "Each grade can have a lead head teacher with optional subject coordinators for specialized oversight.",
-  },
-  {
-    question: "Where can I see performance reports?",
-    answer:
-      "Visit the Reports & Analytics module to review summaries, export PDFs, and schedule automated updates.",
-  },
-  {
-    question: "Does the portal integrate with remote learning tools?",
-    answer:
-      "Yes. Attendance and assessment data from supported virtual tools can be synced for unified reporting.",
-  },
-];
+  ArrowRight,
+  CheckCircle2,
+  BarChart3,
+  Users,
+  Calendar,
+  Shield,
+  Zap,
+  GraduationCap,
+  LayoutDashboard,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 const Home = () => {
   usePageMetadata({
-    title: "Student Portal | Home",
-    description:
-      "Professional school management system to organize students, teachers, classes, and analytics across your institution.",
-    keywords: [
-      "student portal",
-      "school management",
-      "teacher assignment",
-      "education analytics",
-    ],
+    title: "Pathways | Modern School Management",
+    description: "Professional school management system to organize students, teachers, classes, and analytics across your institution.",
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-background selection:bg-primary/20">
       <Navbar />
+      
       <main className="flex-1">
-        <section className="border-b border-border/60 bg-card">
-          <div className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-4 pb-20 pt-16 sm:px-6 lg:grid-cols-2 lg:items-center lg:px-8">
-            <div className="space-y-6">
-              <span className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-primary">
-                School Management Reinvented
-              </span>
-              <h1 className="text-4xl font-bold text-foreground sm:text-5xl">
-                Welcome to the School Portal
-              </h1>
-              <p className="text-lg leading-relaxed text-muted-foreground">
-                Manage students, teachers, and classes with a professional,
-                centralized system built for modern schools.
-              </p>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Link
-                  to="/login"
-                  className="rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-lg transition-colors hover:bg-primary/90"
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/about"
-                  className="rounded-lg border border-primary px-6 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
-                >
-                  Learn More
-                </Link>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-lg">
-              <h2 className="text-xl font-semibold text-card-foreground">
-                Portal snapshot
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Key metrics updated in real time.
-              </p>
-              <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <InfoCard
-                  title="1,248 Students"
-                  subtitle="Active enrollment"
-                  content="Track attendance, assignments, and progression for every learner."
-                  className="shadow-none border-border/60"
-                />
-                <InfoCard
-                  title="112 Teachers"
-                  subtitle="Assigned to classes"
-                  content="Monitor workload distribution and head teacher responsibilities."
-                  className="shadow-none border-border/60"
-                />
-              </div>
-              <div className="mt-6 rounded-2xl border border-dashed border-border bg-muted/40 p-4">
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Automate attendance, approval flows, and performance insights
-                  to keep leadership and staff aligned.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
+        {/* Hero Section */}
+        <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden">
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/20 via-background to-background opacity-50"></div>
+          <div className="absolute top-0 right-0 -z-10 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl opacity-30 animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 -z-10 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-3xl opacity-30 animate-pulse delay-700"></div>
 
-        <section className="py-20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <SectionTitle
-              eyebrow="Capabilities"
-              title="Core features for every stakeholder"
-              description="Modules tailored to administrators, head teachers, and classroom educators."
-            />
-            <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-              {features.map((feature) => (
-                <InfoCard
-                  key={feature.title}
-                  title={feature.title}
-                  content={feature.content}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-card py-20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <SectionTitle
-              eyebrow="Workflow"
-              title="How it works"
-              description="Launch, manage, and scale your school operations in four clear steps."
-            />
-            <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {workflow.map((step) => (
-                <InfoCard
-                  key={step.title}
-                  title={step.title}
-                  content={step.content}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="py-20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <SectionTitle
-              eyebrow="Benefits"
-              title="Why schools choose our portal"
-              description="Deliver transparency, accountability, and measurable results across every academic year."
-            />
-            <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {benefits.map((benefit) => (
-                <InfoCard
-                  key={benefit.title}
-                  title={benefit.title}
-                  content={benefit.content}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-primary py-20 text-primary-foreground">
-          <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
-            <h2 className="text-3xl font-bold leading-tight">
-              Ready to simplify your school management?
-            </h2>
-            <p className="mt-4 text-base leading-relaxed text-primary-foreground/80">
-              Start using the Student Portal to centralize data, empower
-              teachers, and deliver consistent academic experiences.
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+            <Badge variant="outline" className="mb-6 px-4 py-1.5 text-sm font-medium rounded-full border-primary/20 bg-primary/5 text-primary animate-in fade-in slide-in-from-bottom-4 duration-500">
+              ✨ Reimagining Education Management
+            </Badge>
+            
+            <h1 className="mx-auto max-w-4xl text-5xl font-bold tracking-tight text-foreground sm:text-7xl animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
+              Manage your school with <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">confidence</span>
+            </h1>
+            
+            <p className="mx-auto mt-8 max-w-2xl text-lg leading-8 text-muted-foreground animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
+              A comprehensive platform for students, teachers, and administrators. Streamline attendance, grades, and communication in one beautiful interface.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <Link
-                to="/login"
-                className="rounded-lg bg-primary-foreground px-6 py-3 text-sm font-semibold text-primary shadow-lg transition-colors hover:bg-primary-foreground/90"
-              >
-                Get Started Now
+            
+            <div className="mt-10 flex items-center justify-center gap-x-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
+              <Link to="/login">
+                <Button size="lg" className="h-12 px-8 text-base shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all hover:scale-105">
+                  Get Started <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
               </Link>
-              <Link
-                to="/contact"
-                className="rounded-lg border border-primary-foreground px-6 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/10"
-              >
-                Contact Us
+              <Link to="/about">
+                <Button variant="outline" size="lg" className="h-12 px-8 text-base hover:bg-accent hover:text-accent-foreground transition-all">
+                  Learn more
+                </Button>
               </Link>
+            </div>
+
+            {/* Hero Image / Dashboard Preview */}
+            <div className="mt-20 relative mx-auto max-w-5xl rounded-2xl border border-border/50 bg-background/50 p-2 shadow-2xl backdrop-blur-sm animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-500">
+              <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent z-10"></div>
+              <div className="rounded-xl overflow-hidden border border-border/50 bg-card aspect-[16/9] relative group">
+                 {/* Placeholder for a dashboard screenshot - using a constructed UI representation */}
+                 <div className="absolute inset-0 bg-muted/10 flex flex-col">
+                    <div className="h-12 border-b flex items-center px-4 gap-2 bg-card/50">
+                       <div className="w-3 h-3 rounded-full bg-red-400/80"></div>
+                       <div className="w-3 h-3 rounded-full bg-yellow-400/80"></div>
+                       <div className="w-3 h-3 rounded-full bg-green-400/80"></div>
+                    </div>
+                    <div className="flex-1 p-6 grid grid-cols-4 gap-6">
+                       <div className="col-span-1 space-y-4">
+                          <div className="h-8 w-3/4 bg-muted rounded animate-pulse"></div>
+                          <div className="h-4 w-1/2 bg-muted/50 rounded animate-pulse"></div>
+                          <div className="h-32 w-full bg-muted/30 rounded-lg animate-pulse"></div>
+                          <div className="h-32 w-full bg-muted/30 rounded-lg animate-pulse"></div>
+                       </div>
+                       <div className="col-span-3 space-y-6">
+                          <div className="grid grid-cols-3 gap-4">
+                             <div className="h-24 bg-primary/5 border border-primary/10 rounded-xl"></div>
+                             <div className="h-24 bg-primary/5 border border-primary/10 rounded-xl"></div>
+                             <div className="h-24 bg-primary/5 border border-primary/10 rounded-xl"></div>
+                          </div>
+                          <div className="h-64 bg-card border border-border/50 rounded-xl shadow-sm"></div>
+                       </div>
+                    </div>
+                 </div>
+                 <div className="absolute inset-0 flex items-center justify-center z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-background/10 backdrop-blur-[2px]">
+                    <span className="px-4 py-2 bg-background/80 backdrop-blur rounded-full text-sm font-medium shadow-lg border">Interactive Dashboard Preview</span>
+                 </div>
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="bg-card py-20">
-          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-            <SectionTitle
-              eyebrow="Support"
-              title="Frequently asked questions"
-              description="Find quick answers about onboarding, assignments, and analytics."
-            />
-            <Accordion type="single" collapsible className="mt-12 space-y-4">
-              {faqs.map((faq) => (
-                <AccordionItem
-                  key={faq.question}
-                  value={faq.question}
-                  className="rounded-2xl border border-border bg-muted/40 px-4"
-                >
-                  <AccordionTrigger className="text-left text-base font-semibold text-foreground">
-                    {faq.question}
-                  </AccordionTrigger>
-                  <AccordionContent className="text-base leading-relaxed text-muted-foreground">
-                    {faq.answer}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+        {/* Features Grid */}
+        <section className="py-24 sm:py-32 bg-muted/30">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <div className="mx-auto max-w-2xl text-center">
+              <h2 className="text-base font-semibold leading-7 text-primary">Everything you need</h2>
+              <p className="mt-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Powerful features for modern education
+              </p>
+              <p className="mt-6 text-lg leading-8 text-muted-foreground">
+                Empower your institution with tools designed to enhance learning, streamline administration, and foster communication.
+              </p>
+            </div>
+            <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
+              <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-3">
+                {[
+                  {
+                    name: 'Student Management',
+                    description: 'Comprehensive profiles, enrollment tracking, and academic history in one secure place.',
+                    icon: Users,
+                  },
+                  {
+                    name: 'Academic Analytics',
+                    description: 'Real-time insights into student performance, attendance trends, and grade distributions.',
+                    icon: BarChart3,
+                  },
+                  {
+                    name: 'Class Scheduling',
+                    description: 'Smart timetable management for teachers, classes, and exam schedules.',
+                    icon: Calendar,
+                  },
+                  {
+                    name: 'Secure Portal',
+                    description: 'Role-based access control ensuring data privacy for students, teachers, and staff.',
+                    icon: Shield,
+                  },
+                  {
+                    name: 'Teacher Tools',
+                    description: 'Gradebooks, attendance taking, and lesson planning tools built for educators.',
+                    icon: GraduationCap,
+                  },
+                  {
+                    name: 'Real-time Updates',
+                    description: 'Instant notifications for announcements, grades, and important school events.',
+                    icon: Zap,
+                  },
+                ].map((feature) => (
+                  <div key={feature.name} className="flex flex-col bg-card p-8 rounded-2xl border border-border/50 shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+                    <dt className="flex items-center gap-x-3 text-base font-semibold leading-7 text-foreground">
+                      <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <feature.icon className="h-6 w-6" aria-hidden="true" />
+                      </div>
+                      {feature.name}
+                    </dt>
+                    <dd className="mt-4 flex flex-auto flex-col text-base leading-7 text-muted-foreground">
+                      <p className="flex-auto">{feature.description}</p>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
+        </section>
+
+        {/* Workflow Section */}
+        <section className="py-24 sm:py-32 relative overflow-hidden">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <div className="mx-auto max-w-2xl lg:text-center">
+              <h2 className="text-base font-semibold leading-7 text-primary">Workflow</h2>
+              <p className="mt-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Simple, efficient, and effective
+              </p>
+            </div>
+            <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
+              <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
+                {[
+                  { title: "Setup", desc: "Admin configures school profile, classes, and subjects." },
+                  { title: "Onboard", desc: "Register students and assign teachers to classes." },
+                  { title: "Manage", desc: "Track attendance, grades, and daily activities." },
+                  { title: "Analyze", desc: "Generate reports and view performance insights." },
+                ].map((step, idx) => (
+                  <div key={step.title} className="relative flex flex-col items-center text-center p-6">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-primary-foreground text-xl font-bold shadow-lg mb-6 z-10 relative">
+                      {idx + 1}
+                    </div>
+                    {idx < 3 && (
+                      <div className="hidden lg:block absolute top-14 left-1/2 w-full h-0.5 bg-border -z-0"></div>
+                    )}
+                    <h3 className="text-lg font-semibold mb-2">{step.title}</h3>
+                    <p className="text-muted-foreground">{step.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA Section */}
+        <section className="relative isolate mt-12 px-6 py-24 sm:mt-20 sm:py-32 lg:px-8">
+          <div className="absolute inset-0 -z-10 bg-primary overflow-hidden">
+            <div className="absolute -top-[50%] -left-[20%] w-[1000px] h-[1000px] bg-white/5 rounded-full blur-3xl"></div>
+            <div className="absolute -bottom-[50%] -right-[20%] w-[1000px] h-[1000px] bg-white/5 rounded-full blur-3xl"></div>
+          </div>
+          <div className="mx-auto max-w-2xl text-center relative z-10">
+            <h2 className="text-3xl font-bold tracking-tight text-primary-foreground sm:text-4xl">
+              Ready to transform your school?
+            </h2>
+            <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-primary-foreground/80">
+              Join hundreds of schools using Pathways to deliver better education management today.
+            </p>
+            <div className="mt-10 flex items-center justify-center gap-x-6">
+              <Link to="/login">
+                <Button size="lg" variant="secondary" className="h-12 px-8 text-base font-semibold shadow-lg">
+                  Get started
+                </Button>
+              </Link>
+              <Link to="/contact">
+                <Button variant="outline" size="lg" className="h-12 px-8 text-base bg-transparent text-primary-foreground border-primary-foreground/30 hover:bg-primary-foreground/10 hover:text-primary-foreground">
+                  Contact sales
+                </Button>
+              </Link>
+            </div>
           </div>
         </section>
       </main>

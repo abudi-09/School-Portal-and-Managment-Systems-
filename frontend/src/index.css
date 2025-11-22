@@ -9,91 +9,97 @@ All colors MUST be HSL.
 @layer base {
   :root {
     /*
-      Design tokens (HSL) — primary is used for main CTAs and should be
-      consistent between light and dark modes. We set --primary to the
-      green value (previously --accent) so buttons/CTAs remain green
-      across themes. The previous primary (blue/black) is moved to --accent
-      for use as an alternate color when needed.
+      Design System - Pathways UI
+      Updated to match UI/UX redesign specification
+      All colors in HSL format for theme compatibility
     */
-    --background: 0 0% 98%;
-    --foreground: 218 47% 21%;
+    --background: 0 0% 100%;            /* Pure white */
+    --foreground: 222 47% 11%;          /* Near-black text */
 
-    --card: 0 0% 100%;
-    --card-foreground: 218 47% 21%;
+    --card: 0 0% 100%;                  /* White cards */
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 218 47% 21%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 171 100% 37%; /* green */
+    --primary: 221 83% 53%;             /* Education blue #2563EB */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 95%;
-    --secondary-foreground: 218 47% 21%;
+    --secondary: 210 40% 96%;           /* Light gray #F1F5F9 */
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 220 15% 95%;
-    --muted-foreground: 218 20% 50%;
+    --muted: 210 40% 96%;               /* Muted backgrounds */
+    --muted-foreground: 215 16% 47%;    /* Muted text */
 
-    --accent: 218 47% 21%; /* blue/black (previous primary) */
+    --accent: 262 83% 58%;              /* Purple accent #8B5CF6 */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    /* Semantic Colors */
+    --destructive: 0 84% 60%;           /* Red #EF4444 */
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 76% 36%;
+    --success: 142 76% 36%;             /* Green #16A34A */
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
+    --warning: 38 92% 50%;              /* Amber #F59E0B */
     --warning-foreground: 0 0% 100%;
 
-    --border: 220 15% 90%;
-    --input: 220 15% 90%;
-    --ring: 171 100% 37%;
+    --info: 199 89% 48%;                /* Blue #0EA5E9 */
+    --info-foreground: 0 0% 100%;
 
-    --radius: 0.75rem;
+    /* UI Elements */
+    --border: 214 32% 91%;              /* Border gray */
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;                /* Focus ring matches primary */
 
-    --chart-1: 171 100% 37%;
-    --chart-2: 218 47% 21%;
-    --chart-3: 142 76% 36%;
-    --chart-4: 38 92% 50%;
-    --chart-5: 221 83% 53%;
+    --radius: 0.5rem;                   /* 8px border radius (lg) */
+
+    /* Chart colors */
+    --chart-1: 221 83% 53%;             /* Primary blue */
+    --chart-2: 142 76% 36%;             /* Success green */
+    --chart-3: 262 83% 58%;             /* Accent purple */
+    --chart-4: 38 92% 50%;              /* Warning amber */
+    --chart-5: 199 89% 48%;             /* Info blue */
   }
 
   .dark {
-    --background: 218 47% 10%;
-    --foreground: 0 0% 98%;
+    --background: 222 47% 11%;          /* Dark blue-gray */
+    --foreground: 0 0% 98%;             /* Near-white text */
 
-    --card: 218 40% 15%;
+    --card: 222 47% 15%;                 /* Slightly lighter than background */
     --card-foreground: 0 0% 98%;
 
-    --popover: 218 40% 15%;
+    --popover: 222 47% 15%;
     --popover-foreground: 0 0% 98%;
 
-    /* Keep primary green in dark mode as well for consistency */
-    --primary: 171 100% 37%;
+    --primary: 221 83% 53%;             /* Same education blue */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 218 30% 20%;
+    --secondary: 215 25% 27%;           /* Dark gray */
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 218 30% 20%;
-    --muted-foreground: 218 20% 65%;
+    --muted: 215 25% 27%;
+    --muted-foreground: 215 20% 65%;
 
-    /* Accent is the alternate (blue/black) in dark mode too */
-    --accent: 218 47% 21%;
+    --accent: 262 83% 58%;              /* Same purple accent */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62% 45%;
+    /* Semantic colors (slightly adjusted for dark mode) */
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 76% 36%;
+    --success: 142 71% 45%;             /* Brighter green for dark mode */
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 218 30% 25%;
-    --input: 218 30% 25%;
-    --ring: 171 100% 37%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 215 25% 27%;
+    --input: 215 25% 27%;
+    --ring: 221 83% 53%;
   }
 }
 

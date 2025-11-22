@@ -876,6 +876,20 @@ const MessagingCenter = ({
 
   const [savedSearch, setSavedSearch] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const mediaQuery = window.matchMedia("(min-width: 640px)");
+    const handleChange = () => {
+      if (mediaQuery.matches) {
+        setSidebarCollapsed(false);
+      }
+    };
+    handleChange();
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
   useEffect(() => {
     if (!isSavedConversation) return;
     if (!onSearchSavedMessages) return;
@@ -1363,20 +1377,38 @@ const MessagingCenter = ({
               />
             ) : null}
           </div>
-          {onCompose ? (
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
             <Button
               type="button"
               variant="outline"
-              className="gap-2"
-              onClick={onCompose}
-              disabled={composeDisabled}
+              className="w-full sm:hidden"
+              onClick={() => setSidebarCollapsed((prev) => !prev)}
+              aria-controls="messaging-contact-list"
+              aria-expanded={!sidebarCollapsed}
             >
-              <Plus className="h-4 w-4" /> {composeLabel}
+              {sidebarCollapsed ? "Show contacts" : "Hide contacts"}
             </Button>
-          ) : null}
+            {onCompose ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2 w-full sm:w-auto"
+                onClick={onCompose}
+                disabled={composeDisabled}
+              >
+                <Plus className="h-4 w-4" /> {composeLabel}
+              </Button>
+            ) : null}
+          </div>
         </header>
-        <div className="grid gap-6 md:grid-cols-[320px,1fr] sm:grid-cols-[240px,1fr] lg:grid-cols-[360px,1fr]">
-          <Card className="h-fit md:sticky md:top-24">
+        <div className="grid gap-6 md:grid-cols-[320px,1fr] lg:grid-cols-[360px,1fr]">
+          <Card
+            id="messaging-contact-list"
+            className={cn(
+              "h-fit md:sticky md:top-24",
+              sidebarCollapsed ? "hidden sm:block" : "block"
+            )}
+          >
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>{listTitle}</CardTitle>
@@ -1387,6 +1419,8 @@ const MessagingCenter = ({
                       sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
                     }
                     onClick={() => setSidebarCollapsed((s) => !s)}
+                    aria-controls="messaging-contact-list"
+                    aria-expanded={!sidebarCollapsed}
                     className="p-1 rounded hover:bg-muted/10"
                   >
                     {sidebarCollapsed ? (
@@ -1436,7 +1470,7 @@ const MessagingCenter = ({
                 />
               </div>
 
-              <ScrollArea className="h-[480px] pr-2">
+              <ScrollArea className="max-h-[55vh] md:h-[480px] pr-2">
                 <div className="space-y-2">
                   {isLoadingContacts && contacts.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
@@ -1542,7 +1576,7 @@ const MessagingCenter = ({
             {selectedContact ? (
               <>
                 <CardHeader className="border-b border-border pb-4">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                     <Avatar className="min-w-[48px] min-h-[48px] h-12 w-12 border border-border">
                       {getAvatarSrc(selectedContact) ? (
                         <AvatarImage
@@ -1760,7 +1794,7 @@ const MessagingCenter = ({
                       </div>
                     </div>
                   ) : null}
-                  <ScrollArea className="h-[420px] pr-4">
+                  <ScrollArea className="max-h-[60vh] md:h-[420px] pr-4">
                     <div className="space-y-3">
                       {isLoadingThread ? (
                         <p className="text-sm text-muted-foreground">
@@ -1792,7 +1826,7 @@ const MessagingCenter = ({
                                 >
                                   <div
                                     className={cn(
-                                      "group relative max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm transition-colors",
+                                      "group relative max-w-[90%] rounded-2xl px-4 py-3 text-sm shadow-sm transition-colors sm:max-w-[75%]",
                                       isSelf
                                         ? "bg-primary text-primary-foreground"
                                         : "bg-muted text-foreground",

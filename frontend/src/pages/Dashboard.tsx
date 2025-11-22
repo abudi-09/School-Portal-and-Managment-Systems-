@@ -1,14 +1,14 @@
 import {
   Award,
-  TrendingUp,
+  BookOpen,
   ClipboardList,
   Calendar,
   Bell,
-  Trophy,
-  BookOpen,
-  Users,
+  TrendingUp,
 } from "lucide-react";
-import StatCard from "@/components/StatCard";
+import { PageHeader } from "@/components/patterns";
+import { StatCard } from "@/components/patterns";
+import { EmptyState } from "@/components/patterns";
 import { useEffect, useState, useCallback } from "react";
 import type { LucideIcon } from "lucide-react";
 import { StatCardSkeleton } from "@/components/shared/LoadingSkeletons";
@@ -30,7 +30,7 @@ type StatItem = {
   value: string | number;
   icon: LucideIcon;
   description?: string;
-  variant?: "success" | "accent" | "warning" | "default";
+  variant?: "success" | "info" | "warning" | "default";
 };
 
 type AssignmentItem = {
@@ -65,7 +65,7 @@ const Dashboard = () => {
   const [statsError, setStatsError] = useState<string | null>(null);
   const [stats, setStats] = useState<StatItem[]>([]);
 
-  // Assignments (placeholder until endpoint exists)
+  // Assignments
   const [upcomingAssignments, setUpcomingAssignments] = useState<
     AssignmentItem[]
   >([]);
@@ -133,7 +133,7 @@ const Dashboard = () => {
     setLoadingStats(true);
     setStatsError(null);
     try {
-      // GPA from evaluations (approximate)
+      // GPA from evaluations
       const evalRes = await fetch(`${apiBaseUrl}/api/evaluations`, {
         headers: authHeaders(),
       });
@@ -148,20 +148,22 @@ const Dashboard = () => {
               (sum, e) => sum + e.score / (e.maxScore || 100),
               0
             ) / evaluations.length;
-          const pct = avgPercent * 100;
-          const gpa =
-            pct >= 90 ? 4 : pct >= 80 ? 3 : pct >= 70 ? 2 : pct >= 60 ? 1 : 0;
-          gpaValue = gpa.toFixed(2);
+          gpaValue = (avgPercent * 4).toFixed(2);
         }
       }
 
-      // Unread announcements
-      const unreadRes = await fetch(
-        `${apiBaseUrl}/api/announcements/unread-count`,
+      // Announcements count
+      const announcementsRes = await fetch(
+        `${apiBaseUrl}/api/announcements?page=1&pageSize=100`,
         { headers: authHeaders() }
       );
-      const unreadJson = unreadRes.ok ? await unreadRes.json() : null;
-      const unread = unreadJson?.data?.unreadCount ?? 0;
+      let unread = 0;
+      if (announcementsRes.ok) {
+        const announcementsJson = await announcementsRes.json();
+        const items = announcementsJson?.data?.items || [];
+        unread = items.filter((a: { status?: string }) => a.status === "unread")
+          .length;
+      }
 
       const pendingAssignmentsCount = upcomingAssignments.filter(
         (a) => a.status !== "submitted"
@@ -173,17 +175,16 @@ const Dashboard = () => {
           title: "Current GPA",
           value: gpaValue,
           icon: Award,
-          description:
-            gpaValue === "—" ? "No scores yet" : "From recent evaluations",
+          description: "Academic average",
           variant: "success",
         },
         {
           key: "rank",
           title: "Class Rank",
           value: "—",
-          icon: Trophy,
-          description: "Coming soon",
-          variant: "accent",
+          icon: TrendingUp,
+          description: "Out of students",
+          variant: "info",
         },
         {
           key: "assignments",
@@ -199,7 +200,7 @@ const Dashboard = () => {
           value: unread,
           icon: Bell,
           description: "Latest school updates",
-          variant: "accent",
+          variant: "info",
         },
       ]);
     } catch (err) {
@@ -222,45 +223,16 @@ const Dashboard = () => {
   const handleRefresh = () => {
     fetchStats();
     fetchAnnouncements();
+    fetchAssignments();
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20">
-      <div className="p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
-        {/* Enhanced Header */}
-        <div className="bg-gradient-to-r from-primary/5 via-primary/10 to-secondary/5 rounded-2xl p-8 border border-primary/10 shadow-sm">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div className="space-y-2">
-              <h1 className="text-4xl font-bold text-foreground flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Award className="h-7 w-7 text-primary" />
-                </div>
-                Welcome back, John 👋
-              </h1>
-              <p className="text-lg text-muted-foreground leading-relaxed">
-                Here's your academic overview for today. Stay focused and keep
-                up the great work!
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">Today's Date</p>
-                <p className="text-lg font-semibold text-foreground">
-                  {new Date().toLocaleDateString("en-US", {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Enhanced Stats Grid */}
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xl font-semibold">Overview</h2>
+    <div className="p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <PageHeader
+        title="Dashboard"
+        description="Your academic overview and recent activity"
+        actions={
           <Button
             variant="outline"
             size="sm"
@@ -269,241 +241,234 @@ const Dashboard = () => {
           >
             Refresh
           </Button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {loadingStats && stats.length === 0 ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div
-                className="transform hover:scale-105 transition-all duration-300"
-                key={i}
-              >
-                <StatCardSkeleton />
-              </div>
-            ))
-          ) : statsError ? (
+        }
+      />
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {loadingStats && stats.length === 0 ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <StatCardSkeleton key={i} />
+          ))
+        ) : statsError ? (
+          <div className="col-span-full">
             <p className="text-sm text-destructive">{statsError}</p>
-          ) : (
-            stats.slice(0, 4).map((s) => (
-              <div
-                key={s.key}
-                className="transform hover:scale-105 transition-all duration-300"
-              >
-                <StatCard
-                  title={s.title}
-                  value={String(s.value)}
-                  icon={s.icon}
-                  description={s.description}
-                  variant={s.variant || "default"}
-                />
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Enhanced Quick Access */}
-        <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <BookOpen className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="text-2xl font-semibold text-foreground">
-              Quick Access
-            </h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {[
-              {
-                name: "My Scores",
-                icon: Award,
-                href: "/scores",
-                color: "text-blue-600",
-              },
-              {
-                name: "Assignments",
-                icon: ClipboardList,
-                href: "/assignments",
-                color: "text-orange-600",
-              },
-              {
-                name: "Timetable",
-                icon: Calendar,
-                href: "/timetable",
-                color: "text-green-600",
-              },
-              {
-                name: "Announcements",
-                icon: Bell,
-                href: "/announcements",
-                color: "text-purple-600",
-              },
-              {
-                name: "Attendance",
-                icon: Users,
-                href: "/attendance",
-                color: "text-red-600",
-              },
-              {
-                name: "Profile",
-                icon: Trophy,
-                href: "/profile",
-                color: "text-indigo-600",
-              },
-            ].map((item) => (
-              <Link key={item.name} to={item.href}>
-                <Button
-                  variant="outline"
-                  className="w-full h-24 flex flex-col items-center justify-center gap-3 hover:bg-primary/5 hover:border-primary/20 transition-all duration-300 group"
-                >
-                  <item.icon
-                    className={`h-7 w-7 ${item.color} group-hover:scale-110 transition-transform duration-300`}
-                  />
-                  <span className="text-sm font-medium text-center">
-                    {item.name}
-                  </span>
-                </Button>
-              </Link>
-            ))}
-          </div>
-        </div>
+        ) : (
+          stats.map((s) => (
+            <StatCard
+              key={s.key}
+              label={s.title}
+              value={s.value}
+              icon={s.icon}
+              subtitle={s.description}
+              variant={s.variant}
+            />
+          ))
+        )}
+      </div>
 
-        {/* Enhanced Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Upcoming Assignments */}
-          <Card className="shadow-sm border-border/50 hover:shadow-md transition-shadow duration-300">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl">
-                <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
-                  <ClipboardList className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                </div>
-                Upcoming Assignments
-              </CardTitle>
-              <CardDescription className="text-base">
-                Your pending tasks and deadlines
+      {/* Content + Sidebar */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8">
+        {/* Main Content */}
+        <div className="space-y-6">
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+              <CardDescription>
+                Access your most-used features
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {loadingAssignments && (
-                  <p className="text-sm text-muted-foreground">
-                    Loading assignments…
-                  </p>
-                )}
-                {assignmentsError && (
-                  <p className="text-sm text-destructive">{assignmentsError}</p>
-                )}
-                {!loadingAssignments &&
-                  !assignmentsError &&
-                  upcomingAssignments.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      No pending assignments
-                    </p>
-                  )}
-                {upcomingAssignments.map((assignment) => (
-                  <div
-                    key={assignment.id}
-                    className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-secondary/30 to-secondary/10 hover:from-secondary/50 hover:to-secondary/20 transition-all duration-300 border border-border/50 hover:border-primary/20"
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Link to="/scores" className="block">
+                  <Button
+                    variant="outline"
+                    className="w-full h-20 flex flex-col gap-2"
                   >
-                    <div className="flex-1">
-                      <p className="font-semibold text-foreground mb-1">
-                        {assignment.title}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {assignment.subject}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {assignment.due}
-                      </span>
-                      <Badge
-                        variant={
-                          assignment.status === "submitted"
-                            ? "default"
-                            : "secondary"
-                        }
-                        className="px-3 py-1"
-                      >
-                        {assignment.status === "submitted"
-                          ? "Submitted"
-                          : "Pending"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                    <BookOpen className="h-5 w-5" />
+                    <span className="text-sm">View Scores</span>
+                  </Button>
+                </Link>
+                <Link to="/assignments" className="block">
+                  <Button
+                    variant="outline"
+                    className="w-full h-20 flex flex-col gap-2"
+                  >
+                    <ClipboardList className="h-5 w-5" />
+                    <span className="text-sm">Assignments</span>
+                  </Button>
+                </Link>
+                <Link to="/timetable" className="block">
+                  <Button
+                    variant="outline"
+                    className="w-full h-20 flex flex-col gap-2"
+                  >
+                    <Calendar className="h-5 w-5" />
+                    <span className="text-sm">Timetable</span>
+                  </Button>
+                </Link>
               </div>
-              <Link to="/assignments">
-                <Button
-                  variant="ghost"
-                  className="w-full mt-6 hover:bg-primary/5 hover:text-primary transition-colors"
-                >
-                  View all assignments →
-                </Button>
-              </Link>
             </CardContent>
           </Card>
 
-          {/* Recent Announcements */}
-          <Card className="shadow-sm border-border/50 hover:shadow-md transition-shadow duration-300">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/20 flex items-center justify-center">
-                  <Bell className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                </div>
-                Recent Announcements
+          {/* Upcoming Assignments */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="h-5 w-5" />
+                Upcoming Assignments
               </CardTitle>
-              <CardDescription className="text-base">
-                Latest updates from school
+              <CardDescription>
+                Track your pending work and deadlines
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {loadingAnnouncements && (
-                  <p className="text-sm text-muted-foreground">
-                    Loading announcements…
-                  </p>
-                )}
-                {announcementsError && (
-                  <p className="text-sm text-destructive">
-                    {announcementsError}
-                  </p>
-                )}
-                {!loadingAnnouncements &&
-                  !announcementsError &&
-                  recentAnnouncements.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      No announcements
-                    </p>
-                  )}
-                {recentAnnouncements.map((announcement) => (
-                  <div
-                    key={announcement.id}
-                    className="flex items-start gap-4 p-4 rounded-xl bg-gradient-to-r from-secondary/30 to-secondary/10 hover:from-secondary/50 hover:to-secondary/20 transition-all duration-300 border border-border/50 hover:border-primary/20"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0">
-                      <Bell className="h-6 w-6 text-accent" />
+              {loadingAssignments ? (
+                <p className="text-sm text-muted-foreground">
+                  Loading assignments…
+                </p>
+              ) : assignmentsError ? (
+                <p className="text-sm text-destructive">{assignmentsError}</p>
+              ) : upcomingAssignments.length === 0 ? (
+                <EmptyState
+                  icon={ClipboardList}
+                  title="No pending assignments"
+                  description="You're all caught up! New assignments will appear here when teachers add them."
+                  action={
+                    <Link to="/assignments">
+                      <Button variant="outline" size="sm">
+                        View Past Assignments
+                      </Button>
+                    </Link>
+                  }
+                />
+              ) : (
+                <div className="space-y-3">
+                  {upcomingAssignments.map((assignment) => (
+                    <div
+                      key={assignment.id}
+                      className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">
+                          {assignment.title}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {assignment.subject}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="text-sm text-muted-foreground">
+                          {assignment.due}
+                        </span>
+                        <Badge
+                          variant={
+                            assignment.status === "submitted"
+                              ? "default"
+                              : "secondary"
+                          }
+                        >
+                          {assignment.status === "submitted"
+                            ? "Submitted"
+                            : "Pending"}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-foreground mb-1">
-                        {announcement.title}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {announcement.date}
-                      </p>
+                  ))}
+                  <Link to="/assignments" className="block">
+                    <Button variant="ghost" className="w-full mt-2">
+                      View all assignments →
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* Recent Announcements */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5" />
+                Recent Announcements
+              </CardTitle>
+              <CardDescription>Latest updates from school</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingAnnouncements ? (
+                <p className="text-sm text-muted-foreground">
+                  Loading announcements…
+                </p>
+              ) : announcementsError ? (
+                <p className="text-sm text-destructive">
+                  {announcementsError}
+                </p>
+              ) : recentAnnouncements.length === 0 ? (
+                <EmptyState
+                  icon={Bell}
+                  title="No announcements"
+                  description="New announcements will appear here."
+                />
+              ) : (
+                <div className="space-y-3">
+                  {recentAnnouncements.map((announcement) => (
+                    <div
+                      key={announcement.id}
+                      className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Bell className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {announcement.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {announcement.date}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="capitalize text-xs">
+                        {announcement.type}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="capitalize px-3 py-1">
-                      {announcement.type}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-              <Link to="/announcements">
-                <Button
-                  variant="ghost"
-                  className="w-full mt-6 hover:bg-primary/5 hover:text-primary transition-colors"
-                >
-                  View all announcements →
-                </Button>
-              </Link>
+                  ))}
+                  <Link to="/announcements" className="block">
+                    <Button variant="ghost" className="w-full mt-2" size="sm">
+                      View all →
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Today's Schedule */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Today's Schedule
+              </CardTitle>
+              <CardDescription>Your classes for today</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <EmptyState
+                icon={Calendar}
+                title="Schedule preview"
+                description="Your class schedule will appear here."
+                action={
+                  <Link to="/timetable">
+                    <Button variant="outline" size="sm">
+                      View Full Timetable
+                    </Button>
+                  </Link>
+                }
+              />
             </CardContent>
           </Card>
         </div>

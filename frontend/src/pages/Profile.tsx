@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -17,26 +17,24 @@ import {
   Phone,
   Calendar,
   MapPin,
-  Briefcase,
   Lock,
   Camera,
+  Save,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/useAuth";
-import type { User as AuthUser } from "@/contexts/auth-types";
+import { PageHeader } from "@/components/patterns";
 import {
   updateProfile as updateProfileApi,
   uploadAvatar as uploadAvatarApi,
   changePassword as changePasswordApi,
 } from "@/lib/api/profileApi";
-import {
-  SkeletonWrapper,
-  SkeletonLine,
-  SkeletonAvatar,
-} from "@/components/skeleton";
+import { SkeletonWrapper, SkeletonLine, SkeletonAvatar } from "@/components/skeleton";
 
 type Gender = "male" | "female" | "other" | undefined;
+
 interface ProfileInfo {
   phone?: string;
   address?: string;
@@ -44,6 +42,7 @@ interface ProfileInfo {
   gender?: Gender;
   avatar?: string;
 }
+
 interface AcademicInfo {
   studentId?: string;
   class?: string;
@@ -51,13 +50,7 @@ interface AcademicInfo {
   grade?: string;
   subjects?: string[];
 }
-interface EmploymentInfo {
-  employeeId?: string;
-  department?: string;
-  position?: string;
-  joinDate?: string | Date;
-  responsibilities?: string;
-}
+
 interface ApiUser {
   _id?: string;
   id?: string;
@@ -69,7 +62,6 @@ interface ApiUser {
   studentId?: string;
   profile?: ProfileInfo;
   academicInfo?: AcademicInfo;
-  employmentInfo?: EmploymentInfo;
 }
 
 const getApiBase = () =>
@@ -81,10 +73,12 @@ const Profile = () => {
   const { user: authUser } = useAuth();
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  // Security settings (password change)
+  
+  // Password change
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  
   const [loading, setLoading] = useState(true);
   const [apiUser, setApiUser] = useState<ApiUser | null>(null);
 
@@ -94,332 +88,184 @@ const Profile = () => {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
 
-  // Role-specific editable fields
-  const [classField, setClassField] = useState("");
-  const [section, setSection] = useState("");
-  const [grade, setGrade] = useState("");
-  const [subjects, setSubjects] = useState("");
-  const [department, setDepartment] = useState("");
-  const [position, setPosition] = useState("");
-  const [responsibilities, setResponsibilities] = useState("");
-
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          setLoading(false);
-          return;
-        }
-        const res = await fetch(`${getApiBase()}/api/profile/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.message || "Failed to load profile");
-        }
-        const raw: ApiUser = data.data.user as ApiUser;
-        // Normalize id immutably
-        const u: ApiUser = {
-          ...raw,
-          id: raw.id || raw._id,
-        };
-        setApiUser(u);
-        setFirstName(u.firstName || "");
-        setLastName(u.lastName || "");
-        setPhone(u.profile?.phone || "");
-        setAddress(u.profile?.address || "");
-        // Role-specific
-        setClassField(u.academicInfo?.class || "");
-        setSection(u.academicInfo?.section || "");
-        setGrade(u.academicInfo?.grade || "");
-        setSubjects(u.academicInfo?.subjects?.join(", ") || "");
-        setDepartment(u.employmentInfo?.department || "");
-        setPosition(u.employmentInfo?.position || "");
-        setResponsibilities(u.employmentInfo?.responsibilities || "");
-
-        // Avatar
-        const avatarPath = u.profile?.avatar;
-        if (avatarPath && typeof avatarPath === "string") {
-          setAvatarPreview(
-            avatarPath.startsWith("http")
-              ? avatarPath
-              : `${getApiBase()}${avatarPath}`
-          );
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Error";
-        toast.error(message);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchProfile();
-  }, [authUser]);
-  const isStudent = apiUser?.role === "student";
-  const displayName = useMemo(() => {
-    const f = firstName?.trim() || "";
-    const l = lastName?.trim() || "";
-    const full = `${f} ${l}`.trim();
-    return full || apiUser?.email || apiUser?.studentId || "User";
-  }, [firstName, lastName, apiUser]);
+  }, []);
 
-  const initials = useMemo(() => {
-    const parts = displayName.split(" ").filter(Boolean);
-    return (
-      parts
-        .slice(0, 2)
-        .map((p) => p[0]?.toUpperCase())
-        .join("") || "U"
-    );
-  }, [displayName]);
-
-  const classLabel = useMemo(() => {
-    const info = apiUser?.academicInfo;
-    if (!info) return undefined;
-    if (info.class) return info.class;
-    const grade = info.grade ? `Grade ${info.grade}` : "";
-    const section = info.section ? ` ${info.section}` : "";
-    return (grade + section).trim() || undefined;
-  }, [apiUser]);
-
-  const userIdForUpload = apiUser?._id || apiUser?.id || authUser?.id || "";
-
-  const handleSave = async () => {
+  const fetchProfile = async () => {
+    setLoading(true);
     try {
-      const payload: {
-        firstName: string;
-        lastName: string;
-        profile: { phone: string; address: string };
-        academicInfo?: {
-          class: string;
-          section: string;
-          grade: string;
-          subjects: string[];
-        };
-        employmentInfo?: {
-          department: string;
-          position: string;
-          responsibilities: string;
-        };
-      } = {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        profile: { phone: phone.trim(), address: address.trim() },
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${getApiBase()}/api/auth/profile`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) throw new Error("Failed to fetch profile");
+      const data = await res.json();
+      setApiUser(data.data.user);
+      
+      // Set editable fields
+      setFirstName(data.data.user.firstName || "");
+      setLastName(data.data.user.lastName || "");
+      setPhone(data.data.user.profile?.phone || "");
+      setAddress(data.data.user.profile?.address || "");
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      toast.error("Failed to load profile");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
       };
-      // Add role-specific
-      if (apiUser?.role === "student") {
-        payload.academicInfo = {
-          class: classField.trim(),
-          section: section.trim(),
-          grade: grade.trim(),
-          subjects: subjects
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
-        };
-      } else if (apiUser?.role === "teacher" || apiUser?.role === "head") {
-        payload.employmentInfo = {
-          department: department.trim(),
-          position: position.trim(),
-          responsibilities: responsibilities.trim(),
-        };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      // Upload avatar if changed
+      if (selectedFile) {
+        await uploadAvatarApi(selectedFile);
       }
-      const updated = (await updateProfileApi(payload)) as unknown as ApiUser;
-      setApiUser(updated);
+
+      // Update profile
+      await updateProfileApi({
+        firstName,
+        lastName,
+        phone,
+        address,
+      });
+
       toast.success("Profile updated successfully");
       setIsEditing(false);
+      fetchProfile();
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      toast.error("Failed to update profile");
+    }
+  };
 
-      // Update cached auth user name
-      const stored = localStorage.getItem("currentUser");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          const fullName = `${updated.firstName ?? ""} ${
-            updated.lastName ?? ""
-          }`
-            .trim()
-            .replace(/\s+/g, " ");
-          parsed.name = fullName || parsed.name;
-          parsed.studentId = updated.studentId ?? parsed.studentId;
-          parsed.email = updated.email ?? parsed.email;
-          localStorage.setItem("currentUser", JSON.stringify(parsed));
-        } catch {
-          // ignore
-        }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Update error";
-      toast.error(message);
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    try {
+      await changePasswordApi(currentPassword, newPassword);
+      toast.success("Password changed successfully");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      console.error("Error changing password:", error);
+      toast.error("Failed to change password");
     }
   };
 
   if (loading) {
     return (
-      <div className="p-6 lg:p-8 space-y-6" aria-busy>
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Profile</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your personal information and settings
-          </p>
-        </div>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4" aria-hidden>
-              <SkeletonAvatar size={64} />
-              <div className="space-y-2">
-                <SkeletonLine height="h-5" width="w-48" />
-                <SkeletonLine height="h-4" width="w-32" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent
-            className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6"
-            aria-hidden
-          >
-            <div className="space-y-2">
-              <SkeletonLine height="h-4" width="w-24" />
-              <SkeletonLine height="h-10" />
-            </div>
-            <div className="space-y-2">
-              <SkeletonLine height="h-4" width="w-24" />
-              <SkeletonLine height="h-10" />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
+        <SkeletonWrapper>
+          <SkeletonLine className="h-8 w-48" />
+          <SkeletonLine className="h-4 w-96" />
+        </SkeletonWrapper>
+        <SkeletonWrapper>
+          <SkeletonAvatar className="w-24 h-24" />
+        </SkeletonWrapper>
       </div>
     );
   }
 
-  return (
-    <div className="p-6 lg:p-8 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Profile</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your personal information and settings
-        </p>
-      </div>
+  const avatarUrl = avatarPreview || apiUser?.profile?.avatar;
 
-      {/* Profile Picture Section */}
+  return (
+    <div className="p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <PageHeader
+        title="Profile"
+        description="Manage your personal information and account settings"
+        actions={
+          !isEditing ? (
+            <Button onClick={() => setIsEditing(true)}>
+              Edit Profile
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => {
+                setIsEditing(false);
+                fetchProfile();
+              }}>
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+              <Button onClick={handleSaveProfile}>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </Button>
+            </div>
+          )
+        }
+      />
+
+      {/* Avatar Section */}
       <Card>
-        <CardContent className="pt-6">
+        <CardHeader>
+          <CardTitle>Profile Picture</CardTitle>
+          <CardDescription>Update your profile photo</CardDescription>
+        </CardHeader>
+        <CardContent>
           <div className="flex items-center gap-6">
             <div className="relative">
-              <label className="cursor-pointer block">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] || null;
-                    if (f) {
-                      setSelectedFile(f);
-                      setAvatarPreview(URL.createObjectURL(f));
-                    }
-                  }}
-                />
-                <div className="w-24 h-24 rounded-full bg-accent flex items-center justify-center overflow-hidden">
-                  {avatarPreview ? (
-                    <img
-                      src={avatarPreview}
-                      alt="avatar"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-3xl font-bold text-accent-foreground">
-                      {initials}
-                    </span>
-                  )}
-                  <div className="absolute bottom-0 right-0">
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      className="rounded-full h-8 w-8"
-                    >
-                      <Camera className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </label>
-              {selectedFile && (
-                <Button
-                  size="icon"
-                  variant="default"
-                  className="rounded-full h-8 w-8 absolute bottom-0 left-0"
-                  onClick={async () => {
-                    if (!selectedFile) return;
-                    try {
-                      const user = await uploadAvatarApi(selectedFile);
-                      const avatarUrl = user.avatar;
-                      if (avatarUrl) setAvatarPreview(avatarUrl);
-                      toast.success("Avatar uploaded");
-                      // persist to localStorage currentUser if present
-                      const stored = localStorage.getItem("currentUser");
-                      if (stored) {
-                        try {
-                          const parsed = JSON.parse(stored);
-                          parsed.profile = parsed.profile || {};
-                          parsed.profile.avatar = avatarUrl;
-                          localStorage.setItem(
-                            "currentUser",
-                            JSON.stringify(parsed)
-                          );
-                        } catch (e) {
-                          // ignore
-                        }
-                      }
-                      // Also update local state
-                      setApiUser((prev) => ({
-                        ...(prev || {}),
-                        profile: {
-                          ...(prev?.profile || {}),
-                          avatar: avatarUrl || prev?.profile?.avatar,
-                        },
-                      }));
-                      setSelectedFile(null);
-                    } catch (err) {
-                      const message =
-                        err instanceof Error ? err.message : "Upload error";
-                      toast.error(message);
-                    }
-                  }}
+              <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User className="h-12 w-12 text-muted-foreground" />
+                )}
+              </div>
+              {isEditing && (
+                <label
+                  htmlFor="avatar-upload"
+                  className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center cursor-pointer hover:bg-primary/90 transition-colors"
                 >
-                  ✓
-                </Button>
+                  <Camera className="h-4 w-4" />
+                  <input
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarChange}
+                  />
+                </label>
               )}
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-foreground">
-                {displayName}
-              </h2>
-              <p className="text-muted-foreground">
-                {apiUser?.studentId || apiUser?.academicInfo?.studentId || ""}
+              <p className="font-semibold">
+                {apiUser?.firstName} {apiUser?.lastName}
               </p>
-              {(classLabel || apiUser?.role) && (
-                <div className="flex items-center gap-2 mt-2">
-                  {classLabel && (
-                    <Badge variant="secondary">{classLabel}</Badge>
-                  )}
-                  {apiUser?.role && (
-                    <Badge variant="outline" className="capitalize">
-                      {apiUser.role}
-                    </Badge>
-                  )}
-                  {apiUser?.status && (
-                    <Badge
-                      variant={
-                        apiUser.status === "approved" ? "secondary" : "outline"
-                      }
-                      className="capitalize"
-                    >
-                      {apiUser.status}
-                    </Badge>
-                  )}
-                </div>
-              )}
+              <p className="text-sm text-muted-foreground">{apiUser?.email}</p>
+              <Badge variant="outline" className="mt-2">
+                {apiUser?.role}
+              </Badge>
             </div>
           </div>
         </CardContent>
@@ -427,105 +273,64 @@ const Profile = () => {
 
       {/* Tabs */}
       <Tabs defaultValue="personal" className="space-y-6">
-        <TabsList
-          className={`grid w-full max-w-md ${
-            isStudent ? "grid-cols-3" : "grid-cols-2"
-          }`}
-        >
+        <TabsList>
           <TabsTrigger value="personal">Personal Info</TabsTrigger>
-          {isStudent && <TabsTrigger value="parent">Parent Info</TabsTrigger>}
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+          {apiUser?.role === "student" && (
+            <TabsTrigger value="academic">Academic Info</TabsTrigger>
+          )}
+          <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
 
-        {/* Personal Information */}
+        {/* Personal Info */}
         <TabsContent value="personal">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Personal Information</CardTitle>
-                  <CardDescription>
-                    Your basic information and contact details
-                  </CardDescription>
-                </div>
-                {!isEditing ? (
-                  <Button onClick={() => setIsEditing(true)}>Edit</Button>
-                ) : (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsEditing(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button onClick={handleSave}>Save</Button>
-                  </div>
-                )}
-              </div>
+              <CardTitle>Personal Information</CardTitle>
+              <CardDescription>Update your personal details</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="firstName"
-                    className="flex items-center gap-2"
-                  >
-                    <User className="h-4 w-4" />
-                    Full Name
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="firstName"
-                      placeholder="First name"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      disabled={!isEditing}
-                    />
-                    <Input
-                      id="lastName"
-                      placeholder="Last name"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      disabled={!isEditing}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="studentId"
-                    className="flex items-center gap-2"
-                  >
-                    <User className="h-4 w-4" />
-                    Student ID
+                  <Label htmlFor="firstName">
+                    <User className="h-4 w-4 inline mr-2" />
+                    First Name
                   </Label>
                   <Input
-                    id="studentId"
-                    value={
-                      apiUser?.studentId ||
-                      apiUser?.academicInfo?.studentId ||
-                      ""
-                    }
-                    disabled
+                    id="firstName"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    disabled={!isEditing}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="flex items-center gap-2">
-                    <Mail className="h-4 w-4" />
+                  <Label htmlFor="lastName">
+                    <User className="h-4 w-4 inline mr-2" />
+                    Last Name
+                  </Label>
+                  <Input
+                    id="lastName"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    disabled={!isEditing}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="email">
+                    <Mail className="h-4 w-4 inline mr-2" />
                     Email
                   </Label>
                   <Input
                     id="email"
-                    type="email"
                     value={apiUser?.email || ""}
                     disabled
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone" className="flex items-center gap-2">
-                    <Phone className="h-4 w-4" />
+                  <Label htmlFor="phone">
+                    <Phone className="h-4 w-4 inline mr-2" />
                     Phone
                   </Label>
                   <Input
@@ -536,228 +341,113 @@ const Profile = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="dob" className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Date of Birth
-                  </Label>
-                  <Input
-                    id="dob"
-                    value={
-                      apiUser?.profile?.dateOfBirth
-                        ? new Date(apiUser.profile.dateOfBirth)
-                            .toISOString()
-                            .slice(0, 10)
-                        : ""
-                    }
-                    disabled
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="gender" className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    Gender
-                  </Label>
-                  <Input
-                    id="gender"
-                    value={apiUser?.profile?.gender || ""}
-                    disabled
-                  />
-                </div>
-
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="address" className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
+                  <Label htmlFor="address">
+                    <MapPin className="h-4 w-4 inline mr-2" />
                     Address
                   </Label>
-                  <Input
+                  <Textarea
                     id="address"
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     disabled={!isEditing}
+                    rows={3}
                   />
                 </div>
-
-                {/* Role-specific fields */}
-                {apiUser?.role === "student" && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="classField">Class</Label>
-                      <Input
-                        id="classField"
-                        value={classField}
-                        onChange={(e) => setClassField(e.target.value)}
-                        disabled={!isEditing}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="section">Section</Label>
-                      <Input
-                        id="section"
-                        value={section}
-                        onChange={(e) => setSection(e.target.value)}
-                        disabled={!isEditing}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="grade">Grade</Label>
-                      <Input
-                        id="grade"
-                        value={grade}
-                        onChange={(e) => setGrade(e.target.value)}
-                        disabled={!isEditing}
-                      />
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label htmlFor="subjects">
-                        Subjects (comma-separated)
-                      </Label>
-                      <Input
-                        id="subjects"
-                        value={subjects}
-                        onChange={(e) => setSubjects(e.target.value)}
-                        disabled={!isEditing}
-                      />
-                    </div>
-                  </>
-                )}
-
-                {(apiUser?.role === "teacher" || apiUser?.role === "head") && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="department">Department</Label>
-                      <Input
-                        id="department"
-                        value={department}
-                        onChange={(e) => setDepartment(e.target.value)}
-                        disabled={!isEditing}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="position">Position</Label>
-                      <Input
-                        id="position"
-                        value={position}
-                        onChange={(e) => setPosition(e.target.value)}
-                        disabled={!isEditing}
-                      />
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label htmlFor="responsibilities">Responsibilities</Label>
-                      <Textarea
-                        id="responsibilities"
-                        value={responsibilities}
-                        onChange={(e) => setResponsibilities(e.target.value)}
-                        disabled={!isEditing}
-                        rows={3}
-                      />
-                    </div>
-                  </>
-                )}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Parent Information (students only, placeholder) */}
-        {isStudent && (
-          <TabsContent value="parent">
+        {/* Academic Info (Students only) */}
+        {apiUser?.role === "student" && (
+          <TabsContent value="academic">
             <Card>
               <CardHeader>
-                <CardTitle>Parent/Guardian Information</CardTitle>
-                <CardDescription>
-                  Emergency contact and guardian details
-                </CardDescription>
+                <CardTitle>Academic Information</CardTitle>
+                <CardDescription>Your academic details</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Parent/guardian information is managed by your school. Please
-                  contact administration to request updates.
-                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label>Student ID</Label>
+                    <Input value={apiUser?.studentId || "N/A"} disabled />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Grade</Label>
+                    <Input value={apiUser?.academicInfo?.grade || "N/A"} disabled />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Class</Label>
+                    <Input value={apiUser?.academicInfo?.class || "N/A"} disabled />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Section</Label>
+                    <Input value={apiUser?.academicInfo?.section || "N/A"} disabled />
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
         )}
 
-        {/* Account Settings */}
-        <TabsContent value="settings">
+        {/* Security */}
+        <TabsContent value="security">
           <Card>
             <CardHeader>
-              <CardTitle>Account Settings</CardTitle>
-              <CardDescription>Manage your account security</CardDescription>
+              <CardTitle>Change Password</CardTitle>
+              <CardDescription>Update your account password</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Lock className="h-4 w-4" />
-                  Change Password
-                </h3>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="currentPassword">Current Password</Label>
-                    <Input
-                      id="currentPassword"
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password</Label>
-                    <Input
-                      id="newPassword"
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">
-                      Confirm New Password
-                    </Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                    />
-                  </div>
-                  <Button
-                    onClick={async () => {
-                      try {
-                        if (!currentPassword || !newPassword) {
-                          throw new Error("Please fill all password fields");
-                        }
-                        if (newPassword !== confirmPassword) {
-                          throw new Error("New passwords do not match");
-                        }
-                        if (newPassword.length < 6) {
-                          throw new Error(
-                            "New password must be at least 6 characters"
-                          );
-                        }
-                        await changePasswordApi({
-                          currentPassword,
-                          newPassword,
-                          confirmPassword,
-                        });
-                        toast.success("Password updated successfully");
-                        setCurrentPassword("");
-                        setNewPassword("");
-                        setConfirmPassword("");
-                      } catch (err) {
-                        const message =
-                          err instanceof Error
-                            ? err.message
-                            : "Error updating password";
-                        toast.error(message);
-                      }
-                    }}
-                  >
-                    Update Password
-                  </Button>
+            <CardContent>
+              <div className="space-y-4 max-w-md">
+                <div className="space-y-2">
+                  <Label htmlFor="currentPassword">
+                    <Lock className="h-4 w-4 inline mr-2" />
+                    Current Password
+                  </Label>
+                  <Input
+                    id="currentPassword"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                  />
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">
+                    <Lock className="h-4 w-4 inline mr-2" />
+                    New Password
+                  </Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">
+                    <Lock className="h-4 w-4 inline mr-2" />
+                    Confirm New Password
+                  </Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+
+                <Button
+                  onClick={handleChangePassword}
+                  disabled={!currentPassword || !newPassword || !confirmPassword}
+                >
+                  Change Password
+                </Button>
               </div>
             </CardContent>
           </Card>

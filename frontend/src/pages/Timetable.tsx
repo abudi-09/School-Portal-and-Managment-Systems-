@@ -1,17 +1,40 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, Clock, MapPin, FileText } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PageHeader } from "@/components/patterns";
+import { EmptyState } from "@/components/patterns";
 
 const Timetable = () => {
   const [permissionReason, setPermissionReason] = useState("");
   const [permissionDate, setPermissionDate] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const weekSchedule = [
     {
@@ -99,127 +122,114 @@ const Timetable = () => {
     },
   ];
 
-  const permissions = [
-    {
-      id: 1,
-      date: "2025-10-10",
-      reason: "Medical appointment",
-      status: "approved",
-    },
-    {
-      id: 2,
-      date: "2025-10-08",
-      reason: "Family emergency",
-      status: "pending",
-    },
-  ];
-
-  const getSubjectColor = (subject: string) => {
-    const colors: { [key: string]: string } = {
-      Mathematics: "bg-blue-500/10 text-blue-700 border-blue-200",
-      Physics: "bg-purple-500/10 text-purple-700 border-purple-200",
-      Chemistry: "bg-green-500/10 text-green-700 border-green-200",
-      English: "bg-amber-500/10 text-amber-700 border-amber-200",
-      History: "bg-red-500/10 text-red-700 border-red-200",
-      "Computer Science": "bg-teal-500/10 text-teal-700 border-teal-200",
-      "Physical Education": "bg-orange-500/10 text-orange-700 border-orange-200",
-      Art: "bg-pink-500/10 text-pink-700 border-pink-200",
-      Music: "bg-indigo-500/10 text-indigo-700 border-indigo-200",
-    };
-    return colors[subject] || "bg-gray-500/10 text-gray-700 border-gray-200";
+  const handleSubmitPermission = () => {
+    // TODO: Implement permission request submission
+    console.log("Permission request:", { permissionDate, permissionReason });
+    setDialogOpen(false);
+    setPermissionReason("");
+    setPermissionDate("");
   };
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Timetable</h1>
-          <p className="text-muted-foreground mt-1">
-            Your class and exam schedule
-          </p>
-        </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="default" className="gap-2">
-              <FileText className="h-4 w-4" />
-              Request Permission
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Request Absence Permission</DialogTitle>
-              <DialogDescription>
-                Submit a request to be absent from class
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="date">Date</Label>
-                <Select value={permissionDate} onValueChange={setPermissionDate}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select date" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2025-10-14">October 14, 2025</SelectItem>
-                    <SelectItem value="2025-10-15">October 15, 2025</SelectItem>
-                    <SelectItem value="2025-10-16">October 16, 2025</SelectItem>
-                  </SelectContent>
-                </Select>
+      <PageHeader
+        title="Timetable & Schedule"
+        description="View your class schedule, exam dates, and request absence permissions"
+        actions={
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <FileText className="h-4 w-4 mr-2" />
+                Request Permission
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Request Absence Permission</DialogTitle>
+                <DialogDescription>
+                  Submit a request to be absent from class. Your request will be reviewed by your teacher.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="date">Date</Label>
+                  <Select value={permissionDate} onValueChange={setPermissionDate}>
+                    <SelectTrigger id="date">
+                      <SelectValue placeholder="Select date" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2025-10-20">October 20, 2025</SelectItem>
+                      <SelectItem value="2025-10-21">October 21, 2025</SelectItem>
+                      <SelectItem value="2025-10-22">October 22, 2025</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reason">Reason</Label>
+                  <Textarea
+                    id="reason"
+                    placeholder="Explain why you need to be absent..."
+                    value={permissionReason}
+                    onChange={(e) => setPermissionReason(e.target.value)}
+                    rows={4}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="reason">Reason</Label>
-                <Textarea
-                  id="reason"
-                  placeholder="Enter reason for absence..."
-                  value={permissionReason}
-                  onChange={(e) => setPermissionReason(e.target.value)}
-                  className="min-h-[100px]"
-                />
-              </div>
-              <Button className="w-full">Submit Request</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSubmitPermission}
+                  disabled={!permissionDate || !permissionReason.trim()}
+                >
+                  Submit Request
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        }
+      />
 
       {/* Tabs */}
-      <Tabs defaultValue="class" className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-3">
-          <TabsTrigger value="class">Class Schedule</TabsTrigger>
-          <TabsTrigger value="exam">Exam Schedule</TabsTrigger>
-          <TabsTrigger value="permissions">Permissions</TabsTrigger>
+      <Tabs defaultValue="schedule" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="schedule">Class Schedule</TabsTrigger>
+          <TabsTrigger value="exams">Exam Schedule</TabsTrigger>
         </TabsList>
 
         {/* Class Schedule */}
-        <TabsContent value="class" className="space-y-6">
+        <TabsContent value="schedule" className="space-y-4">
           {weekSchedule.map((day) => (
             <Card key={day.day}>
               <CardHeader>
-                <CardTitle>{day.day}</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <CalendarIcon className="h-5 w-5" />
+                  {day.day}
+                </CardTitle>
+                <CardDescription>{day.classes.length} classes</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {day.classes.map((classItem, index) => (
+                  {day.classes.map((classItem, idx) => (
                     <div
-                      key={index}
-                      className={`p-4 rounded-lg border ${getSubjectColor(classItem.subject)}`}
+                      key={idx}
+                      className="flex items-center gap-4 p-4 rounded-lg border hover:bg-muted/50 transition-colors"
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-lg mb-2">{classItem.subject}</h4>
-                          <div className="space-y-1 text-sm">
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <Clock className="h-4 w-4" />
-                              <span>{classItem.time}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <MapPin className="h-4 w-4" />
-                              <span>{classItem.room}</span>
-                            </div>
-                            <p className="text-muted-foreground">{classItem.teacher}</p>
-                          </div>
-                        </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-[120px]">
+                        <Clock className="h-4 w-4" />
+                        <span>{classItem.time}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{classItem.subject}</p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {classItem.teacher}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground flex-shrink-0">
+                        <MapPin className="h-4 w-4" />
+                        <span>{classItem.room}</span>
                       </div>
                     </div>
                   ))}
@@ -230,71 +240,53 @@ const Timetable = () => {
         </TabsContent>
 
         {/* Exam Schedule */}
-        <TabsContent value="exam" className="space-y-4">
-          {examSchedule.map((exam, index) => (
-            <Card key={index}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      {exam.subject}
-                    </CardTitle>
-                    <CardDescription>
-                      {new Date(exam.date).toLocaleDateString("en-US", {
-                        weekday: "long",
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })}
-                    </CardDescription>
-                  </div>
-                  <Badge variant="secondary">{exam.type}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-6 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    <span>{exam.time}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPin className="h-4 w-4" />
-                    <span>{exam.room}</span>
-                  </div>
-                </div>
+        <TabsContent value="exams" className="space-y-4">
+          {examSchedule.length === 0 ? (
+            <Card>
+              <CardContent className="p-12">
+                <EmptyState
+                  icon={CalendarIcon}
+                  title="No upcoming exams"
+                  description="Exam schedules will appear here when they are announced."
+                />
               </CardContent>
             </Card>
-          ))}
-        </TabsContent>
-
-        {/* Permissions */}
-        <TabsContent value="permissions" className="space-y-4">
-          {permissions.map((permission) => (
-            <Card key={permission.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <CalendarIcon className="h-5 w-5" />
-                      {new Date(permission.date).toLocaleDateString()}
-                    </CardTitle>
-                    <CardDescription>{permission.reason}</CardDescription>
+          ) : (
+            examSchedule.map((exam, idx) => (
+              <Card key={idx} className="hover:shadow-md transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <CardTitle className="flex items-center gap-2">
+                        {exam.subject}
+                      </CardTitle>
+                      <CardDescription>
+                        {new Date(exam.date).toLocaleDateString("en-US", {
+                          weekday: "long",
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
+                      </CardDescription>
+                    </div>
+                    <Badge variant="destructive">{exam.type}</Badge>
                   </div>
-                  <Badge
-                    variant={
-                      permission.status === "approved"
-                        ? "default"
-                        : permission.status === "pending"
-                        ? "secondary"
-                        : "destructive"
-                    }
-                  >
-                    {permission.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-            </Card>
-          ))}
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span>{exam.time}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                      <span>{exam.room}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </TabsContent>
       </Tabs>
     </div>

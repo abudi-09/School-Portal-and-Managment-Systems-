@@ -1,15 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, RotateCcw } from 'lucide-react';
+import { Play, Pause, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/audioUtils';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { AnimatedWaveform } from './AnimatedWaveform';
 
 interface VoicePlayerProps {
   audioUrl: string;
@@ -28,39 +22,8 @@ export const VoicePlayer = ({
 }: VoicePlayerProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [playbackRate, setPlaybackRate] = useState(1);
+  const [isLoaded, setIsLoaded] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Draw waveform
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !waveform.length) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const width = canvas.width;
-    const height = canvas.height;
-    const barWidth = width / waveform.length;
-    const progress = duration > 0 ? currentTime / duration : 0;
-
-    ctx.clearRect(0, 0, width, height);
-
-    waveform.forEach((amplitude, i) => {
-      const barHeight = Math.max(2, amplitude * height * 0.7);
-      const x = i * barWidth;
-      const y = (height - barHeight) / 2;
-
-      // Color based on playback progress
-      const isPlayed = i / waveform.length < progress;
-      ctx.fillStyle = isPlayed
-        ? isOwn ? 'rgba(255, 255, 255, 0.9)' : 'hsl(var(--primary))'
-        : isOwn ? 'rgba(255, 255, 255, 0.4)' : 'hsl(var(--muted-foreground) / 0.3)';
-      
-      ctx.fillRect(x, y, barWidth - 1, barHeight);
-    });
-  }, [waveform, currentTime, duration, isOwn]);
 
   // Audio event handlers
   useEffect(() => {
@@ -78,26 +41,23 @@ export const VoicePlayer = ({
 
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
+    
+    const handleCanPlay = () => setIsLoaded(true);
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
+    audio.addEventListener('canplay', handleCanPlay);
 
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('canplay', handleCanPlay);
     };
   }, []);
-
-  // Update playback rate
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.playbackRate = playbackRate;
-    }
-  }, [playbackRate]);
 
   const togglePlayPause = () => {
     if (!audioRef.current) return;
@@ -109,17 +69,11 @@ export const VoicePlayer = ({
     }
   };
 
-  const handleSeek = (value: number[]) => {
+  const handleSeek = (progress: number) => {
     if (!audioRef.current) return;
-    const newTime = (value[0] / 100) * duration;
+    const newTime = progress * duration;
     audioRef.current.currentTime = newTime;
     setCurrentTime(newTime);
-  };
-
-  const handleRestart = () => {
-    if (!audioRef.current) return;
-    audioRef.current.currentTime = 0;
-    setCurrentTime(0);
   };
 
   const handleDownload = () => {
@@ -129,10 +83,10 @@ export const VoicePlayer = ({
     a.click();
   };
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progress = duration > 0 ? currentTime / duration : 0;
 
   return (
-    <div className={cn("flex items-center gap-2 min-w-[250px]", className)}>
+    <div className={cn("flex items-center gap-2 min-w-[200px] max-w-[350px]", className)}>
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
 
       {/* Play/Pause button */}
@@ -140,10 +94,12 @@ export const VoicePlayer = ({
         variant="ghost"
         size="icon"
         className={cn(
-          "h-8 w-8 flex-shrink-0 rounded-full",
-          isOwn ? "hover:bg-primary-foreground/20" : ""
+          "h-9 w-9 flex-shrink-0 rounded-full transition-all",
+          isOwn ? "hover:bg-primary-foreground/20" : "hover:bg-primary/10",
+          isPlaying && "scale-95"
         )}
         onClick={togglePlayPause}
+        disabled={!isLoaded}
       >
         {isPlaying ? (
           <Pause className="h-4 w-4" fill="currentColor" />
@@ -152,93 +108,54 @@ export const VoicePlayer = ({
         )}
       </Button>
 
-      {/* Waveform and progress */}
-      <div className="flex-1 min-w-0 space-y-1">
+      {/* Waveform and timer */}
+      <div className="flex-1 min-w-0 space-y-0.5">
         {waveform.length > 0 ? (
-          <canvas
-            ref={canvasRef}
-            width={200}
-            height={30}
-            className="w-full h-[30px] cursor-pointer"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              const percent = (x / rect.width) * 100;
-              handleSeek([percent]);
-            }}
+          <AnimatedWaveform
+            waveform={waveform}
+            progress={progress}
+            isPlaying={isPlaying}
+            isOwn={isOwn}
+            onSeek={handleSeek}
           />
         ) : (
-          <Slider
-            value={[progress]}
-            onValueChange={handleSeek}
-            max={100}
-            step={0.1}
-            className="w-full"
-          />
+          <div className="h-8 flex items-center">
+            <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+              <div 
+                className={cn(
+                  "h-full transition-all duration-100",
+                  isOwn ? "bg-primary-foreground/60" : "bg-primary"
+                )}
+                style={{ width: `${progress * 100}%` }}
+              />
+            </div>
+          </div>
         )}
         
-        <div className="flex items-center justify-between text-[10px] opacity-70">
-          <span className="font-mono tabular-nums">
-            {formatDuration(currentTime)}
-          </span>
-          <span className="font-mono tabular-nums">
-            {formatDuration(duration)}
-          </span>
+        <div className={cn(
+          "flex items-center justify-between text-[10px] font-mono tabular-nums",
+          isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
+        )}>
+          {/* Elapsed time */}
+          <span>{formatDuration(currentTime)}</span>
+          {/* Total duration */}
+          <span>{formatDuration(duration)}</span>
         </div>
       </div>
 
-      {/* Speed control */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "h-6 px-2 text-[10px] font-medium",
-              isOwn ? "hover:bg-primary-foreground/20" : ""
-            )}
-          >
-            {playbackRate}x
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => (
-            <DropdownMenuItem
-              key={rate}
-              onClick={() => setPlaybackRate(rate)}
-              className={playbackRate === rate ? 'bg-accent' : ''}
-            >
-              {rate}x
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* Additional controls */}
-      <div className="flex items-center gap-0.5">
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "h-6 w-6",
-            isOwn ? "hover:bg-primary-foreground/20" : ""
-          )}
-          onClick={handleRestart}
-        >
-          <RotateCcw className="h-3 w-3" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "h-6 w-6",
-            isOwn ? "hover:bg-primary-foreground/20" : ""
-          )}
-          onClick={handleDownload}
-        >
-          <Download className="h-3 w-3" />
-        </Button>
-      </div>
+      {/* Download button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn(
+          "h-7 w-7 flex-shrink-0",
+          isOwn ? "hover:bg-primary-foreground/20" : "hover:bg-primary/10"
+        )}
+        onClick={handleDownload}
+        title="Download voice message"
+      >
+        <Download className="h-3.5 w-3.5" />
+      </Button>
     </div>
   );
 };

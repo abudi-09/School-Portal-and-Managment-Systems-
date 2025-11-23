@@ -3,6 +3,7 @@ import { MessageItem, UserRole } from "./types";
 import { format } from "date-fns";
 import { Check, CheckCheck, FileIcon, Download, Play, Pause } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { VoicePlayer } from "./VoicePlayer";
 
 interface MessageBubbleProps {
   message: MessageItem;
@@ -109,6 +110,18 @@ export const MessageBubble = ({
                 <Download className="h-4 w-4" />
               </a>
             )}
+          </div>
+        )}
+
+        {/* Voice Message */}
+        {message.type === "voice" && message.fileUrl && (
+          <div className="py-1">
+            <VoicePlayer
+              audioUrl={message.fileUrl}
+              duration={message.voiceDuration || 0}
+              waveform={message.voiceWaveform}
+              isOwn={isOwn}
+            />
           </div>
         )}
 

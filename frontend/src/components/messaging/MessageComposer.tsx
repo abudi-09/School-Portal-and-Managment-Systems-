@@ -16,9 +16,15 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
+import { VoiceRecorder } from "./VoiceRecorder";
+import { FilePreviewList } from "./FilePreview";
+import { validateFile, generateThumbnail, isImageFile } from "@/lib/fileUtils";
+import { useToast } from "@/hooks/use-toast";
 
 interface MessageComposerProps {
   onSend: (content: string, file?: File) => void;
+  onSendVoice?: (audioBlob: Blob, duration: number, waveform: number[]) => void;
   onTyping?: () => void;
   disabled?: boolean;
   placeholder?: string;
@@ -31,20 +37,50 @@ interface MessageComposerProps {
 
 export const MessageComposer = ({
   onSend,
+  onSendVoice,
   onTyping,
   disabled,
   placeholder = "Type a message...",
   replyTo,
 }: MessageComposerProps) => {
   const [message, setMessage] = useState("");
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<Array<{ file: File; preview?: string }>>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  // Voice recording
+  const voiceRecorder = useVoiceRecorder({
+    onData: (blob, duration, waveform) => {
+      if (onSendVoice) {
+        onSendVoice(blob, duration, waveform);
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Recording Error",
+        description: error.message || "Failed to record voice message",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleSend = () => {
-    if (!message.trim()) return;
-    onSend(message);
+    if (!message.trim() && selectedFiles.length === 0) return;
+    
+    // Send files first
+    selectedFiles.forEach(({ file }) => {
+      onSend("", file);
+    });
+    
+    // Then send text if any
+    if (message.trim()) {
+      onSend(message);
+    }
+    
     setMessage("");
+    setSelectedFiles([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -57,19 +93,77 @@ export const MessageComposer = ({
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onSend("", file);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') => {
+    const files = Array.from(e.target.files || []);
+    
+    for (const file of files) {
+      // Validate file
+      const maxSize = type === 'image' ? 10 * 1024 * 1024 : 25 * 1024 * 1024; // 10MB for images, 25MB for docs
+      const allowedTypes = type === 'image' 
+        ? ['image/*']
+        : ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/*'];
+      
+      const validation = validateFile(file, maxSize, allowedTypes);
+      
+      if (!validation.valid) {
+        toast({
+          title: "Invalid File",
+          description: validation.error,
+          variant: "destructive",
+        });
+        continue;
+      }
+
+      // Generate preview for images
+      let preview: string | undefined;
+      if (isImageFile(file)) {
+        try {
+          preview = await generateThumbnail(file);
+        } catch (err) {
+          console.error('Failed to generate thumbnail:', err);
+        }
+      }
+
+      setSelectedFiles(prev => [...prev, { file, preview }]);
+    }
+
+    // Reset input
+    if (e.target) e.target.value = "";
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMicClick = () => {
+    if (voiceRecorder.isRecording) {
+      voiceRecorder.stop();
+    } else {
+      voiceRecorder.start();
     }
   };
 
+  // Show voice recorder if recording
+  if (voiceRecorder.isRecording) {
+    return (
+      <div className="p-4 border-t bg-background">
+        <VoiceRecorder
+          isRecording={voiceRecorder.isRecording}
+          isPaused={false}
+          duration={voiceRecorder.duration}
+          waveformLive={voiceRecorder.waveformLive}
+          onStop={voiceRecorder.stop}
+          onCancel={voiceRecorder.cancel}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="p-4 border-t bg-background">
+    <div className="p-4 border-t bg-background space-y-2">
       {/* Reply Preview */}
       {replyTo && (
-        <div className="flex items-center justify-between mb-2 p-2 rounded bg-muted/50 border-l-4 border-primary">
+        <div className="flex items-center justify-between p-2 rounded bg-muted/50 border-l-4 border-primary">
           <div className="text-sm">
             <p className="font-semibold text-primary">{replyTo.senderName}</p>
             <p className="text-muted-foreground truncate max-w-[300px]">
@@ -85,6 +179,14 @@ export const MessageComposer = ({
             <X className="h-4 w-4" />
           </Button>
         </div>
+      )}
+
+      {/* File Previews */}
+      {selectedFiles.length > 0 && (
+        <FilePreviewList
+          files={selectedFiles}
+          onRemove={handleRemoveFile}
+        />
       )}
 
       <div className="flex items-end gap-2">
@@ -104,7 +206,7 @@ export const MessageComposer = ({
             <Button
               variant="ghost"
               className="w-full justify-start gap-2"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => imageInputRef.current?.click()}
             >
               <ImageIcon className="h-4 w-4" />
               Photo
@@ -122,9 +224,19 @@ export const MessageComposer = ({
 
         <input
           type="file"
+          ref={imageInputRef}
+          className="hidden"
+          accept="image/*"
+          multiple
+          onChange={(e) => handleFileSelect(e, 'image')}
+        />
+        <input
+          type="file"
           ref={fileInputRef}
           className="hidden"
-          onChange={handleFileSelect}
+          accept=".pdf,.doc,.docx,.txt"
+          multiple
+          onChange={(e) => handleFileSelect(e, 'file')}
         />
 
         {/* Input */}
@@ -156,7 +268,7 @@ export const MessageComposer = ({
         </div>
 
         {/* Send / Mic */}
-        {message.trim() ? (
+        {message.trim() || selectedFiles.length > 0 ? (
           <Button
             onClick={handleSend}
             disabled={disabled}
@@ -171,6 +283,7 @@ export const MessageComposer = ({
             size="icon"
             className="flex-shrink-0 text-muted-foreground hover:text-primary"
             disabled={disabled}
+            onClick={handleMicClick}
           >
             <Mic className="h-5 w-5" />
           </Button>

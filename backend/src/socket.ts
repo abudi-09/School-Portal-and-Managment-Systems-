@@ -704,12 +704,21 @@ export const initSocket = (server: http.Server): Server => {
           }
 
           // Send incoming notification to callee
-          emitToUser(calleeId, "call:incoming", {
-            from: callerId,
-            fromRole: callerRole,
-            sdp: payload.sdp,
-            ts: Date.now(),
-          });
+          try {
+            emitToUser(calleeId, "call:incoming", {
+              from: callerId,
+              fromRole: callerRole,
+              sdp: payload.sdp,
+              ts: Date.now(),
+            });
+            console.log(
+              `SERVER > call:offer forwarded ${callerId} -> ${calleeId}`
+            );
+          } catch (err) {
+            console.error("SERVER > call:offer forward failed", err);
+            callback?.({ success: false, message: "Failed to forward offer" });
+            return;
+          }
           callback?.({ success: true });
         } catch (e) {
           callback?.({ success: false, message: "Failed to process offer" });
@@ -738,11 +747,20 @@ export const initSocket = (server: http.Server): Server => {
             return;
           }
           establishCall(calleeId, callerId);
-          emitToUser(callerId, "call:answer", {
-            from: calleeId,
-            sdp: payload.sdp,
-            ts: Date.now(),
-          });
+          try {
+            emitToUser(callerId, "call:answer", {
+              from: calleeId,
+              sdp: payload.sdp,
+              ts: Date.now(),
+            });
+            console.log(
+              `SERVER > call:answer forwarded ${calleeId} -> ${callerId}`
+            );
+          } catch (err) {
+            console.error("SERVER > call:answer forward failed", err);
+            callback?.({ success: false, message: "Failed to forward answer" });
+            return;
+          }
           callback?.({ success: true });
         } catch (e) {
           callback?.({ success: false, message: "Failed to process answer" });
@@ -752,25 +770,44 @@ export const initSocket = (server: http.Server): Server => {
 
     socket.on("call:ice", (payload: CallIcePayload) => {
       const fromId = socketUser.id;
-      emitToUser(payload.to, "call:ice", {
-        from: fromId,
-        candidate: payload.candidate,
-      });
+      try {
+        emitToUser(payload.to, "call:ice", {
+          from: fromId,
+          candidate: payload.candidate,
+        });
+        console.log(`SERVER > call:ice forwarded ${fromId} -> ${payload.to}`);
+      } catch (err) {
+        console.error("SERVER > call:ice forward failed", err);
+      }
     });
 
     socket.on("call:hangup", (payload: CallHangupPayload) => {
       const fromId = socketUser.id;
       clearCall(fromId);
-      emitToUser(payload.to, "call:hangup", {
-        from: fromId,
-        reason: payload.reason,
-        ts: Date.now(),
-      });
+      try {
+        emitToUser(payload.to, "call:hangup", {
+          from: fromId,
+          reason: payload.reason,
+          ts: Date.now(),
+        });
+        console.log(
+          `SERVER > call:hangup forwarded ${fromId} -> ${payload.to}`
+        );
+      } catch (err) {
+        console.error("SERVER > call:hangup forward failed", err);
+      }
     });
 
     socket.on("call:cancel", (payload: CallCancelPayload) => {
       const fromId = socketUser.id;
-      emitToUser(payload.to, "call:cancel", { from: fromId, ts: Date.now() });
+      try {
+        emitToUser(payload.to, "call:cancel", { from: fromId, ts: Date.now() });
+        console.log(
+          `SERVER > call:cancel forwarded ${fromId} -> ${payload.to}`
+        );
+      } catch (err) {
+        console.error("SERVER > call:cancel forward failed", err);
+      }
     });
 
     socket.on("disconnect", () => {

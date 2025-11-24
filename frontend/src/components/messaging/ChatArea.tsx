@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatHeader } from "./ChatHeader";
 import { CallOverlay } from "./CallOverlay";
-import { useCall } from "@/hooks/useCall";
+import { useCallContext } from "@/contexts/CallContext";
 import { MessageBubble } from "./MessageBubble";
 import { MessageComposer } from "./MessageComposer";
 import { ContactItem, MessageItem } from "./types";
@@ -56,7 +56,7 @@ export const ChatArea = ({
   pinnedMessages,
 }: ChatAreaProps) => {
   // Initialize call hook per conversation scope.
-  const call = useCall(currentUserId);
+  const call = useCallContext();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom

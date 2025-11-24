@@ -30,6 +30,38 @@ export const useCall = (currentUserId: string): UseCallResult => {
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
+  const incomingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const callTimerRef = useRef<number | null>(null);
+  const callStartTsRef = useRef<number | null>(null);
+  const [callDuration, setCallDuration] = useState<number>(0);
+  const processingRef = useRef(false); // Guard for idempotent actions
+  const callIdRef = useRef<string>(Math.random().toString(36).substring(7));
+
+  const log = useCallback((msg: string, data?: unknown) => {
+    console.log(`CALL[${callIdRef.current}] ${msg}`, data || "");
+  }, []);
+
+  const startCallTimer = useCallback(() => {
+    if (callTimerRef.current) return; // Prevent duplicate timers
+    callStartTsRef.current = Date.now();
+    setCallDuration(0);
+    log("TIMER_STARTED");
+    callTimerRef.current = window.setInterval(() => {
+      if (!callStartTsRef.current) return;
+      setCallDuration(Math.floor((Date.now() - callStartTsRef.current) / 1000));
+    }, 1000);
+  }, [log]);
+
+  const stopCallTimer = useCallback(() => {
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+    callStartTsRef.current = null;
+    setCallDuration(0);
+    console.log("useCall > call timer stopped");
+  }, []);
 
   // Ensure socket exists
   useEffect(() => {
@@ -55,21 +87,143 @@ export const useCall = (currentUserId: string): UseCallResult => {
     const pc = new RTCPeerConnection(STUN_CONFIG);
     pc.ontrack = (ev) => {
       const [stream] = ev.streams;
-      if (stream) setRemoteStream(stream);
+      if (stream) {
+        setRemoteStream(stream);
+        log("AUDIO_ESTABLISHED", { streamId: stream.id });
+        try {
+          if (!audioElRef.current) {
+            audioElRef.current = new Audio();
+            audioElRef.current.autoplay = true;
+          }
+          // Attach stream and attempt to play (user gesture required for autoplay but Accept is a gesture)
+          // Setting HTMLAudioElement.srcObject is supported in browsers
+          if (audioElRef.current) {
+            (
+              audioElRef.current as unknown as {
+                srcObject?: MediaStream | null;
+              }
+            ).srcObject = stream;
+            audioElRef.current.play().catch((e) => {
+              log("AUDIO_AUTOPLAY_FAILED", e);
+              // Don't hangup, just warn. UI could show "Click to unmute"
+            });
+          }
+        } catch (e) {
+          console.warn("useCall > play remote audio failed", e);
+        }
+      }
     };
     pc.onicecandidate = (ev) => {
-      if (ev.candidate && remoteUserId) {
+      if (!ev.candidate) return;
+      const json = ev.candidate.toJSON();
+      // Emit only after remoteDescription applied; otherwise buffer
+      if (pc.remoteDescription && remoteUserId) {
         const socket = getSocket();
-        socket?.emit("call:ice", { to: remoteUserId, candidate: ev.candidate });
+        try {
+          socket?.emit("call:ice", { to: remoteUserId, candidate: json });
+          // log("EMIT_ICE_IMMEDIATE", { sdpMid: json.sdpMid });
+        } catch (err) {
+          console.warn("useCall > emit ICE failed, buffering", err);
+          pendingIceRef.current.push(json);
+        }
+      } else {
+        pendingIceRef.current.push(json);
+        log("BUFFER_OUTGOING_ICE", { sdpMid: json.sdpMid });
       }
+    };
+    pc.onconnectionstatechange = () => {
+      console.log("PC > connectionStateChange", pc.connectionState);
+      if (pc.connectionState === "connected") {
+        startCallTimer();
+      } else if (
+        ["disconnected", "closed", "failed"].includes(pc.connectionState)
+      ) {
+        stopCallTimer();
+      }
+    };
+    pc.oniceconnectionstatechange = () => {
+      console.log("PC > iceConnectionStateChange", pc.iceConnectionState);
+      if (
+        pc.iceConnectionState === "connected" ||
+        pc.iceConnectionState === "completed"
+      ) {
+        startCallTimer();
+      } else if (
+        ["disconnected", "closed", "failed"].includes(pc.iceConnectionState)
+      ) {
+        stopCallTimer();
+      }
+    };
+    pc.onicegatheringstatechange = () => {
+      console.log("PC > iceGatheringStateChange", pc.iceGatheringState);
     };
     pcRef.current = pc;
     return pc;
-  }, [remoteUserId]);
+  }, [remoteUserId, startCallTimer, stopCallTimer, log]);
+
+  // (flushPendingIce already defined above)
+
+  const bufferIncomingCandidate = useCallback(
+    (candidate: RTCIceCandidateInit) => {
+      incomingCandidatesRef.current.push(candidate);
+    },
+    []
+  );
+
+  const drainIncomingCandidates = useCallback(async () => {
+    const pc = pcRef.current;
+    if (!pc) return;
+    const pending = incomingCandidatesRef.current.splice(0);
+    if (!pending.length) return;
+    log("DRAIN_INCOMING_ICE", { count: pending.length });
+    for (const candidate of pending) {
+      try {
+        await pc.addIceCandidate(candidate as RTCIceCandidateInit);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        const name =
+          err instanceof Error && "name" in err
+            ? (err as Error).name
+            : "UnknownError";
+        console.warn("useCall > addIceCandidate drain failed", {
+          name,
+          message,
+        });
+        // If invalid state (remoteDescription not yet set) re-buffer for later
+        if (name === "InvalidStateError" || !pc.remoteDescription) {
+          incomingCandidatesRef.current.push(candidate);
+        }
+      }
+    }
+  }, [log]);
+
+  const flushPendingIce = useCallback(
+    (toId: string) => {
+      const socket = getSocket();
+      if (!socket) return 0;
+      const pending = pendingIceRef.current.splice(0);
+      const count = pending.length;
+      if (count === 0) return 0;
+      log("FLUSH_OUTGOING_ICE", { count, to: toId });
+      for (const candidate of pending) {
+        try {
+          socket.emit("call:ice", { to: toId, candidate });
+        } catch (e) {
+          console.warn("useCall > failed to emit pending ICE", e);
+        }
+      }
+      return count;
+    },
+    [log]
+  );
 
   const startCall = useCallback(
     async (peerUserId: string) => {
+      if (processingRef.current) return;
+      processingRef.current = true;
       try {
+        // Debug log to help trace button presses
+        log("startCall -> initiating call", { to: peerUserId });
         if (state !== "idle") throw new Error("Already in call flow");
         const socket = getSocket();
         if (!socket) throw new Error("Socket unavailable");
@@ -83,6 +237,7 @@ export const useCall = (currentUserId: string): UseCallResult => {
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
+        log("caller set local offer SDP");
         socket.emit(
           "call:offer",
           { to: peerUserId, sdp: offer.sdp },
@@ -97,13 +252,19 @@ export const useCall = (currentUserId: string): UseCallResult => {
         const msg = e instanceof Error ? e.message : "Failed to start call";
         setError(msg);
         cleanup();
+      } finally {
+        processingRef.current = false;
       }
     },
-    [state, initPeer, cleanup]
+    [state, initPeer, cleanup, log]
   );
 
   const acceptCall = useCallback(async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
     try {
+      // Debug log for accepting
+      log("ACCEPT_BEGIN", { from: inboundOffer?.from });
       if (!inboundOffer) return;
       const socket = getSocket();
       if (!socket) throw new Error("Socket unavailable");
@@ -118,8 +279,12 @@ export const useCall = (currentUserId: string): UseCallResult => {
         sdp: inboundOffer.sdp,
       });
       await pc.setRemoteDescription(remoteDesc);
+      log("REMOTE_SDP_SET");
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      log("callee set local answer SDP");
+
       socket.emit(
         "call:answer",
         { to: inboundOffer.from, sdp: answer.sdp },
@@ -127,17 +292,41 @@ export const useCall = (currentUserId: string): UseCallResult => {
           if (!ack?.success) {
             setError(ack?.message || "Answer failed");
             cleanup();
+          } else {
+            log("ANSWER_EMITTED");
           }
         }
       );
-      // Apply any pending ICE gathered before remoteUserId was set
+      // Flush any pending ICE gathered before remoteUserId was set
+      try {
+        flushPendingIce(inboundOffer.from);
+      } catch (e) {
+        console.warn("useCall > flushPendingIce after accept failed", e);
+      }
+      try {
+        await drainIncomingCandidates();
+      } catch (e) {
+        console.warn(
+          "useCall > drainIncomingCandidates after accept failed",
+          e
+        );
+      }
       pendingIceRef.current = [];
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to accept call";
       setError(msg);
       cleanup();
+    } finally {
+      processingRef.current = false;
     }
-  }, [inboundOffer, initPeer, cleanup]);
+  }, [
+    inboundOffer,
+    initPeer,
+    cleanup,
+    flushPendingIce,
+    drainIncomingCandidates,
+    log,
+  ]);
 
   const rejectCall = useCallback(() => {
     const socket = getSocket();
@@ -172,6 +361,7 @@ export const useCall = (currentUserId: string): UseCallResult => {
     if (!socket) return;
 
     const onIncoming = (evt: IncomingCallEvent) => {
+      console.log("useCall > incoming offer from", evt.from);
       if (state !== "idle") {
         // Busy - auto reject by sending cancel notice? Optionally implement.
         return;
@@ -183,17 +373,49 @@ export const useCall = (currentUserId: string): UseCallResult => {
       if (!pcRef.current) return;
       const desc = new RTCSessionDescription({ type: "answer", sdp: evt.sdp });
       await pcRef.current.setRemoteDescription(desc);
+      log("REMOTE_SDP_SET (Answer)");
       setState("in-call");
+      try {
+        flushPendingIce(evt.from);
+      } catch (e) {
+        console.warn("useCall > flushPendingIce on answer failed", e);
+      }
+      try {
+        await drainIncomingCandidates();
+      } catch (e) {
+        console.warn(
+          "useCall > drainIncomingCandidates after answer failed",
+          e
+        );
+      }
     };
     const onIce = async (evt: CallIceEvent) => {
-      if (!pcRef.current) return;
+      const pc = pcRef.current;
+      const candidate = evt.candidate as RTCIceCandidateInit;
+      if (!pc) {
+        bufferIncomingCandidate(candidate);
+        return;
+      }
+      if (!pc.remoteDescription) {
+        // Remote SDP not yet applied; buffer
+        bufferIncomingCandidate(candidate);
+        return;
+      }
       try {
-        await pcRef.current.addIceCandidate(
-          evt.candidate as RTCIceCandidateInit
-        );
-      } catch (e) {
-        // Non-fatal: log and continue
-        console.warn("ICE candidate add failed", e);
+        await pc.addIceCandidate(candidate);
+        // log("ADD_ICE_SUCCESS");
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        const name =
+          e instanceof Error && "name" in e
+            ? (e as Error).name
+            : "UnknownError";
+        console.warn("useCall > addIceCandidate incoming failed", {
+          name,
+          message,
+        });
+        // Re-buffer only if state error
+        if (name === "InvalidStateError") bufferIncomingCandidate(candidate);
       }
     };
     const onHangup = (evt: CallHangupEvent) => {
@@ -220,7 +442,16 @@ export const useCall = (currentUserId: string): UseCallResult => {
       socket.off("call:hangup", onHangup);
       socket.off("call:cancel", onCancel);
     };
-  }, [state, remoteUserId, inboundOffer, cleanup]);
+  }, [
+    state,
+    remoteUserId,
+    inboundOffer,
+    cleanup,
+    flushPendingIce,
+    bufferIncomingCandidate,
+    drainIncomingCandidates,
+    log,
+  ]);
 
   // Ensure cleanup on page unload/navigation
   useEffect(() => {

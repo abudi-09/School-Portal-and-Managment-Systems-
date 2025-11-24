@@ -5,10 +5,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Check } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Check, Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RecipientDto } from "@/lib/api/messagesApi";
 
@@ -55,148 +59,163 @@ const ForwardMessageDialog: React.FC<ForwardMessageDialogProps> = ({
     });
   }, [recipients, search]);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!scrollRef.current || !hasMore || isLoading) return;
-      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-      if (scrollTop + clientHeight >= scrollHeight - 100) {
-        // 100px threshold
-        onLoadMore();
-      }
-    };
-
-    const scrollElement = scrollRef.current;
-    if (scrollElement) {
-      scrollElement.addEventListener("scroll", handleScroll);
-      return () => scrollElement.removeEventListener("scroll", handleScroll);
+  // Infinite scroll detection within ScrollArea viewport
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+    if (!hasMore || isLoading) return;
+    if (scrollTop + clientHeight >= scrollHeight - 50) {
+      onLoadMore();
     }
-  }, [hasMore, isLoading, onLoadMore]);
+  };
 
   const hasRecipients = filtered.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full sm:max-w-2xl md:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Forward Message</DialogTitle>
+      <DialogContent className="sm:max-w-[500px] p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <DialogTitle className="text-xl">Forward Message</DialogTitle>
           <DialogDescription>
-            Select one recipient to forward your message.
+            Search and select a person to forward this message to.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mt-4">
-          <Input
-            placeholder="Search recipients"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full"
-          />
+        <div className="p-4 border-b bg-muted/30">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 bg-background border-muted-foreground/20 focus-visible:ring-1"
+            />
+          </div>
         </div>
 
-        <div className="mt-4 max-h-80">
-          <div
-            ref={scrollRef}
-            className="space-y-3 p-3 max-h-80 overflow-y-auto border rounded-md"
-          >
+        <ScrollArea
+          className="h-[400px]"
+          onScrollCapture={handleScroll} // Capture scroll events from the viewport
+        >
+          <div className="p-2">
             {isLoading && filtered.length === 0 ? (
-              <div className="text-sm text-muted-foreground p-4">
-                Loading recipients…
+              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                <span className="text-sm">Loading recipients...</span>
               </div>
             ) : !hasRecipients ? (
-              <div className="text-sm text-muted-foreground p-4">
-                No recipients available.
+              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-2">
+                <User className="h-8 w-8 opacity-20" />
+                <span className="text-sm">No recipients found.</span>
               </div>
             ) : (
-              <>
+              <div className="space-y-1">
                 {filtered.map((r) => {
                   const selected = selectedId === r.id;
                   return (
-                    <label
+                    <div
                       key={r.id}
+                      onClick={() => onSelectRecipient(r.id)}
                       className={cn(
-                        "w-full flex items-center gap-4 rounded-lg px-4 py-3 transition cursor-pointer",
-                        "border border-border bg-background hover:bg-muted"
+                        "group flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200",
+                        selected
+                          ? "bg-primary/10 hover:bg-primary/15"
+                          : "hover:bg-muted/80"
                       )}
                     >
-                      <input
-                        type="radio"
-                        name="forward-recipient"
-                        className="sr-only"
-                        checked={selected}
-                        onChange={() => onSelectRecipient(r.id)}
-                        aria-checked={selected}
-                        aria-label={`Select ${r.name}`}
-                      />
-
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className="flex-shrink-0">
-                          <span
-                            className={cn(
-                              "flex h-5 w-5 items-center justify-center rounded-full border transition",
-                              selected
-                                ? "border-primary"
-                                : "border-muted-foreground/40"
-                            )}
-                            aria-hidden="true"
-                          >
-                            {selected ? (
-                              <span className="h-3 w-3 rounded-full bg-primary" />
-                            ) : null}
-                          </span>
-                        </div>
-
-                        <div className="h-10 w-10 flex-shrink-0 rounded-full bg-primary/10 text-primary grid place-items-center text-sm font-medium">
+                      <Avatar className="h-10 w-10 border border-border/50">
+                        {/* Assuming r.avatarUrl exists, otherwise fallback */}
+                        <AvatarImage src={(r as any).avatarUrl} alt={r.name} />
+                        <AvatarFallback
+                          className={cn(
+                            "text-sm font-medium",
+                            selected
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+                          )}
+                        >
                           {r.name
                             .split(" ")
                             .map((p) => p[0])
                             .join("")
                             .slice(0, 2)
                             .toUpperCase()}
-                        </div>
+                        </AvatarFallback>
+                      </Avatar>
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="truncate font-medium">{r.name}</p>
-                            <span className="inline-flex shrink-0 items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                      <div className="flex-1 min-w-0 flex flex-col">
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={cn(
+                              "font-medium truncate text-sm",
+                              selected
+                                ? "text-foreground"
+                                : "text-foreground/90"
+                            )}
+                          >
+                            {r.name}
+                          </span>
+                          {r.role && (
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] px-1.5 h-5 font-normal capitalize"
+                            >
                               {r.role}
-                            </span>
-                          </div>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {r.email ?? r.role}
-                          </p>
+                            </Badge>
+                          )}
                         </div>
+                        <span className="text-xs text-muted-foreground truncate">
+                          {r.email}
+                        </span>
                       </div>
 
-                      <div className="flex-shrink-0">
-                        {selected ? (
-                          <Check className="h-5 w-5 text-primary" />
-                        ) : null}
+                      <div
+                        className={cn(
+                          "flex-shrink-0 transition-opacity duration-200",
+                          selected
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-10"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "h-5 w-5 rounded-full flex items-center justify-center",
+                            selected
+                              ? "bg-primary text-primary-foreground"
+                              : "border border-muted-foreground/30"
+                          )}
+                        >
+                          {selected && <Check className="h-3 w-3" />}
+                        </div>
                       </div>
-                    </label>
+                    </div>
                   );
                 })}
                 {isLoading && filtered.length > 0 && (
-                  <div className="text-sm text-muted-foreground p-4 text-center">
-                    Loading more…
+                  <div className="py-4 flex justify-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
-        </div>
+        </ScrollArea>
 
-        <div className="mt-4 pt-3 flex justify-end gap-3">
+        <DialogFooter className="p-4 border-t bg-muted/10">
           <Button
-            variant="outline"
-            className="border-gray-300 text-gray-700 hover:bg-gray-100"
+            variant="ghost"
             onClick={() => onOpenChange(false)}
+            className="mr-2"
           >
             Cancel
           </Button>
-          <Button onClick={onConfirm} disabled={!selectedId || isLoading}>
-            Send
+          <Button
+            onClick={onConfirm}
+            disabled={!selectedId || isLoading}
+            className="min-w-[100px]"
+          >
+            Forward
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -216,10 +216,19 @@ export const useMessageSocket = ({
     }
 
     if (!sharedSocket) {
+      // Allow polling fallback to avoid strict websocket-only failures
       sharedSocket = io(apiBaseUrl, {
         auth: { token },
-        transports: ["websocket"],
+        transports: ["polling", "websocket"],
         autoConnect: true,
+      });
+
+      // Diagnostics
+      sharedSocket.on("connect_error", (err) => {
+        console.warn("Socket connect_error:", err);
+      });
+      sharedSocket.on("reconnect_attempt", (n) => {
+        console.log("Socket reconnect attempt", n);
       });
     }
 
@@ -462,8 +471,14 @@ export const ensureMessageSocket = (): Socket | null => {
   if (!token) return null;
   sharedSocket = io(apiBaseUrl, {
     auth: { token },
-    transports: ["websocket"],
+    transports: ["polling", "websocket"],
     autoConnect: true,
   });
+  sharedSocket.on("connect_error", (err) =>
+    console.warn("Socket connect_error:", err)
+  );
+  sharedSocket.on("reconnect_attempt", (n) =>
+    console.log("Socket reconnect attempt", n)
+  );
   return sharedSocket;
 };

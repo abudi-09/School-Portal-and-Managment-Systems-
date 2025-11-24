@@ -88,6 +88,9 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
             </div>
           </>
         )}
+        {call.error && (
+          <div className="text-xs text-red-500 text-center">{call.error}</div>
+        )}
       </div>
     </div>
   );

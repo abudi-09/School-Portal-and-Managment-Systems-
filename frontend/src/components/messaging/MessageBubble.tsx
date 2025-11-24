@@ -1,7 +1,20 @@
 import { cn } from "@/lib/utils";
 import { MessageItem, UserRole } from "./types";
 import { format } from "date-fns";
-import { Check, CheckCheck, FileIcon, Download, Play, Pause, Reply, Copy, Forward, Pin, CheckSquare, Trash2 } from "lucide-react";
+import {
+  Check,
+  CheckCheck,
+  FileIcon,
+  Download,
+  Play,
+  Pause,
+  Reply,
+  Copy,
+  Forward,
+  Pin,
+  CheckSquare,
+  Trash2,
+} from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { VoicePlayer } from "./VoicePlayer";
 import {
@@ -44,7 +57,12 @@ export const MessageBubble = ({
 
   if (isDeleted) {
     return (
-      <div className={cn("flex w-full mb-2", isOwn ? "justify-end" : "justify-start")}>
+      <div
+        className={cn(
+          "flex w-full mb-2",
+          isOwn ? "justify-end" : "justify-start"
+        )}
+      >
         <div className="px-4 py-2 rounded-lg bg-muted/50 text-muted-foreground text-sm italic">
           This message was deleted
         </div>
@@ -92,10 +110,14 @@ export const MessageBubble = ({
               <div
                 className={cn(
                   "mb-2 p-2 rounded text-xs border-l-2 opacity-90",
-                  isOwn ? "bg-primary-foreground/10 border-primary-foreground" : "bg-background/50 border-primary"
+                  isOwn
+                    ? "bg-primary-foreground/10 border-primary-foreground"
+                    : "bg-background/50 border-primary"
                 )}
               >
-                <p className="font-semibold mb-0.5">{message.replyTo.senderName}</p>
+                <p className="font-semibold mb-0.5">
+                  {message.replyTo.senderName}
+                </p>
                 <p className="truncate">{message.replyTo.snippet}</p>
               </div>
             )}
@@ -115,19 +137,27 @@ export const MessageBubble = ({
                   className="max-w-full h-auto object-cover max-h-[300px]"
                   loading="lazy"
                 />
-                {message.content && <p className="mt-2 text-sm">{message.content}</p>}
+                {message.content && (
+                  <p className="mt-2 text-sm">{message.content}</p>
+                )}
               </div>
             )}
 
-            {message.type === "file" && (
+            {(message.type === "file" || message.type === "doc") && (
               <div className="flex items-center gap-3 p-2 rounded bg-background/10">
                 <div className="p-2 rounded bg-background/20">
                   <FileIcon className="h-5 w-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{message.fileName}</p>
+                  <p className="text-sm font-medium truncate">
+                    {message.fileName}
+                  </p>
                   <p className="text-xs opacity-70">
-                    {message.fileSize ? `${(message.fileSize / 1024).toFixed(1)} KB` : "File"}
+                    {message.fileSize
+                      ? `${(message.fileSize / 1024).toFixed(1)} KB`
+                      : message.type === "doc"
+                      ? "Document"
+                      : "File"}
                   </p>
                 </div>
                 {message.fileUrl && (

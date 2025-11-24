@@ -44,7 +44,9 @@ export const MessageComposer = ({
   replyTo,
 }: MessageComposerProps) => {
   const [message, setMessage] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState<Array<{ file: File; preview?: string }>>([]);
+  const [selectedFiles, setSelectedFiles] = useState<
+    Array<{ file: File; preview?: string }>
+  >([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -68,17 +70,17 @@ export const MessageComposer = ({
 
   const handleSend = () => {
     if (!message.trim() && selectedFiles.length === 0) return;
-    
+
     // Send files first
     selectedFiles.forEach(({ file }) => {
       onSend("", file);
     });
-    
+
     // Then send text if any
     if (message.trim()) {
       onSend(message);
     }
-    
+
     setMessage("");
     setSelectedFiles([]);
     if (textareaRef.current) {
@@ -93,18 +95,28 @@ export const MessageComposer = ({
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') => {
+  const handleFileSelect = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: "image" | "file"
+  ) => {
     const files = Array.from(e.target.files || []);
-    
+
     for (const file of files) {
       // Validate file
-      const maxSize = type === 'image' ? 10 * 1024 * 1024 : 25 * 1024 * 1024; // 10MB for images, 25MB for docs
-      const allowedTypes = type === 'image' 
-        ? ['image/*']
-        : ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/*'];
-      
+      // Match backend limit (10MB) for all uploads to avoid server rejections
+      const maxSize = 10 * 1024 * 1024;
+      const allowedTypes =
+        type === "image"
+          ? ["image/*"]
+          : [
+              "application/pdf",
+              "application/msword",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "text/*",
+            ];
+
       const validation = validateFile(file, maxSize, allowedTypes);
-      
+
       if (!validation.valid) {
         toast({
           title: "Invalid File",
@@ -120,11 +132,11 @@ export const MessageComposer = ({
         try {
           preview = await generateThumbnail(file);
         } catch (err) {
-          console.error('Failed to generate thumbnail:', err);
+          console.error("Failed to generate thumbnail:", err);
         }
       }
 
-      setSelectedFiles(prev => [...prev, { file, preview }]);
+      setSelectedFiles((prev) => [...prev, { file, preview }]);
     }
 
     // Reset input
@@ -132,7 +144,7 @@ export const MessageComposer = ({
   };
 
   const handleRemoveFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleMicClick = () => {
@@ -183,10 +195,7 @@ export const MessageComposer = ({
 
       {/* File Previews */}
       {selectedFiles.length > 0 && (
-        <FilePreviewList
-          files={selectedFiles}
-          onRemove={handleRemoveFile}
-        />
+        <FilePreviewList files={selectedFiles} onRemove={handleRemoveFile} />
       )}
 
       <div className="flex items-end gap-2">
@@ -228,7 +237,7 @@ export const MessageComposer = ({
           className="hidden"
           accept="image/*"
           multiple
-          onChange={(e) => handleFileSelect(e, 'image')}
+          onChange={(e) => handleFileSelect(e, "image")}
         />
         <input
           type="file"
@@ -236,7 +245,7 @@ export const MessageComposer = ({
           className="hidden"
           accept=".pdf,.doc,.docx,.txt"
           multiple
-          onChange={(e) => handleFileSelect(e, 'file')}
+          onChange={(e) => handleFileSelect(e, "file")}
         />
 
         {/* Input */}
@@ -249,7 +258,10 @@ export const MessageComposer = ({
               onTyping?.();
               // Auto-resize
               e.target.style.height = "auto";
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 150)}px`;
+              e.target.style.height = `${Math.min(
+                e.target.scrollHeight,
+                150
+              )}px`;
             }}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}

@@ -1048,16 +1048,29 @@ export const useMessagingController = ({
     },
   });
 
+
   // Delete selected messages (must be after socket initialization)
+  // Note: We don't include emitDeleteMessage in deps to avoid initialization issues
   const deleteSelectedMessages = useCallback(async () => {
     if (!selectedConversationId) return;
     
     const messageIds = Array.from(selectedMessages);
     try {
       // Delete each selected message
-      await Promise.all(
-        messageIds.map((id) => emitDeleteMessage(id, false))
-      );
+      // Access emitDeleteMessage directly without it being in dependencies
+      const deletePromises = messageIds.map((id) => {
+        // Call the socket method directly
+        return new Promise<void>((resolve, reject) => {
+          try {
+            emitDeleteMessage(id, false);
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        });
+      });
+      
+      await Promise.all(deletePromises);
       
       toast({ 
         title: "Messages deleted", 
@@ -1072,7 +1085,7 @@ export const useMessagingController = ({
         variant: "destructive",
       });
     }
-  }, [selectedMessages, selectedConversationId, emitDeleteMessage, toast, exitSelectionMode]);
+  }, [selectedMessages, selectedConversationId, toast, exitSelectionMode]);
 
 
   useEffect(() => {

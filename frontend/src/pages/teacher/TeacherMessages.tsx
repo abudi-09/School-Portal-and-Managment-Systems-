@@ -10,6 +10,11 @@ const TeacherMessages = () => {
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(
     null
   );
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const [selectedForwardRecipientId, setSelectedForwardRecipientId] = useState<
+    string | null
+  >(null);
+  const [isForwarding, setIsForwarding] = useState(false);
 
   const controller = useMessagingController({
     currentUserId: user?.id,
@@ -41,6 +46,32 @@ const TeacherMessages = () => {
       setSelectedRecipientId(null);
     }
   }, [composeOpen]);
+
+  // Open forward dialog when a message is selected for forwarding
+  useEffect(() => {
+    if (!controller.forwardingMessage) {
+      setForwardOpen(false);
+      setSelectedForwardRecipientId(null);
+      return;
+    }
+    setForwardOpen(true);
+    if (controller.recipients.length === 0) {
+      void controller.loadRecipients();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controller.forwardingMessage]);
+
+  const handleConfirmForward = async () => {
+    if (!selectedForwardRecipientId) return;
+    try {
+      setIsForwarding(true);
+      await controller.onConfirmForward(selectedForwardRecipientId);
+      setForwardOpen(false);
+      setSelectedForwardRecipientId(null);
+    } finally {
+      setIsForwarding(false);
+    }
+  };
 
   return (
     <>
@@ -79,6 +110,7 @@ const TeacherMessages = () => {
         onCopyMessage={controller.onCopyMessage}
         replyingTo={controller.replyingTo}
         onCancelReply={controller.onCancelReply}
+        pinnedMessages={controller.pinnedMessages}
       />
       <NewConversationDialog
         open={composeOpen}
@@ -90,6 +122,24 @@ const TeacherMessages = () => {
         onConfirm={handleConfirmCompose}
         description="Only heads of school can receive messages from teachers."
         confirmLabel="Start conversation"
+      />
+      <NewConversationDialog
+        open={forwardOpen}
+        onOpenChange={(open) => {
+          setForwardOpen(open);
+          if (!open) {
+            controller.onCancelForward();
+            setSelectedForwardRecipientId(null);
+          }
+        }}
+        recipients={controller.recipients.filter((r) => r.role === "head")}
+        isLoading={controller.isRecipientsLoading || isForwarding}
+        selectedRecipientId={selectedForwardRecipientId}
+        onSelectRecipient={setSelectedForwardRecipientId}
+        onConfirm={handleConfirmForward}
+        description="Select a recipient to forward this message."
+        confirmLabel={isForwarding ? "Forwarding..." : "Forward"}
+        title="Forward Message"
       />
     </>
   );

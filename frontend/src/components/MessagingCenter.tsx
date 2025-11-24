@@ -36,6 +36,7 @@ const MessagingCenter = ({
   onCopyMessage,
   replyingTo,
   onCancelReply,
+  pinnedMessages,
 }: MessagingCenterProps) => {
   const isMobile = useIsMobile();
   const [showChat, setShowChat] = useState(false);
@@ -99,6 +100,7 @@ const MessagingCenter = ({
           onCopy={onCopyMessage}
           replyingTo={replyingTo}
           onCancelReply={onCancelReply}
+          pinnedMessages={pinnedMessages}
           onDelete={(msg) => onDeleteMessage?.(selectedConversationId || "", msg.id)}
         />
       </div>

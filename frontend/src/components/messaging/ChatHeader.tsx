@@ -8,6 +8,7 @@ interface ChatHeaderProps {
   contact: ContactItem;
   onBack: () => void;
   onInfo?: () => void;
+  onStartAudioCall?: (contact: ContactItem) => void;
 }
 
 const getInitials = (name: string) =>
@@ -31,7 +32,12 @@ const formatRoleLabel = (role: UserRole) => {
   }
 };
 
-export const ChatHeader = ({ contact, onBack, onInfo }: ChatHeaderProps) => {
+export const ChatHeader = ({
+  contact,
+  onBack,
+  onInfo,
+  onStartAudioCall,
+}: ChatHeaderProps) => {
   const isOnline =
     contact.presence?.visibleStatus === "online" && !contact.presence.hidden;
 
@@ -71,7 +77,13 @@ export const ChatHeader = ({ contact, onBack, onInfo }: ChatHeaderProps) => {
       </div>
 
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" className="hidden sm:inline-flex">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hidden sm:inline-flex"
+          disabled={!isOnline}
+          onClick={() => onStartAudioCall?.(contact)}
+        >
           <Phone className="h-5 w-5 text-muted-foreground" />
         </Button>
         <Button variant="ghost" size="icon" className="hidden sm:inline-flex">

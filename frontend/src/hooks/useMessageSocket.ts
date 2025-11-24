@@ -451,3 +451,19 @@ export const useMessageSocket = ({
     emitSeen,
   };
 };
+
+// --- Call Feature Support Helpers (Phase 1) ---
+// Provide a way for other hooks (e.g., useCall) to reuse the same socket instance
+// without establishing a second connection.
+export const getExistingMessageSocket = (): Socket | null => sharedSocket;
+export const ensureMessageSocket = (): Socket | null => {
+  if (sharedSocket) return sharedSocket;
+  const token = getAuthToken();
+  if (!token) return null;
+  sharedSocket = io(apiBaseUrl, {
+    auth: { token },
+    transports: ["websocket"],
+    autoConnect: true,
+  });
+  return sharedSocket;
+};

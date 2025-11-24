@@ -101,8 +101,15 @@ export interface MessagingCenterProps {
     conversationId: string,
     messageId: string
   ) => Promise<void> | void;
-  onSendVoice?: (conversationId: string, audioBlob: Blob, duration: number, waveform: number[]) => Promise<void> | void;
-  onSearchSavedMessages?: (query: string) => Promise<MessageItem[]> | MessageItem[];
+  onSendVoice?: (
+    conversationId: string,
+    audioBlob: Blob,
+    duration: number,
+    waveform: number[]
+  ) => Promise<void> | void;
+  onSearchSavedMessages?: (
+    query: string
+  ) => Promise<MessageItem[]> | MessageItem[];
   isUploadingAttachment?: boolean;
   messageDraft?: string;
   onChangeDraft?: (conversationId: string, content: string) => void;
@@ -115,7 +122,7 @@ export interface MessagingCenterProps {
   emptyStateMessage?: string;
   disallowedRecipientMessage?: string;
   validateRecipient?: (contact: ContactItem) => boolean;
-  
+
   // New actions
   onReplyMessage?: (message: MessageItem) => void;
   onForwardMessage?: (message: MessageItem) => void;
@@ -124,4 +131,5 @@ export interface MessagingCenterProps {
   onCopyMessage?: (content: string) => void;
   replyingTo?: MessageItem | null;
   onCancelReply?: () => void;
+  pinnedMessages?: Set<string>;
 }

@@ -31,6 +31,8 @@ import {
   isVisibleOnline,
 } from "../services/presence.service";
 import cloudinary, { isCloudinaryConfigured } from "../config/cloudinary";
+import fs from "fs";
+import path from "path";
 import { idToString } from "../utils/idToString";
 import { generateWaveform } from "../utils/generateWaveform";
 
@@ -142,6 +144,7 @@ router.post(
         .status(400)
         .json({ success: false, message: "Unsupported voice mime type" });
     }
+    const uploadedFile = req.file as Express.Multer.File;
     if (!isCloudinaryConfigured) {
       return res
         .status(500)
@@ -845,14 +848,6 @@ router.post(
         .json({ success: false, message: "Authentication required" });
     }
 
-    if (!isCloudinaryConfigured) {
-      return res.status(503).json({
-        success: false,
-        message:
-          "File uploads are temporarily unavailable. Cloudinary is not configured.",
-      });
-    }
-
     if (!req.file) {
       return res
         .status(400)
@@ -860,6 +855,38 @@ router.post(
     }
 
     const uploadedFile = req.file as Express.Multer.File;
+
+    if (!isCloudinaryConfigured) {
+      try {
+        const uploadsRoot = path.join(__dirname, "..", "uploads", "messages");
+        await fs.promises.mkdir(uploadsRoot, { recursive: true });
+        const timestamp = Date.now();
+        const safeName = uploadedFile.originalname.replace(
+          /[^a-zA-Z0-9_.-]/g,
+          "_"
+        );
+        const storedName = `${timestamp}-${safeName}`;
+        const storedPath = path.join(uploadsRoot, storedName);
+        await fs.promises.writeFile(storedPath, uploadedFile.buffer);
+
+        const fileUrl = `/uploads/messages/${storedName}`;
+        return res.status(201).json({
+          success: true,
+          data: {
+            fileUrl,
+            fileName: uploadedFile.originalname,
+            mimeType: uploadedFile.mimetype,
+            size: uploadedFile.size,
+          },
+        });
+      } catch (e) {
+        console.error("Local upload error:", e);
+        return res
+          .status(500)
+          .json({ success: false, message: "Failed to upload file" });
+      }
+    }
+
     try {
       const folder = "pathways/messages";
       const useFilename = true;

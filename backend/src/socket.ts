@@ -614,6 +614,165 @@ export const initSocket = (server: http.Server): Server => {
       }
     );
 
+    // ------------------------------------------------------------------
+    // 1:1 Audio Call Signaling (Phase 1 - Audio only, STUN only)
+    // Events:
+    //  - call:offer    (initiator -> server -> callee)
+    //  - call:incoming (server -> callee notification incl. SDP offer)
+    //  - call:answer   (callee -> server -> initiator)
+    //  - call:ice      (either side -> server -> peer)
+    //  - call:hangup   (either side -> server -> peer, ends active call)
+    //  - call:cancel   (initiator -> server -> callee, before answer)
+    // Basic in-memory session tracking to prevent multiple concurrent calls per user.
+    // NOTE: This is ephemeral; scaling horizontally would require shared store.
+
+    interface CallOfferPayload {
+      to: string;
+      sdp: string;
+    }
+    interface CallAnswerPayload {
+      to: string;
+      sdp: string;
+    }
+    interface CallIcePayload {
+      to: string;
+      candidate: unknown;
+    }
+    interface CallHangupPayload {
+      to: string;
+      reason?: string;
+    }
+    interface CallCancelPayload {
+      to: string;
+    }
+
+    // userId -> peerId mapping for active calls
+    const activeCalls: Map<string, string> =
+      (ioInstance as any).activeCalls || new Map();
+    (ioInstance as any).activeCalls = activeCalls;
+
+    const isBusy = (userId: string) => activeCalls.has(userId);
+    const establishCall = (a: string, b: string) => {
+      activeCalls.set(a, b);
+      activeCalls.set(b, a);
+    };
+    const clearCall = (userId: string) => {
+      const peer = activeCalls.get(userId);
+      if (peer) {
+        activeCalls.delete(peer);
+      }
+      activeCalls.delete(userId);
+    };
+
+    socket.on(
+      "call:offer",
+      async (
+        payload: CallOfferPayload,
+        callback?: (r: { success: boolean; message?: string }) => void
+      ) => {
+        try {
+          const callerId = socketUser.id;
+          const calleeId = payload.to;
+          if (callerId === calleeId) {
+            callback?.({ success: false, message: "Cannot call yourself" });
+            return;
+          }
+          if (isBusy(callerId)) {
+            callback?.({
+              success: false,
+              message: "You are already in a call",
+            });
+            return;
+          }
+          if (isBusy(calleeId)) {
+            callback?.({ success: false, message: "User is busy" });
+            return;
+          }
+
+          const callerObjId = new mongoose.Types.ObjectId(callerId);
+          const calleeObjId = new mongoose.Types.ObjectId(calleeId);
+          const { sender: caller, receiver: callee } = await ensureUsersExist(
+            callerObjId,
+            calleeObjId
+          );
+          const callerRole = caller.role as MessageRole;
+          const calleeRole = callee.role as MessageRole;
+          // Reuse hierarchy rule (same as messaging) unless same user (already excluded)
+          if (!hierarchyAllows(callerRole, calleeRole)) {
+            callback?.({ success: false, message: "Call hierarchy violation" });
+            return;
+          }
+
+          // Send incoming notification to callee
+          emitToUser(calleeId, "call:incoming", {
+            from: callerId,
+            fromRole: callerRole,
+            sdp: payload.sdp,
+            ts: Date.now(),
+          });
+          callback?.({ success: true });
+        } catch (e) {
+          callback?.({ success: false, message: "Failed to process offer" });
+        }
+      }
+    );
+
+    socket.on(
+      "call:answer",
+      async (
+        payload: CallAnswerPayload,
+        callback?: (r: { success: boolean; message?: string }) => void
+      ) => {
+        try {
+          const calleeId = socketUser.id;
+          const callerId = payload.to;
+          if (isBusy(calleeId)) {
+            callback?.({
+              success: false,
+              message: "You are already in a call",
+            });
+            return;
+          }
+          if (isBusy(callerId)) {
+            callback?.({ success: false, message: "Peer is busy" });
+            return;
+          }
+          establishCall(calleeId, callerId);
+          emitToUser(callerId, "call:answer", {
+            from: calleeId,
+            sdp: payload.sdp,
+            ts: Date.now(),
+          });
+          callback?.({ success: true });
+        } catch (e) {
+          callback?.({ success: false, message: "Failed to process answer" });
+        }
+      }
+    );
+
+    socket.on("call:ice", (payload: CallIcePayload) => {
+      const fromId = socketUser.id;
+      emitToUser(payload.to, "call:ice", {
+        from: fromId,
+        candidate: payload.candidate,
+      });
+    });
+
+    socket.on("call:hangup", (payload: CallHangupPayload) => {
+      const fromId = socketUser.id;
+      clearCall(fromId);
+      emitToUser(payload.to, "call:hangup", {
+        from: fromId,
+        reason: payload.reason,
+        ts: Date.now(),
+      });
+    });
+
+    socket.on("call:cancel", (payload: CallCancelPayload) => {
+      const fromId = socketUser.id;
+      emitToUser(payload.to, "call:cancel", { from: fromId, ts: Date.now() });
+    });
+
     socket.on("disconnect", () => {
       socket.leave(roomForUser(socketUser.id));
       // Schedule graceful offline via presence service; callback runs after grace period if still offline.

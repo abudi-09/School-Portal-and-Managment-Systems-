@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import type { RecipientDto } from "@/lib/api/messagesApi";
-import type { UserRole } from "@/components/MessagingCenter";
+import type { UserRole } from "@/components/messaging/types";
 import { cn } from "@/lib/utils";
 
 interface NewConversationDialogProps {
@@ -29,6 +29,7 @@ interface NewConversationDialogProps {
   onConfirm: () => void;
   confirmLabel?: string;
   description?: string;
+  title?: string;
 }
 
 const roleLabels: Record<UserRole, string> = {
@@ -49,6 +50,7 @@ const NewConversationDialog = ({
   onConfirm,
   confirmLabel = "Start conversation",
   description = "Choose a recipient to begin a new conversation.",
+  title = "New Message",
 }: NewConversationDialogProps) => {
   const hasRecipients = recipients.length > 0;
 
@@ -56,7 +58,7 @@ const NewConversationDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>New Message</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -77,7 +79,9 @@ const NewConversationDialog = ({
                       return (
                         <CommandItem
                           key={recipient.id}
-                          value={`${recipient.name} ${recipient.email ?? recipient.role}`.trim()}
+                          value={`${recipient.name} ${
+                            recipient.email ?? recipient.role
+                          }`.trim()}
                           onSelect={() => onSelectRecipient(recipient.id)}
                           className={cn(
                             "flex items-center justify-between rounded-lg px-3 py-2",
@@ -110,9 +114,7 @@ const NewConversationDialog = ({
               disabled={!selectedRecipientId || isLoading || !hasRecipients}
               className="gap-2"
             >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : null}
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {confirmLabel}
             </Button>
           </div>

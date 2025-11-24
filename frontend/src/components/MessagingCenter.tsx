@@ -3,7 +3,6 @@ import { ContactList } from "./messaging/ContactList";
 import { ChatArea } from "./messaging/ChatArea";
 import { MessagingCenterProps } from "./messaging/types";
 import { cn } from "@/lib/utils";
-import { useMediaQuery } from "@/hooks/use-mobile"; // Assuming this hook exists or I'll use a simple check
 
 // Fallback hook if use-mobile doesn't exist
 const useIsMobile = () => {
@@ -25,9 +24,18 @@ const MessagingCenter = ({
   currentUserId = "current-user", // Fallback
   onSelectConversation,
   onSendMessage,
+  onSendVoice,
+  onDeleteMessage,
   isLoadingContacts,
   isLoadingThread,
   onCompose,
+  onReplyMessage,
+  onForwardMessage,
+  onPinMessage,
+  onSelectMessage,
+  onCopyMessage,
+  replyingTo,
+  onCancelReply,
 }: MessagingCenterProps) => {
   const isMobile = useIsMobile();
   const [showChat, setShowChat] = useState(false);
@@ -49,16 +57,6 @@ const MessagingCenter = ({
     // Optional: clear selection in parent if needed, but usually fine to keep
   };
 
-  const handleSendMessage = async (content: string, file?: File) => {
-    if (selectedConversationId && onSendMessage) {
-      await onSendMessage(selectedConversationId, {
-        content,
-        type: file ? (file.type.startsWith("image/") ? "image" : "file") : "text",
-        file,
-      });
-    }
-  };
-
   const selectedContact = contacts.find((c) => c.id === selectedConversationId) || null;
 
   return (
@@ -66,8 +64,8 @@ const MessagingCenter = ({
       {/* Contact List - Hidden on mobile if chat is open */}
       <div
         className={cn(
-          "w-full md:w-80 lg:w-96 flex-shrink-0 border-r transition-all duration-300",
-          isMobile && showChat ? "hidden" : "block"
+          "w-full md:w-80 lg:w-96 border-r bg-muted/5",
+          isMobile && showChat ? "hidden" : "flex flex-col"
         )}
       >
         <ContactList
@@ -90,9 +88,18 @@ const MessagingCenter = ({
           contact={selectedContact}
           messages={messages}
           currentUserId={currentUserId}
-          onSendMessage={handleSendMessage}
+          onSendMessage={onSendMessage}
+          onSendVoice={onSendVoice}
           onBack={handleBack}
           isLoading={isLoadingThread}
+          onReply={onReplyMessage}
+          onForward={onForwardMessage}
+          onPin={onPinMessage}
+          onSelect={onSelectMessage}
+          onCopy={onCopyMessage}
+          replyingTo={replyingTo}
+          onCancelReply={onCancelReply}
+          onDelete={(msg) => onDeleteMessage?.(selectedConversationId || "", msg.id)}
         />
       </div>
     </div>

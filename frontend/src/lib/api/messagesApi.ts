@@ -63,7 +63,7 @@ type MessageResponse = {
   replyTo?: {
     messageId: string;
     senderName: string;
-    type: "text" | "image" | "file" | "doc";
+    type: "text" | "image" | "file" | "doc" | "voice" | "video";
     snippet: string;
   };
   replyToDeleted?: boolean;

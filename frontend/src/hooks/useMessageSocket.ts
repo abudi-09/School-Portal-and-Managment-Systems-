@@ -20,7 +20,7 @@ export interface SocketMessagePayload {
   threadKey: string;
   senderRole: "admin" | "head" | "teacher";
   receiverRole: "admin" | "head" | "teacher";
-  type: "text" | "image" | "file" | "doc";
+  type: "text" | "image" | "file" | "doc" | "voice" | "video";
   fileUrl?: string;
   fileName?: string;
   mimeType?: string;
@@ -33,7 +33,7 @@ export interface SocketMessagePayload {
   replyTo?: {
     messageId: string;
     senderName: string;
-    type: "text" | "image" | "file" | "doc";
+    type: "text" | "image" | "file" | "doc" | "voice" | "video";
     snippet: string;
   };
   replyToDeleted?: boolean;

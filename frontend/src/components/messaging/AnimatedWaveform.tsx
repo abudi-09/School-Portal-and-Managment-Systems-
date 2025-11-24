@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 interface AnimatedWaveformProps {
   waveform: number[];
-  progress: number; // 0-1
+  progress: number; // 0 to 1
   isPlaying: boolean;
   isOwn: boolean;
   onSeek: (progress: number) => void;
@@ -28,60 +28,73 @@ export const AnimatedWaveform = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const draw = () => {
-      const width = canvas.width;
-      const height = canvas.height;
-      const barWidth = width / waveform.length;
-      const barGap = 1;
+    // Handle high DPI displays
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    
+    // Set actual size in memory (scaled to account for extra pixel density)
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
 
-      // Clear canvas
+    // Normalize coordinate system to use css pixels
+    ctx.scale(dpr, dpr);
+
+    const draw = () => {
+      const width = rect.width;
+      const height = rect.height;
+      const barCount = waveform.length;
+      const barWidth = (width / barCount) * 0.6; // 60% width, 40% gap
+      const gap = (width / barCount) * 0.4;
+      
       ctx.clearRect(0, 0, width, height);
 
       waveform.forEach((amplitude, i) => {
-        const barHeight = Math.max(3, amplitude * height * 0.75);
-        const x = i * barWidth;
-        const y = (height - barHeight) / 2;
-
-        // Determine if this bar has been played
-        const barProgress = i / waveform.length;
-        const isPlayed = barProgress < progress;
-
-        // Create gradient for smooth transition
-        const transitionZone = 0.02; // 2% transition zone
-        const isInTransition = 
-          barProgress >= progress - transitionZone && 
-          barProgress <= progress + transitionZone;
-
-        if (isInTransition && isPlaying) {
-          // Smooth gradient transition at playhead
-          const gradient = ctx.createLinearGradient(x, 0, x + barWidth, 0);
-          const localProgress = (progress - barProgress) / transitionZone;
-          
-          if (isOwn) {
-            gradient.addColorStop(0, isPlayed ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.35)');
-            gradient.addColorStop(1, isPlayed ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.35)');
-          } else {
-            gradient.addColorStop(0, isPlayed ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground) / 0.25)');
-            gradient.addColorStop(1, isPlayed ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground) / 0.25)');
-          }
-          ctx.fillStyle = gradient;
-        } else {
-          // Regular coloring
-          if (isOwn) {
-            ctx.fillStyle = isPlayed 
-              ? 'rgba(255, 255, 255, 0.95)' 
-              : 'rgba(255, 255, 255, 0.35)';
-          } else {
-            ctx.fillStyle = isPlayed 
-              ? 'hsl(var(--primary))' 
-              : 'hsl(var(--muted-foreground) / 0.25)';
-          }
+        // Calculate x position
+        const x = i * (width / barCount) + gap / 2;
+        
+        // Calculate bar height with minimum visibility
+        // Apply a "wave" effect around the playhead if playing
+        let currentAmplitude = amplitude;
+        
+        if (isPlaying) {
+            // Calculate distance from playhead (0 to 1)
+            const barProgress = i / barCount;
+            const dist = Math.abs(barProgress - progress);
+            
+            // Wave effect: boost amplitude near playhead
+            if (dist < 0.1) {
+                const boost = Math.sin((1 - dist / 0.1) * Math.PI / 2) * 0.3;
+                currentAmplitude = Math.min(1, currentAmplitude + boost);
+            }
         }
 
-        // Draw rounded rectangle for bar
-        const radius = Math.min(barWidth / 2, 2);
+        const barHeight = Math.max(3, currentAmplitude * height * 0.8);
+        const y = (height - barHeight) / 2;
+
+        // Determine color based on progress
+        const barProgress = i / barCount;
+        const isPlayed = barProgress < progress;
+
+        // Colors
+        const playedColor = isOwn ? 'rgba(255, 255, 255, 1)' : '#3b82f6'; // White or Blue
+        const unplayedColor = isOwn ? 'rgba(255, 255, 255, 0.4)' : '#cbd5e1'; // Transparent White or Gray
+
+        // Draw rounded rect
+        ctx.fillStyle = isPlayed ? playedColor : unplayedColor;
+        
+        // Rounded rect logic
+        const radius = barWidth / 2;
         ctx.beginPath();
-        ctx.roundRect(x, y, barWidth - barGap, barHeight, radius);
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + barWidth - radius, y);
+        ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+        ctx.lineTo(x + barWidth, y + barHeight - radius);
+        ctx.quadraticCurveTo(x + barWidth, y + barHeight, x + barWidth - radius, y + barHeight);
+        ctx.lineTo(x + radius, y + barHeight);
+        ctx.quadraticCurveTo(x, y + barHeight, x, y + barHeight - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
         ctx.fill();
       });
 
@@ -105,21 +118,16 @@ export const AnimatedWaveform = ({
 
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const clickProgress = x / rect.width;
-    onSeek(Math.max(0, Math.min(1, clickProgress)));
+    const clickProgress = Math.max(0, Math.min(1, x / rect.width));
+    onSeek(clickProgress);
   };
 
   return (
     <canvas
       ref={canvasRef}
-      width={300}
-      height={32}
-      className={cn(
-        "w-full h-8 cursor-pointer transition-opacity hover:opacity-80",
-        className
-      )}
+      className={cn("w-full h-full cursor-pointer touch-none", className)}
       onClick={handleClick}
-      style={{ imageRendering: 'auto' }}
+      style={{ width: '100%', height: '100%' }}
     />
   );
 };

@@ -56,6 +56,7 @@ const AdminMessages = () => {
         currentUserId={controller.currentUserId}
         onSelectConversation={controller.onSelectConversation}
         onSendMessage={controller.onSendMessage}
+        onSendVoice={controller.onSendVoiceMessage}
         onEditMessage={controller.onEditMessage}
         onDeleteMessage={controller.onDeleteMessage}
         onToggleReaction={controller.onToggleReaction}
@@ -71,6 +72,13 @@ const AdminMessages = () => {
         composeDisabled={controller.isRecipientsLoading}
         emptyStateMessage="No conversations yet. Start by selecting a head of school."
         validateRecipient={controller.validateContact}
+        onReplyMessage={controller.onReplyMessage}
+        onForwardMessage={controller.onForwardMessage}
+        onPinMessage={controller.onPinMessage}
+        onSelectMessage={controller.onSelectMessage}
+        onCopyMessage={controller.onCopyMessage}
+        replyingTo={controller.replyingTo}
+        onCancelReply={controller.onCancelReply}
       />
       <NewConversationDialog
         open={composeOpen}

@@ -56,6 +56,7 @@ const TeacherMessages = () => {
         currentUserId={controller.currentUserId}
         onSelectConversation={controller.onSelectConversation}
         onSendMessage={controller.onSendMessage}
+        onSendVoice={controller.onSendVoiceMessage}
         onEditMessage={controller.onEditMessage}
         onDeleteMessage={controller.onDeleteMessage}
         onToggleReaction={controller.onToggleReaction}
@@ -71,6 +72,13 @@ const TeacherMessages = () => {
         composeDisabled={controller.isRecipientsLoading}
         emptyStateMessage="Start collaborating by sending your first message."
         validateRecipient={controller.validateContact}
+        onReplyMessage={controller.onReplyMessage}
+        onForwardMessage={controller.onForwardMessage}
+        onPinMessage={controller.onPinMessage}
+        onSelectMessage={controller.onSelectMessage}
+        onCopyMessage={controller.onCopyMessage}
+        replyingTo={controller.replyingTo}
+        onCancelReply={controller.onCancelReply}
       />
       <NewConversationDialog
         open={composeOpen}

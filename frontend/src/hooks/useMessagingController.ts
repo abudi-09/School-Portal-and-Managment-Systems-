@@ -13,13 +13,15 @@ import {
   fetchSavedThread,
   markMessageRead,
   uploadMessageFile,
+  sendVoiceMessage,
+  forwardMessage,
   toAbsoluteFileUrl,
 } from "@/lib/api/messagesApi";
 import type {
   ContactItem,
   MessageItem,
   UserRole,
-} from "@/components/MessagingCenter";
+} from "@/components/messaging/types";
 import {
   MessageDeletedEvent,
   MessageReadEvent,
@@ -84,6 +86,10 @@ const summarizeMessage = (message: Summarizable) => {
       return message.fileName || "Document";
     case "file":
       return message.fileName || "File";
+    case "voice":
+      return "Voice Message";
+    case "video":
+      return "Video";
     default:
       return message.content;
   }
@@ -281,7 +287,8 @@ interface MessagingControllerResult {
     emoji: string
   ) => Promise<void>;
   onSaveMessage: (conversationId: string, messageId: string) => Promise<void>;
-  searchSavedMessages: (query: string) => Promise<void>;
+  onSendVoiceMessage: (conversationId: string, audioBlob: Blob, duration: number, waveform: number[]) => Promise<void>;
+  searchSavedMessages: (query: string) => Promise<MessageItem[]>;
   isLoadingContacts: boolean;
   isLoadingThread: boolean;
   isSendingMessage: boolean;
@@ -293,6 +300,24 @@ interface MessagingControllerResult {
   isRecipientsLoading: boolean;
   startConversationWith: (recipient: RecipientDto) => Promise<void>;
   validateContact: (contact: ContactItem) => boolean;
+  replyingTo: MessageItem | null;
+  onReplyMessage: (message: MessageItem) => void;
+  onForwardMessage: (message: MessageItem) => void;
+  onPinMessage: (message: MessageItem) => void;
+  onSelectMessage: (message: MessageItem) => void;
+  onCopyMessage: (content: string) => void;
+  onCancelReply: () => void;
+  // Forward state
+  forwardingMessage: MessageItem | null;
+  onConfirmForward: (recipientId: string) => Promise<void>;
+  onCancelForward: () => void;
+  // Pin state
+  pinnedMessages: Set<string>;
+  // Selection state
+  selectionMode: boolean;
+  selectedMessages: Set<string>;
+  onExitSelectionMode: () => void;
+  onDeleteSelectedMessages: () => Promise<void>;
 }
 
 export const useMessagingController = ({
@@ -314,6 +339,103 @@ export const useMessagingController = ({
   const [recipients, setRecipients] = useState<RecipientDto[]>([]);
   const [isRecipientsLoading, setIsRecipientsLoading] = useState(false);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<MessageItem | null>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<MessageItem | null>(null);
+  const [selectedPinnedMessages, setSelectedPinnedMessages] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+
+  // Action handlers
+  const handleReplyMessage = useCallback((message: MessageItem) => {
+    setReplyingTo(message);
+  }, []);
+
+  const handleForwardMessage = useCallback((message: MessageItem) => {
+    setForwardingMessage(message);
+  }, []);
+
+  const confirmForwardMessage = useCallback(async (recipientId: string) => {
+    if (!forwardingMessage) return;
+    
+    try {
+      await forwardMessage(forwardingMessage.id, recipientId);
+      toast({ 
+        title: "Message forwarded", 
+        description: "Your message has been forwarded successfully." 
+      });
+      setForwardingMessage(null);
+    } catch (error) {
+      const description =
+        error instanceof Error ? error.message : "Failed to forward message.";
+      toast({
+        title: "Unable to forward message",
+        description,
+        variant: "destructive",
+      });
+    }
+  }, [forwardingMessage, toast]);
+
+  const cancelForward = useCallback(() => {
+    setForwardingMessage(null);
+  }, []);
+
+  const handlePinMessage = useCallback((message: MessageItem) => {
+    setSelectedPinnedMessages((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(message.id)) {
+        newSet.delete(message.id);
+        toast({ 
+          title: "Message unpinned", 
+          description: "Message has been unpinned from this conversation." 
+        });
+      } else {
+        newSet.add(message.id);
+        toast({ 
+          title: "Message pinned", 
+          description: "Message has been pinned to this conversation." 
+        });
+      }
+      return newSet;
+    });
+  }, [toast]);
+
+  const handleSelectMessage = useCallback((message: MessageItem) => {
+    if (!selectionMode) {
+      // Enter selection mode
+      setSelectionMode(true);
+      setSelectedMessages(new Set([message.id]));
+      toast({ 
+        title: "Selection mode", 
+        description: "Selection mode activated. Select more messages or tap actions." 
+      });
+    } else {
+      // Toggle selection
+      setSelectedMessages((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(message.id)) {
+          newSet.delete(message.id);
+        } else {
+          newSet.add(message.id);
+        }
+        return newSet;
+      });
+    }
+  }, [selectionMode, toast]);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedMessages(new Set());
+  }, []);
+
+
+  const handleCopyMessage = useCallback((content: string) => {
+    navigator.clipboard.writeText(content);
+    toast({ title: "Copied to clipboard" });
+  }, [toast]);
+
+  const cancelReply = useCallback(() => {
+    setReplyingTo(null);
+  }, []);
 
   const threadCacheRef = useRef<Set<string>>(new Set());
   const contactsRef = useRef<ContactItem[]>(contacts);
@@ -926,6 +1048,33 @@ export const useMessagingController = ({
     },
   });
 
+  // Delete selected messages (must be after socket initialization)
+  const deleteSelectedMessages = useCallback(async () => {
+    if (!selectedConversationId) return;
+    
+    const messageIds = Array.from(selectedMessages);
+    try {
+      // Delete each selected message
+      await Promise.all(
+        messageIds.map((id) => emitDeleteMessage(id, false))
+      );
+      
+      toast({ 
+        title: "Messages deleted", 
+        description: `${messageIds.length} message(s) deleted successfully.` 
+      });
+      
+      exitSelectionMode();
+    } catch (error) {
+      toast({
+        title: "Unable to delete messages",
+        description: "Some messages could not be deleted.",
+        variant: "destructive",
+      });
+    }
+  }, [selectedMessages, selectedConversationId, emitDeleteMessage, toast, exitSelectionMode]);
+
+
   useEffect(() => {
     emitSeenRef.current = emitSeen;
   }, [emitSeen]);
@@ -1079,8 +1228,8 @@ export const useMessagingController = ({
   );
 
   const searchSavedMessages = useCallback(
-    async (query: string) => {
-      if (!currentUserId) return;
+    async (query: string): Promise<MessageItem[]> => {
+      if (!currentUserId) return [];
       const participantId = currentUserId;
       setIsLoadingThread(true);
       try {
@@ -1120,6 +1269,7 @@ export const useMessagingController = ({
             exists ? { ...exists, ...updated } : updated,
           ];
         });
+        return mappedMessages;
       } catch (error) {
         const description =
           error instanceof Error
@@ -1130,6 +1280,7 @@ export const useMessagingController = ({
           description,
           variant: "destructive",
         });
+        return [];
       } finally {
         setIsLoadingThread(false);
       }
@@ -1378,6 +1529,47 @@ export const useMessagingController = ({
     [toast]
   );
 
+  const onSendVoiceMessage = useCallback(
+    async (conversationId: string, audioBlob: Blob, duration: number, waveform: number[]) => {
+      setIsSending(true);
+      setIsUploadingAttachment(true);
+      try {
+        // Create a File from the Blob
+        const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
+          type: audioBlob.type || "audio/webm",
+        });
+
+        // Upload the audio file
+        const uploadResult = await uploadMessageFile(audioFile);
+
+        // Send voice message via API
+        await sendVoiceMessage(
+          conversationId,
+          uploadResult.fileUrl,
+          uploadResult.fileName,
+          uploadResult.mimeType,
+          duration,
+          waveform
+        );
+
+        threadCacheRef.current.add(conversationId);
+      } catch (error) {
+        const description =
+          error instanceof Error ? error.message : "Failed to send voice message.";
+        toast({
+          title: "Unable to send voice message",
+          description,
+          variant: "destructive",
+        });
+      } finally {
+        setIsSending(false);
+        setIsUploadingAttachment(false);
+      }
+    },
+    [toast]
+  );
+
+
   const loadRecipientsList = useCallback(async () => {
     setIsRecipientsLoading(true);
     try {
@@ -1620,6 +1812,7 @@ export const useMessagingController = ({
     onDeleteMessage,
     onToggleReaction,
     onSaveMessage,
+    onSendVoiceMessage,
     searchSavedMessages,
     isLoadingContacts,
     isLoadingThread,
@@ -1632,5 +1825,23 @@ export const useMessagingController = ({
     isRecipientsLoading,
     startConversationWith,
     validateContact,
+    replyingTo,
+    onReplyMessage: handleReplyMessage,
+    onForwardMessage: handleForwardMessage,
+    onPinMessage: handlePinMessage,
+    onSelectMessage: handleSelectMessage,
+    onCopyMessage: handleCopyMessage,
+    onCancelReply: cancelReply,
+    // Forward state
+    forwardingMessage,
+    onConfirmForward: confirmForwardMessage,
+    onCancelForward: cancelForward,
+    // Pin state
+    pinnedMessages: selectedPinnedMessages,
+    // Selection state
+    selectionMode,
+    selectedMessages,
+    onExitSelectionMode: exitSelectionMode,
+    onDeleteSelectedMessages: deleteSelectedMessages,
   };
 };

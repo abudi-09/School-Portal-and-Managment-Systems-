@@ -12,9 +12,18 @@ interface ChatAreaProps {
   contact: ContactItem | null;
   messages: MessageItem[];
   currentUserId: string;
-  onSendMessage: (content: string, file?: File) => void;
+  onSendMessage: (conversationId: string, payload: { content?: string; file?: File }) => void;
+  onSendVoice?: (conversationId: string, audioBlob: Blob, duration: number, waveform: number[]) => void;
   onBack: () => void;
   isLoading?: boolean;
+  onReply?: (message: MessageItem) => void;
+  onForward?: (message: MessageItem) => void;
+  onPin?: (message: MessageItem) => void;
+  onSelect?: (message: MessageItem) => void;
+  onDelete?: (message: MessageItem) => void;
+  onCopy?: (content: string) => void;
+  replyingTo?: MessageItem | null;
+  onCancelReply?: () => void;
 }
 
 export const ChatArea = ({
@@ -22,8 +31,17 @@ export const ChatArea = ({
   messages,
   currentUserId,
   onSendMessage,
+  onSendVoice,
   onBack,
   isLoading,
+  onReply,
+  onForward,
+  onPin,
+  onSelect,
+  onDelete,
+  onCopy,
+  replyingTo,
+  onCancelReply,
 }: ChatAreaProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -45,6 +63,10 @@ export const ChatArea = ({
       </div>
     );
   }
+
+  const replySenderName = replyingTo 
+    ? (replyingTo.senderId === currentUserId ? "You" : contact.name)
+    : "";
 
   return (
     <div className="flex flex-col h-full bg-background w-full">
@@ -95,6 +117,12 @@ export const ChatArea = ({
                     showAvatar={showAvatar}
                     senderName={contact.name}
                     senderAvatar={contact.avatarUrl}
+                    onReply={onReply}
+                    onForward={onForward}
+                    onPin={onPin}
+                    onSelect={onSelect}
+                    onDelete={onDelete}
+                    onCopy={onCopy}
                   />
                 </div>
               );
@@ -104,7 +132,33 @@ export const ChatArea = ({
         </div>
       </ScrollArea>
 
-      <MessageComposer onSend={onSendMessage} />
+      <MessageComposer 
+        onSend={(content: string, file?: File) => {
+          if (!contact) return;
+          onSendMessage(contact.id, { 
+            content, 
+            file,
+            replyToMessageId: replyingTo?.id 
+          });
+          // Clear reply after sending
+          if (replyingTo && onCancelReply) {
+            onCancelReply();
+          }
+        }}
+        onSendVoice={onSendVoice ? (audioBlob: Blob, duration: number, waveform: number[]) => {
+          if (!contact) return;
+          onSendVoice(contact.id, audioBlob, duration, waveform);
+          // Clear reply after sending voice
+          if (replyingTo && onCancelReply) {
+            onCancelReply();
+          }
+        } : undefined}
+        replyTo={replyingTo ? {
+          senderName: replySenderName,
+          snippet: replyingTo.content || (replyingTo.type === 'voice' ? "Voice Message" : (replyingTo.fileName ? `File: ${replyingTo.fileName}` : "Attachment")),
+          onCancel: onCancelReply || (() => {})
+        } : undefined}
+      />
     </div>
   );
 };

@@ -48,7 +48,7 @@ import PendingApproval from "./pages/PendingApproval";
 import AssignmentDetail from "./pages/AssignmentDetail";
 import TimetableMatrix from "./pages/TimetableMatrix";
 import AttendanceTracking from "./pages/AttendanceTracking";
-import VoiceTestPage from "./pages/VoiceTestPage";
+
 import Home from "./pages/Home";
 import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -70,8 +70,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/pending-approval" element={<PendingApproval />} />
-          <Route path="/voice-test" element={<VoiceTestPage />} />
-
+  
           {/* Student Portal Routes */}
           <Route
             element={

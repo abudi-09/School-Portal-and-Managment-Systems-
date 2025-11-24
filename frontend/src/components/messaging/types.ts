@@ -27,7 +27,7 @@ export interface MessageItem {
   replyTo?: {
     messageId: string;
     senderName: string;
-    type: "text" | "image" | "file" | "doc";
+    type: "text" | "image" | "file" | "doc" | "voice" | "video";
     snippet: string;
   };
   replyToDeleted?: boolean;
@@ -101,10 +101,11 @@ export interface MessagingCenterProps {
     conversationId: string,
     messageId: string
   ) => Promise<void> | void;
-  onSearchSavedMessages?: (query: string) => Promise<void> | void;
+  onSendVoice?: (conversationId: string, audioBlob: Blob, duration: number, waveform: number[]) => Promise<void> | void;
+  onSearchSavedMessages?: (query: string) => Promise<MessageItem[]> | MessageItem[];
   isUploadingAttachment?: boolean;
-  messageDraft: string;
-  onChangeDraft: (value: string) => void;
+  messageDraft?: string;
+  onChangeDraft?: (conversationId: string, content: string) => void;
   isLoadingContacts?: boolean;
   isLoadingThread?: boolean;
   isSendingMessage?: boolean;
@@ -114,4 +115,13 @@ export interface MessagingCenterProps {
   emptyStateMessage?: string;
   disallowedRecipientMessage?: string;
   validateRecipient?: (contact: ContactItem) => boolean;
+  
+  // New actions
+  onReplyMessage?: (message: MessageItem) => void;
+  onForwardMessage?: (message: MessageItem) => void;
+  onPinMessage?: (message: MessageItem) => void;
+  onSelectMessage?: (message: MessageItem) => void;
+  onCopyMessage?: (content: string) => void;
+  replyingTo?: MessageItem | null;
+  onCancelReply?: () => void;
 }

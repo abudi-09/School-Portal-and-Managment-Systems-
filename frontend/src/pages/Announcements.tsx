@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/select";
 import TablePagination from "@/components/shared/TablePagination";
 import { useToast } from "@/hooks/use-toast";
-import { SkeletonGrid } from "@/components/skeleton";
+import { SkeletonGrid, SkeletonWrapper } from "@/components/skeleton";
 import {
   getAnnouncements,
   getUnreadCount,
@@ -46,7 +46,9 @@ const Announcements = () => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sourceFilter, setSourceFilter] = useState<AnnouncementType | "all">("all");
+  const [sourceFilter, setSourceFilter] = useState<AnnouncementType | "all">(
+    "all"
+  );
 
   // Pagination
   const PAGE_SIZE = 10;
@@ -78,7 +80,7 @@ const Announcements = () => {
     try {
       const source = sourceFilter === "all" ? undefined : sourceFilter;
       const result = await getAnnouncements(page, PAGE_SIZE, source);
-      
+
       const items = result.items.map((item) => ({
         ...item,
         id: item._id,
@@ -130,7 +132,7 @@ const Announcements = () => {
     const nextId = isCurrentlyExpanded
       ? null
       : announcement._id || announcement.id;
-    
+
     setExpandedId(nextId);
 
     // Mark as read when expanding
@@ -179,7 +181,12 @@ const Announcements = () => {
         onSearchChange={setSearch}
         filters={
           <>
-            <Select value={sourceFilter} onValueChange={(value) => setSourceFilter(value as AnnouncementType | "all")}>
+            <Select
+              value={sourceFilter}
+              onValueChange={(value) =>
+                setSourceFilter(value as AnnouncementType | "all")
+              }
+            >
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Source" />
               </SelectTrigger>
@@ -218,160 +225,146 @@ const Announcements = () => {
       />
 
       {/* Announcements List */}
-      {loading ? (
-        <SkeletonGrid count={6} />
-      ) : error ? (
-        <Card>
-          <CardContent className="p-12">
-            <EmptyState
-              icon={Bell}
-              title="Failed to load announcements"
-              description={error}
-              action={
-                <Button onClick={fetchAnnouncements} variant="outline">
-                  Try Again
-                </Button>
-              }
-            />
-          </CardContent>
-        </Card>
-      ) : filteredAnnouncements.length === 0 ? (
-        <Card>
-          <CardContent className="p-12">
-            <EmptyState
-              icon={Bell}
-              title="No announcements found"
-              description={
-                search || typeFilter !== "all" || statusFilter !== "all"
-                  ? "Try adjusting your filters to see more results."
-                  : "New announcements will appear here when posted."
-              }
-            />
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {filteredAnnouncements.map((announcement) => {
-            const isExpanded =
-              expandedId === announcement._id || expandedId === announcement.id;
-            const truncatedMessage =
-              announcement.message.length > 200 && !isExpanded
-                ? announcement.message.substring(0, 200) + "..."
-                : announcement.message;
+      <SkeletonWrapper
+        isLoading={loading}
+        skeleton={<SkeletonGrid columns={1} count={6} />}
+      >
+        {error ? (
+          <EmptyState
+            icon={Bell}
+            title="Failed to load announcements"
+            description={error}
+            action={
+              <Button onClick={fetchAnnouncements} variant="outline">
+                Try Again
+              </Button>
+            }
+          />
+        ) : filteredAnnouncements.length === 0 ? (
+          <EmptyState
+            icon={Bell}
+            title="No announcements found"
+            description={
+              search || typeFilter !== "all" || statusFilter !== "all"
+                ? "Try adjusting your filters to see more results."
+                : "New announcements will appear here when posted."
+            }
+          />
+        ) : (
+          <div className="space-y-4">
+            {filteredAnnouncements.map((announcement) => {
+              const isExpanded =
+                expandedId === announcement._id ||
+                expandedId === announcement.id;
 
-            return (
-              <Card
-                key={announcement._id || announcement.id}
-                className={`transition-all ${
-                  !announcement.isRead
-                    ? "border-l-4 border-l-primary bg-primary/5"
-                    : "hover:shadow-md"
-                }`}
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <Bell className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="text-lg truncate">
+              return (
+                <Card
+                  key={announcement._id || announcement.id}
+                  className={`transition-all border-border ${
+                    !announcement.isRead
+                      ? "border-l-4 border-l-primary bg-primary/5"
+                      : "hover:bg-muted/5"
+                  }`}
+                >
+                  <CardHeader className="bg-muted/50 border-b border-border">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-1">
+                          <Bell
+                            className={`h-4 w-4 ${
+                              !announcement.isRead
+                                ? "text-primary"
+                                : "text-muted-foreground"
+                            }`}
+                          />
+                          <CardTitle className="text-lg truncate text-foreground">
                             {announcement.title}
                           </CardTitle>
-                          <CardDescription className="truncate">
-                            Posted by{" "}
-                            {"postedBy" in announcement
-                              ? announcement.postedBy?.name || "Unknown"
-                              : "Unknown"}
-                          </CardDescription>
                         </div>
+                        <CardDescription className="text-muted-foreground ml-7">
+                          Posted by{" "}
+                          {"postedBy" in announcement
+                            ? announcement.postedBy?.name || "Unknown"
+                            : "Unknown"}{" "}
+                          • {new Date(announcement.date).toLocaleDateString()}
+                        </CardDescription>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <Badge variant={getTypeColor(announcement.type)}>
-                        {announcement.type}
-                      </Badge>
-                      {!announcement.isRead && (
-                        <Badge variant="destructive" className="px-2">
-                          New
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge
+                          variant={getTypeColor(announcement.type)}
+                          className="capitalize"
+                        >
+                          {announcement.type}
                         </Badge>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    <span>
-                      {new Date(announcement.date).toLocaleDateString("en-US", {
-                        weekday: "long",
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })}
-                    </span>
-                  </div>
-
-                  <p className="text-foreground leading-relaxed whitespace-pre-wrap">
-                    {truncatedMessage}
-                  </p>
-
-                  {announcement.message.length > 200 && (
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="p-0 h-auto flex items-center gap-1"
-                      onClick={() => handleToggleExpand(announcement)}
-                    >
-                      {isExpanded ? (
-                        <>
-                          <ChevronUp className="h-4 w-4" />
-                          Show less
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="h-4 w-4" />
-                          Read more
-                        </>
-                      )}
-                    </Button>
-                  )}
-
-                  {announcement.attachments &&
-                    announcement.attachments.length > 0 && (
-                      <div className="pt-4 border-t">
-                        <p className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <Paperclip className="h-4 w-4" />
-                          Attachments ({announcement.attachments.length})
-                        </p>
-                        <div className="space-y-2">
-                          {announcement.attachments.map((attachment, idx) => (
-                            <a
-                              key={idx}
-                              href={attachment.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-                            >
-                              <Paperclip className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm flex-1 truncate">
-                                {attachment.name}
-                              </span>
-                              <Badge variant="outline" className="text-xs">
-                                {(attachment.size / 1024).toFixed(1)} KB
-                              </Badge>
-                            </a>
-                          ))}
-                        </div>
+                        {!announcement.isRead && (
+                          <Badge variant="destructive" className="px-2">
+                            New
+                          </Badge>
+                        )}
                       </div>
-                    )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <div className="space-y-3">
+                      <div
+                        className={`text-foreground ${
+                          !isExpanded && "line-clamp-3"
+                        }`}
+                      >
+                        {announcement.message}
+                      </div>
+
+                      {announcement.message.length > 200 && (
+                        <Button
+                          variant="link"
+                          className="p-0 h-auto font-semibold text-primary"
+                          onClick={() => handleToggleExpand(announcement)}
+                        >
+                          {isExpanded ? (
+                            <span className="flex items-center gap-1">
+                              Show Less <ChevronUp className="h-3 w-3" />
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              Read More <ChevronDown className="h-3 w-3" />
+                            </span>
+                          )}
+                        </Button>
+                      )}
+
+                      {/* Attachments if any */}
+                      {announcement.attachments &&
+                        announcement.attachments.length > 0 && (
+                          <div className="pt-4 border-t border-border mt-4">
+                            <p className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
+                              <Paperclip className="h-3 w-3" /> Attachments
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {announcement.attachments.map((att, idx) => (
+                                <a
+                                  key={idx}
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 p-2 rounded-md border border-border bg-background hover:bg-muted transition-colors text-sm"
+                                >
+                                  <Paperclip className="h-3 w-3 text-muted-foreground" />
+                                  <span className="truncate max-w-[150px]">
+                                    {att.name}
+                                  </span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </SkeletonWrapper>
 
       {/* Pagination */}
       {!loading && filteredAnnouncements.length > 0 && (

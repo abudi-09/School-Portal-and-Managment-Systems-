@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { getAuthToken } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -38,6 +39,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   listClasses,
@@ -93,6 +95,9 @@ const AssignmentManagement = () => {
   const apiBaseUrl =
     import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000";
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+  const [activeTab, setActiveTab] = useState<"class" | "subject">("class");
 
   // Server bootstrap: load classes, teachers, and subject assignments
   const fetchServerData = async () => {
@@ -100,6 +105,7 @@ const AssignmentManagement = () => {
       // Load classes (aligned with admin management)
       try {
         const classesPayload = await listClasses();
+        console.log("Classes loaded:", classesPayload);
         const mapped = (classesPayload.data?.classes ?? []).map((c) => ({
           id: c.classId,
           name: c.name || `${c.grade}${String(c.section).toUpperCase()}`,
@@ -109,7 +115,7 @@ const AssignmentManagement = () => {
         }));
         setClasses(mapped);
       } catch (err) {
-        console.warn("Failed to fetch classes list", err);
+        console.error("Failed to fetch classes list", err);
         setClasses([]);
       }
 
@@ -135,6 +141,7 @@ const AssignmentManagement = () => {
           { headers }
         );
         const teachersPayload = await teachersRes.json().catch(() => ({}));
+        console.log("Teachers loaded:", teachersPayload);
         if (teachersRes.ok && (teachersPayload as any)?.success) {
           type ApiTeacher = {
             _id?: string;
@@ -316,9 +323,29 @@ const AssignmentManagement = () => {
         const cls = classes.find((c) => c.id === selectedClass);
         if (!cls || !cls.grade) return;
 
+        let stream: "natural" | "social" | undefined;
+
+        // Resolve stream for Grade 11/12 to ensure we get the correct subjects
+        if (Number(cls.grade) >= 11) {
+          try {
+            const secRes = await listSectionsByGradeHead(
+              Number(cls.grade) as GradeLevel
+            );
+            const found = secRes.data?.sections?.find(
+              (s) => s.label.toLowerCase() === cls.section?.toLowerCase()
+            );
+            if (found) stream = found.stream;
+          } catch (e) {
+            console.warn("Failed to resolve stream for class", e);
+          }
+        }
+
         // fetch courses for grade (keep existing behavior for class-scoped subjects)
+        const qs = new URLSearchParams({ grade: String(cls.grade) });
+        if (stream) qs.append("stream", stream);
+
         const coursesRes = await fetch(
-          `${apiBaseUrl}/api/head/courses?grade=${cls.grade}`,
+          `${apiBaseUrl}/api/head/courses?${qs.toString()}`,
           { headers }
         );
         const coursesPayload = await coursesRes.json().catch(() => ({}));
@@ -421,6 +448,14 @@ const AssignmentManagement = () => {
       setLoadingSubjectTeachers(true);
       setSubjectTeachersError(null);
       try {
+        // Debug: log current selection that drives the request
+        // eslint-disable-next-line no-console
+        console.debug("loadTeachersForSubject() called with:", {
+          assignmentType,
+          selectedGrade,
+          selectedStream,
+          selectedSubject,
+        });
         const token = getAuthToken() || localStorage.getItem("token");
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -431,11 +466,19 @@ const AssignmentManagement = () => {
           subject: selectedSubject,
         });
         if (selectedStream) params.append("stream", String(selectedStream));
-        const res = await fetch(
-          `${apiBaseUrl}/api/head/teachers/by-subject?${params.toString()}`,
-          { headers }
-        );
+        const url = `${apiBaseUrl}/api/head/teachers/by-subject?${params.toString()}`;
+        // Debug: log final URL
+        // eslint-disable-next-line no-console
+        console.debug("fetching teachers by subject url:", url);
+        const res = await fetch(url, { headers });
         const payload = await res.json().catch(() => ({}));
+        // Debug: log response status and payload
+        // eslint-disable-next-line no-console
+        console.debug("teachers/by-subject response", {
+          status: res.status,
+          ok: res.ok,
+          payload,
+        });
         if (res.ok && payload?.success) {
           const teacherArr = (payload.data?.teachers ?? []) as Array<{
             _id?: string;
@@ -493,7 +536,7 @@ const AssignmentManagement = () => {
       }
       // Reset downstream selections
       setSelectedStream(null);
-      setSelectedSubject((prev) => prev); // keep if coming from subject row (already set before dialog open)
+      // keep any previously-selected subject (do not overwrite)
       setSubjectTeacherOptions([]);
     } else {
       // Reset cascade when doing class teacher assignment
@@ -816,7 +859,7 @@ const AssignmentManagement = () => {
           };
           if (token) headers.Authorization = `Bearer ${token}`;
 
-          const res = await fetch(
+          let res = await fetch(
             `${apiBaseUrl}/api/head/subject-assignments/${cls.id}`,
             {
               method: "PUT",
@@ -827,7 +870,25 @@ const AssignmentManagement = () => {
               }),
             }
           );
-          const payload = await res.json().catch(() => ({}));
+          let payload = await res.json().catch(() => ({}));
+
+          // Handle conflict / reassign confirmation
+          if (res.status === 409 && payload?.code === "CONFIRM_REASSIGN") {
+            res = await fetch(
+              `${apiBaseUrl}/api/head/subject-assignments/${cls.id}`,
+              {
+                method: "PUT",
+                headers,
+                body: JSON.stringify({
+                  subject: selectedSubject,
+                  teacherId: teacher.id,
+                  confirmReassign: true,
+                }),
+              }
+            );
+            payload = await res.json().catch(() => ({}));
+          }
+
           if (!res.ok || !payload.success) {
             throw new Error(
               payload.message || "Failed to assign subject teacher"
@@ -990,28 +1051,61 @@ const AssignmentManagement = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group">
+            <button
+              className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group"
+              onClick={() => {
+                setActiveTab("class");
+                // scroll tabs into view
+                setTimeout(
+                  () =>
+                    tabsRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    }),
+                  50
+                );
+              }}
+            >
               <Users className="h-8 w-8 text-muted-foreground group-hover:text-primary mb-3" />
               <span className="text-sm font-medium text-foreground group-hover:text-primary">
                 Assign Class Teacher
               </span>
             </button>
-            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group">
+            <button
+              className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group"
+              onClick={() => {
+                setActiveTab("subject");
+                setTimeout(
+                  () =>
+                    tabsRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    }),
+                  50
+                );
+              }}
+            >
               <ClipboardList className="h-8 w-8 text-muted-foreground group-hover:text-primary mb-3" />
               <span className="text-sm font-medium text-foreground group-hover:text-primary">
                 Assign Subject Teacher
               </span>
             </button>
-            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group">
+            <button
+              className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group"
+              onClick={() => navigate("/head/teachers")}
+            >
               <Eye className="h-8 w-8 text-muted-foreground group-hover:text-primary mb-3" />
               <span className="text-sm font-medium text-foreground group-hover:text-primary">
                 View Teacher Details
               </span>
             </button>
-            <button className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group">
+            <button
+              className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 transition-all group"
+              onClick={() => navigate("/head/schedules")}
+            >
               <BookOpen className="h-8 w-8 text-muted-foreground group-hover:text-primary mb-3" />
               <span className="text-sm font-medium text-foreground group-hover:text-primary">
-                Assignment Report
+                Schedule Management
               </span>
             </button>
           </div>
@@ -1025,364 +1119,403 @@ const AssignmentManagement = () => {
         Removing the `lg:grid-cols-2` breakpoint forces a single-column layout
         on all screen sizes (keeps responsiveness while meeting the UX request).
       */}
-      <div className="grid grid-cols-1 gap-6">
-        {/* Class Teacher Assignment */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Class Teacher Assignment
-            </CardTitle>
-            <CardDescription>
-              Assign head class teachers to classes
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="mb-3">
-              <Input
-                placeholder="Search teachers by name or subject"
-                value={teacherSearch}
-                onChange={(e) => {
-                  setTeacherSearch(e.target.value);
-                  setTeacherPage(1);
-                }}
-              />
-            </div>
-
-            {(() => {
-              const q = teacherSearch.trim().toLowerCase();
-              const filteredTeachers = teachers.filter((t) => {
-                if (!q) return true;
-                const subjMatch = (t.subjects || []).some((s) =>
-                  s.toLowerCase().includes(q)
-                );
-                return (
-                  t.name.toLowerCase().includes(q) ||
-                  (t.department || "").toLowerCase().includes(q) ||
-                  subjMatch
-                );
-              });
-
-              // paginate client-side
-              const total = filteredTeachers.length;
-              const totalPages = Math.max(
-                1,
-                Math.ceil(total / TEACHER_PAGE_LIMIT)
-              );
-              const start = (teacherPage - 1) * TEACHER_PAGE_LIMIT;
-              const pagedTeachers = filteredTeachers.slice(
-                start,
-                start + TEACHER_PAGE_LIMIT
-              );
-
-              if (filteredTeachers.length === 0) {
-                return (
-                  <div className="text-sm text-muted-foreground py-6 text-center">
-                    No teachers available. Approve teachers first or adjust your
-                    search.
-                  </div>
-                );
-              }
-
-              return (
-                <>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Teacher</TableHead>
-                        <TableHead>Grade</TableHead>
-                        <TableHead>Subjects</TableHead>
-                        <TableHead className="text-right">Assign</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {pagedTeachers.map((t) => {
-                        const expanded = !!expandedByTeacher[t.id];
-                        const selGrade =
-                          gradeByTeacher[t.id] ??
-                          (t.grade ? String(t.grade) : "");
-                        const selStream = streamByTeacher[t.id] ?? "";
-                        const selSection = sectionByTeacher[t.id] ?? "";
-                        const sectionOpts = sectionOptsByTeacher[t.id] ?? [];
-                        const loadingSections =
-                          !!sectionsLoadingByTeacher[t.id];
-                        return (
-                          <>
-                            <TableRow key={t.id}>
-                              <TableCell className="font-medium">
-                                {t.name}
-                              </TableCell>
-                              <TableCell>{t.grade ?? "—"}</TableCell>
-                              <TableCell>
-                                <div className="flex flex-wrap gap-1">
-                                  {(t.subjects ?? []).length === 0 ? (
-                                    <span className="text-sm text-muted-foreground">
-                                      —
-                                    </span>
-                                  ) : (
-                                    (t.subjects ?? []).map((s) => (
-                                      <Badge key={s} variant="secondary">
-                                        {s}
-                                      </Badge>
-                                    ))
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  size="sm"
-                                  onClick={() => toggleExpanded(t.id)}
-                                >
-                                  {(t.assignedClasses ?? 0) > 0
-                                    ? "Reassign"
-                                    : "Assign as Head of Class"}
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                            {expanded && (
-                              <TableRow>
-                                <TableCell colSpan={4}>
-                                  <div className="p-4 bg-secondary rounded-md flex flex-col gap-3 items-start">
-                                    <div className="flex items-center gap-2">
-                                      <Label className="mr-1">Grade</Label>
-                                      <Select
-                                        value={selGrade || undefined}
-                                        onValueChange={(v) =>
-                                          onChangeGrade(t.id, v)
-                                        }
-                                      >
-                                        <SelectTrigger className="w-28">
-                                          <SelectValue placeholder="Select" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="9">9</SelectItem>
-                                          <SelectItem value="10">10</SelectItem>
-                                          <SelectItem value="11">11</SelectItem>
-                                          <SelectItem value="12">12</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    {(Number(selGrade) === 11 ||
-                                      Number(selGrade) === 12) && (
-                                      <div className="flex items-center gap-2">
-                                        <Label className="mr-1">Stream</Label>
-                                        <Select
-                                          value={selStream || undefined}
-                                          onValueChange={(v) =>
-                                            onChangeStream(
-                                              t.id,
-                                              v as "natural" | "social"
-                                            )
-                                          }
-                                        >
-                                          <SelectTrigger className="w-36">
-                                            <SelectValue placeholder="Choose" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="natural">
-                                              Natural
-                                            </SelectItem>
-                                            <SelectItem value="social">
-                                              Social
-                                            </SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                    )}
-                                    <div className="flex items-center gap-2">
-                                      <Label className="mr-1">Section</Label>
-                                      <Select
-                                        value={selSection || undefined}
-                                        onValueChange={(v) =>
-                                          setSectionByTeacher((p) => ({
-                                            ...p,
-                                            [t.id]: v,
-                                          }))
-                                        }
-                                        disabled={
-                                          loadingSections ||
-                                          !selGrade ||
-                                          (Number(selGrade) >= 11 && !selStream)
-                                        }
-                                      >
-                                        <SelectTrigger className="w-36">
-                                          <SelectValue
-                                            placeholder={
-                                              loadingSections
-                                                ? "Loading..."
-                                                : "Choose"
-                                            }
-                                          />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {sectionOpts.length === 0 &&
-                                          !loadingSections ? (
-                                            <div className="px-2 py-1 text-sm text-muted-foreground">
-                                              No sections
-                                            </div>
-                                          ) : (
-                                            sectionOpts.map((s) => (
-                                              <SelectItem
-                                                key={s.id}
-                                                value={s.label}
-                                              >
-                                                {s.label}
-                                              </SelectItem>
-                                            ))
-                                          )}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <Button
-                                        size="sm"
-                                        disabled={
-                                          !selGrade ||
-                                          !selSection ||
-                                          (Number(selGrade) >= 11 && !selStream)
-                                        }
-                                        onClick={() =>
-                                          onAssignHeadFromExpanded(t.id)
-                                        }
-                                      >
-                                        Confirm Assign
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => toggleExpanded(t.id)}
-                                      >
-                                        Cancel
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="text-sm text-muted-foreground">
-                      Page {teacherPage} of {totalPages}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={teacherPage <= 1}
-                        onClick={() =>
-                          setTeacherPage((p) => Math.max(1, p - 1))
-                        }
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        size="sm"
-                        disabled={teacherPage >= totalPages}
-                        onClick={() =>
-                          setTeacherPage((p) => Math.min(totalPages, p + 1))
-                        }
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              );
-            })()}
-          </CardContent>
-        </Card>
-
-        {/* Subject Assignment */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5" />
+      <div ref={tabsRef}>
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as "class" | "subject")}
+          className="w-full"
+        >
+          <TabsList>
+            <TabsTrigger value="class">Class Teacher Assignment</TabsTrigger>
+            <TabsTrigger value="subject">
               Subject Teacher Assignment
-            </CardTitle>
-            <CardDescription>
-              Assign subject teachers to classes
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Select Class</Label>
-              <Select value={selectedClass} onValueChange={setSelectedClass}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a class" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map((classItem) => (
-                    <SelectItem key={classItem.id} value={classItem.id}>
-                      Class {classItem.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="class">
+            {/* Class Teacher Assignment */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Class Teacher Assignment
+                </CardTitle>
+                <CardDescription>
+                  Assign head class teachers to classes
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="mb-3">
+                  <Input
+                    placeholder="Search teachers by name or subject"
+                    value={teacherSearch}
+                    onChange={(e) => {
+                      setTeacherSearch(e.target.value);
+                      setTeacherPage(1);
+                    }}
+                  />
+                </div>
 
-            {selectedClass && (
-              <div className="space-y-3 pt-4">
                 {(() => {
-                  const cls = classes.find((c) => c.id === selectedClass);
-                  const nameMap = new Map(
-                    subjectAssignmentsServer.map((a) => [a.subject, a.teacher])
+                  const q = teacherSearch.trim().toLowerCase();
+                  const filteredTeachers = teachers.filter((t) => {
+                    if (!q) return true;
+                    const subjMatch = (t.subjects || []).some((s) =>
+                      s.toLowerCase().includes(q)
+                    );
+                    return (
+                      t.name.toLowerCase().includes(q) ||
+                      (t.department || "").toLowerCase().includes(q) ||
+                      subjMatch
+                    );
+                  });
+
+                  // paginate client-side
+                  const total = filteredTeachers.length;
+                  const totalPages = Math.max(
+                    1,
+                    Math.ceil(total / TEACHER_PAGE_LIMIT)
                   );
-                  const list = subjectOptions.map((subj) => ({
-                    subject: subj,
-                    teacher: nameMap.get(subj) ?? "Unassigned",
-                  }));
-                  return list
-                    .filter((row) =>
-                      subjectSearch
-                        ? row.subject
-                            .toLowerCase()
-                            .includes(subjectSearch.toLowerCase())
-                        : true
-                    )
-                    .map((row, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between p-4 rounded-lg bg-secondary"
-                      >
-                        <div>
-                          <p className="font-medium text-foreground mb-1">
-                            {row.subject}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Teacher:{" "}
-                            <span
-                              className={
-                                row.teacher === "Unassigned"
-                                  ? "text-warning font-medium"
-                                  : "text-foreground"
-                              }
-                            >
-                              {row.teacher}
-                            </span>
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedSubject(row.subject);
-                            openAssignmentDialog("subject");
-                          }}
-                        >
-                          {row.teacher === "Unassigned" ? "Assign" : "Change"}
-                        </Button>
+                  const start = (teacherPage - 1) * TEACHER_PAGE_LIMIT;
+                  const pagedTeachers = filteredTeachers.slice(
+                    start,
+                    start + TEACHER_PAGE_LIMIT
+                  );
+
+                  if (filteredTeachers.length === 0) {
+                    return (
+                      <div className="text-sm text-muted-foreground py-6 text-center">
+                        No teachers available. Approve teachers first or adjust
+                        your search.
                       </div>
-                    ));
+                    );
+                  }
+
+                  return (
+                    <>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Teacher</TableHead>
+                            <TableHead>Grade</TableHead>
+                            <TableHead>Subjects</TableHead>
+                            <TableHead className="text-right">Assign</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pagedTeachers.map((t) => {
+                            const expanded = !!expandedByTeacher[t.id];
+                            const selGrade =
+                              gradeByTeacher[t.id] ??
+                              (t.grade ? String(t.grade) : "");
+                            const selStream = streamByTeacher[t.id] ?? "";
+                            const selSection = sectionByTeacher[t.id] ?? "";
+                            const sectionOpts =
+                              sectionOptsByTeacher[t.id] ?? [];
+                            const loadingSections =
+                              !!sectionsLoadingByTeacher[t.id];
+                            return (
+                              <Fragment key={t.id}>
+                                <TableRow>
+                                  <TableCell className="font-medium">
+                                    {t.name}
+                                  </TableCell>
+                                  <TableCell>{t.grade ?? "—"}</TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-wrap gap-1">
+                                      {(t.subjects ?? []).length === 0 ? (
+                                        <span className="text-sm text-muted-foreground">
+                                          —
+                                        </span>
+                                      ) : (
+                                        (t.subjects ?? []).map((s) => (
+                                          <Badge key={s} variant="secondary">
+                                            {s}
+                                          </Badge>
+                                        ))
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <Button
+                                      size="sm"
+                                      onClick={() => toggleExpanded(t.id)}
+                                    >
+                                      {(t.assignedClasses ?? 0) > 0
+                                        ? "Reassign"
+                                        : "Assign as Head of Class"}
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                                {expanded && (
+                                  <TableRow>
+                                    <TableCell colSpan={4}>
+                                      <div className="p-4 bg-secondary rounded-md flex flex-col gap-3 items-start">
+                                        <div className="flex items-center gap-2">
+                                          <Label className="mr-1">Grade</Label>
+                                          <Select
+                                            value={selGrade || undefined}
+                                            onValueChange={(v) =>
+                                              onChangeGrade(t.id, v)
+                                            }
+                                          >
+                                            <SelectTrigger className="w-28">
+                                              <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="9">
+                                                9
+                                              </SelectItem>
+                                              <SelectItem value="10">
+                                                10
+                                              </SelectItem>
+                                              <SelectItem value="11">
+                                                11
+                                              </SelectItem>
+                                              <SelectItem value="12">
+                                                12
+                                              </SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        {(Number(selGrade) === 11 ||
+                                          Number(selGrade) === 12) && (
+                                          <div className="flex items-center gap-2">
+                                            <Label className="mr-1">
+                                              Stream
+                                            </Label>
+                                            <Select
+                                              value={selStream || undefined}
+                                              onValueChange={(v) =>
+                                                onChangeStream(
+                                                  t.id,
+                                                  v as "natural" | "social"
+                                                )
+                                              }
+                                            >
+                                              <SelectTrigger className="w-36">
+                                                <SelectValue placeholder="Choose" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="natural">
+                                                  Natural
+                                                </SelectItem>
+                                                <SelectItem value="social">
+                                                  Social
+                                                </SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                        )}
+                                        <div className="flex items-center gap-2">
+                                          <Label className="mr-1">
+                                            Section
+                                          </Label>
+                                          <Select
+                                            value={selSection || undefined}
+                                            onValueChange={(v) =>
+                                              setSectionByTeacher((p) => ({
+                                                ...p,
+                                                [t.id]: v,
+                                              }))
+                                            }
+                                            disabled={
+                                              loadingSections ||
+                                              !selGrade ||
+                                              (Number(selGrade) >= 11 &&
+                                                !selStream)
+                                            }
+                                          >
+                                            <SelectTrigger className="w-36">
+                                              <SelectValue
+                                                placeholder={
+                                                  loadingSections
+                                                    ? "Loading..."
+                                                    : "Choose"
+                                                }
+                                              />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {sectionOpts.length === 0 &&
+                                              !loadingSections ? (
+                                                <div className="px-2 py-1 text-sm text-muted-foreground">
+                                                  No sections
+                                                </div>
+                                              ) : (
+                                                sectionOpts.map((s) => (
+                                                  <SelectItem
+                                                    key={s.id}
+                                                    value={s.label}
+                                                  >
+                                                    {s.label}
+                                                  </SelectItem>
+                                                ))
+                                              )}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <Button
+                                            size="sm"
+                                            disabled={
+                                              !selGrade ||
+                                              !selSection ||
+                                              (Number(selGrade) >= 11 &&
+                                                !selStream)
+                                            }
+                                            onClick={() =>
+                                              onAssignHeadFromExpanded(t.id)
+                                            }
+                                          >
+                                            Confirm Assign
+                                          </Button>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => toggleExpanded(t.id)}
+                                          >
+                                            Cancel
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+
+                      <div className="flex items-center justify-between mt-4">
+                        <div className="text-sm text-muted-foreground">
+                          Page {teacherPage} of {totalPages}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={teacherPage <= 1}
+                            onClick={() =>
+                              setTeacherPage((p) => Math.max(1, p - 1))
+                            }
+                          >
+                            Previous
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={teacherPage >= totalPages}
+                            onClick={() =>
+                              setTeacherPage((p) => Math.min(totalPages, p + 1))
+                            }
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  );
                 })()}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="subject">
+            {/* Subject Assignment */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5" />
+                  Subject Teacher Assignment
+                </CardTitle>
+                <CardDescription>
+                  Assign subject teachers to classes
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Select Class</Label>
+                  <Select
+                    value={selectedClass}
+                    onValueChange={setSelectedClass}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a class" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {classes.map((classItem) => (
+                        <SelectItem key={classItem.id} value={classItem.id}>
+                          Class {classItem.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedClass && (
+                  <div className="space-y-3 pt-4">
+                    {(() => {
+                      const cls = classes.find((c) => c.id === selectedClass);
+                      const nameMap = new Map(
+                        subjectAssignmentsServer.map((a) => [
+                          a.subject,
+                          a.teacher,
+                        ])
+                      );
+                      const list = subjectOptions.map((subj) => ({
+                        subject: subj,
+                        teacher: nameMap.get(subj) ?? "Unassigned",
+                      }));
+                      return list
+                        .filter((row) =>
+                          subjectSearch
+                            ? row.subject
+                                .toLowerCase()
+                                .includes(subjectSearch.toLowerCase())
+                            : true
+                        )
+                        .map((row, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between p-4 rounded-lg bg-secondary"
+                          >
+                            <div>
+                              <p className="font-medium text-foreground mb-1">
+                                {row.subject}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                Teacher:{" "}
+                                <span
+                                  className={
+                                    row.teacher === "Unassigned"
+                                      ? "text-warning font-medium"
+                                      : "text-foreground"
+                                  }
+                                >
+                                  {row.teacher}
+                                </span>
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedSubject(row.subject);
+                                openAssignmentDialog("subject");
+                              }}
+                            >
+                              {row.teacher === "Unassigned"
+                                ? "Assign"
+                                : "Change"}
+                            </Button>
+                          </div>
+                        ));
+                    })()}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Available Teachers section removed: list is now presented on Teacher Management page */}
@@ -1452,8 +1585,8 @@ const AssignmentManagement = () => {
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Natural">Natural</SelectItem>
-                      <SelectItem value="Social">Social</SelectItem>
+                      <SelectItem value="natural">Natural</SelectItem>
+                      <SelectItem value="social">Social</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

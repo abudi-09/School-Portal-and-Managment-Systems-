@@ -3,6 +3,7 @@ import { body, param, validationResult } from "express-validator";
 import User from "../models/User";
 import Course from "../models/Course";
 import Section from "../models/Section";
+import ClassModel from "../models/Class";
 import { authMiddleware, authorizeRoles } from "../middleware/auth";
 import { ApprovalService } from "../services/approval.service";
 import AuditLog from "../models/AuditLog";
@@ -509,6 +510,22 @@ router.post(
 
       const doc = new Section({ grade, label, capacity, stream });
       await doc.save();
+
+      // Sync: Create corresponding Class document
+      try {
+        const classId = `${grade}${label}`.toLowerCase();
+        await ClassModel.create({
+          classId,
+          grade: String(grade),
+          section: label,
+          name: `Grade ${grade} - Section ${label}`,
+        });
+      } catch (syncErr) {
+        console.error("Failed to sync Class creation:", syncErr);
+        // We don't fail the request if sync fails, but we log it.
+        // Ideally we should use a transaction.
+      }
+
       return res.status(201).json({ success: true, data: { section: doc } });
     } catch (error: any) {
       if (error?.code === 11000) {
@@ -578,8 +595,29 @@ router.patch(
           .status(404)
           .json({ success: false, message: "Section not found" });
 
+      const oldLabel = section.label;
+      const grade = section.grade;
+
       Object.assign(section, update);
       await section.save();
+
+      // Sync: Update Class if label changed
+      if (update.label && update.label !== oldLabel) {
+        try {
+          const oldClassId = `${grade}${oldLabel}`.toLowerCase();
+          const newClassId = `${grade}${update.label}`.toLowerCase();
+          await ClassModel.findOneAndUpdate(
+            { classId: oldClassId },
+            {
+              classId: newClassId,
+              section: update.label,
+              name: `Grade ${grade} - Section ${update.label}`,
+            }
+          );
+        } catch (syncErr) {
+          console.error("Failed to sync Class update:", syncErr);
+        }
+      }
 
       return res.json({ success: true, data: { section } });
     } catch (error: any) {
@@ -637,6 +675,15 @@ router.delete(
           .status(404)
           .json({ success: false, message: "Section not found" });
       }
+
+      // Sync: Delete corresponding Class document
+      try {
+        const classId = `${section.grade}${section.label}`.toLowerCase();
+        await ClassModel.findOneAndDelete({ classId });
+      } catch (syncErr) {
+        console.error("Failed to sync Class deletion:", syncErr);
+      }
+
       return res.json({ success: true, data: { section } });
     } catch (error: any) {
       console.error("Delete section error:", error);
@@ -920,12 +967,10 @@ router.get(
       });
     } catch (error: any) {
       console.error("System status error", error);
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: "Server error retrieving system status",
-        });
+      res.status(500).json({
+        success: false,
+        message: "Server error retrieving system status",
+      });
     }
   }
 );

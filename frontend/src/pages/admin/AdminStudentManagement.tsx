@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { listSectionsByGrade, type SectionResponse } from "@/lib/api/courseSectionApi";
 import type { FormEvent } from "react";
 import {
   UserPlus,
@@ -112,7 +113,9 @@ type StudentFormState = {
   firstName: string;
   lastName: string;
   email: string;
-  grade: string;
+  grade: string; // e.g., "10"
+  stream: string; // e.g., "natural" | "social" (for 11/12)
+  section: string; // e.g., "A"
   phone: string;
 };
 
@@ -123,6 +126,8 @@ const EMPTY_STUDENT_FORM: StudentFormState = {
   lastName: "",
   email: "",
   grade: "",
+  stream: "",
+  section: "",
   phone: "",
 };
 
@@ -138,6 +143,8 @@ const AdminStudentManagement = () => {
   const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
   const [newStudentForm, setNewStudentForm] =
     useState<StudentFormState>(EMPTY_STUDENT_FORM);
+  const [sectionOptions, setSectionOptions] = useState<SectionResponse[]>([]);
+  const [sectionsLoading, setSectionsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generatedCredentials, setGeneratedCredentials] = useState<{
     studentId: string;
@@ -224,10 +231,61 @@ const AdminStudentManagement = () => {
     }));
   };
 
+  // Load sections when grade changes
+  useEffect(() => {
+    const grade = newStudentForm.grade;
+    const stream = newStudentForm.stream;
+    if (!grade) {
+      setSectionOptions([]);
+      setNewStudentForm((p) => ({ ...p, section: "", stream: "" }));
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setSectionsLoading(true);
+      try {
+        const gradeNum = Number(grade);
+        if (!Number.isFinite(gradeNum)) {
+          setSectionOptions([]);
+          return;
+        }
+        // Debug: log grade/stream before fetching
+        // eslint-disable-next-line no-console
+        console.debug("load sections for grade/stream:", { gradeNum, stream });
+        // For grades 11/12 require stream selection to fetch correct sections
+        const res =
+          (gradeNum === 11 || gradeNum === 12) && !stream
+            ? { data: { sections: [] } }
+            : await listSectionsByGrade(gradeNum as any, stream || undefined);
+        if (cancelled) return;
+        const opts = res.data?.sections ?? [];
+        // Debug: log returned sections
+        // eslint-disable-next-line no-console
+        console.debug(
+          `sections fetched for grade ${gradeNum}${stream ? `/${stream}` : ""}:`,
+          opts
+        );
+        setSectionOptions(opts);
+        // if only one section, preselect it
+        if (opts.length === 1) setNewStudentForm((p) => ({ ...p, section: opts[0].label }));
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("Failed to load sections for grade", grade, "stream", stream, e);
+        setSectionOptions([]);
+      } finally {
+        if (!cancelled) setSectionsLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [newStudentForm.grade, newStudentForm.stream]);
+
   const handleAddStudent = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
 
-    const { firstName, lastName, email, grade, phone } = newStudentForm;
+    const { firstName, lastName, email, grade, section, phone } = newStudentForm;
 
     if (!firstName.trim() || !lastName.trim() || !email.trim()) {
       toast({
@@ -273,7 +331,11 @@ const AdminStudentManagement = () => {
 
     setIsSubmitting(true);
 
-    const normalizedGrade = grade ? grade.toUpperCase() : undefined;
+    const normalizedGrade = grade ? String(grade).toUpperCase() : undefined;
+    const classId =
+      grade && section
+        ? `${String(grade)}${String(section).toLowerCase()}`
+        : normalizedGrade ?? undefined;
 
     const payload = {
       firstName: firstName.trim(),
@@ -281,7 +343,7 @@ const AdminStudentManagement = () => {
       email: emailTrimmed,
       profile: phoneTrimmed ? { phone: phoneTrimmed } : undefined,
       academicInfo: normalizedGrade
-        ? { grade: normalizedGrade, class: normalizedGrade }
+        ? { grade: normalizedGrade, class: classId }
         : undefined,
     };
 
@@ -771,25 +833,97 @@ const AdminStudentManagement = () => {
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="grade">Grade/Class</Label>
-                      <Select
-                        value={newStudentForm.grade}
-                        onValueChange={(value) =>
-                          handleNewStudentChange("grade", value)
-                        }
-                      >
-                        <SelectTrigger id="grade" className="border-border">
-                          <SelectValue placeholder="Select grade" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="10a">10A</SelectItem>
-                          <SelectItem value="10b">10B</SelectItem>
-                          <SelectItem value="11a">11A</SelectItem>
-                          <SelectItem value="11b">11B</SelectItem>
-                          <SelectItem value="12a">12A</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="grade">Grade</Label>
+                        <Select
+                          value={newStudentForm.grade}
+                          onValueChange={(value) =>
+                            setNewStudentForm((p) => ({ ...p, grade: value, stream: "", section: "" }))
+                          }
+                        >
+                          <SelectTrigger id="grade" className="border-border">
+                            <SelectValue placeholder="Select grade" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[9, 10, 11, 12].map((g) => (
+                              <SelectItem key={g} value={String(g)}>
+                                {g}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Stream (required for grades 11 & 12) */}
+                      <div className="space-y-2">
+                        <Label>Stream</Label>
+                        <Select
+                          value={newStudentForm.stream}
+                          onValueChange={(v) =>
+                            setNewStudentForm((p) => ({ ...p, stream: v, section: "" }))
+                          }
+                          disabled={!(newStudentForm.grade === "11" || newStudentForm.grade === "12")}
+                        >
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                newStudentForm.grade === "11" || newStudentForm.grade === "12"
+                                  ? "Select stream"
+                                  : "N/A for this grade"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="natural">Natural</SelectItem>
+                            <SelectItem value="social">Social</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="section">Section</Label>
+                        <Select
+                          value={newStudentForm.section}
+                          onValueChange={(v) =>
+                            handleNewStudentChange("section", v)
+                          }
+                          disabled={
+                            sectionsLoading ||
+                            !newStudentForm.grade ||
+                            ((newStudentForm.grade === "11" || newStudentForm.grade === "12") && !newStudentForm.stream)
+                          }
+                        >
+                          <SelectTrigger id="section">
+                            <SelectValue
+                              placeholder={
+                                sectionsLoading
+                                  ? "Loading..."
+                                  : !newStudentForm.grade
+                                  ? "Select grade first"
+                                  : (newStudentForm.grade === "11" || newStudentForm.grade === "12") && !newStudentForm.stream
+                                  ? "Select stream first"
+                                  : sectionOptions.length
+                                  ? "Choose section"
+                                  : "No sections"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {!newStudentForm.grade ? (
+                              <div className="px-2 py-1 text-sm text-muted-foreground">Select grade first</div>
+                            ) : (newStudentForm.grade === "11" || newStudentForm.grade === "12") && !newStudentForm.stream ? (
+                              <div className="px-2 py-1 text-sm text-muted-foreground">Select stream first</div>
+                            ) : sectionOptions.length === 0 && !sectionsLoading ? (
+                              <div className="px-2 py-1 text-sm text-muted-foreground">No sections</div>
+                            ) : (
+                              sectionOptions.map((s) => (
+                                <SelectItem key={s.id} value={s.label}>{s.label}</SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>

@@ -1596,13 +1596,26 @@ const AssignmentManagement = () => {
                   <Select
                     value={selectedSubject ?? undefined}
                     onValueChange={(v) => setSelectedSubject(v ?? null)}
-                    disabled={loadingSubjects || subjectOptions.length === 0}
+                    disabled={
+                      !selectedGrade ||
+                      ((Number(selectedGrade) === 11 ||
+                        Number(selectedGrade) === 12) &&
+                        !selectedStream) ||
+                      loadingSubjects ||
+                      (subjectOptions.length === 0 && !subjectsError)
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue
                         placeholder={
-                          loadingSubjects
-                            ? "Loading..."
+                          !selectedGrade
+                            ? "Select grade first"
+                            : (Number(selectedGrade) === 11 ||
+                                Number(selectedGrade) === 12) &&
+                              !selectedStream
+                            ? "Select stream first"
+                            : loadingSubjects
+                            ? "Loading subjects..."
                             : subjectOptions.length
                             ? "Choose subject"
                             : subjectsError || "No subjects"
@@ -1635,13 +1648,37 @@ const AssignmentManagement = () => {
               <Select
                 value={selectedTeacherId ?? undefined}
                 onValueChange={(v) => setSelectedTeacherId(v ?? null)}
+                disabled={
+                  assignmentType === "subject" &&
+                  (!selectedGrade ||
+                    ((Number(selectedGrade) === 11 ||
+                      Number(selectedGrade) === 12) &&
+                      !selectedStream) ||
+                    !selectedSubject)
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Choose a teacher" />
                 </SelectTrigger>
                 <SelectContent>
                   {assignmentType === "subject" ? (
-                    loadingSubjectTeachers ? (
+                    !selectedGrade ||
+                    ((Number(selectedGrade) === 11 ||
+                      Number(selectedGrade) === 12) &&
+                      !selectedStream) ||
+                    !selectedSubject ? (
+                      <div className="px-2 py-1 text-sm text-muted-foreground">
+                        {!selectedGrade
+                          ? "Select grade first"
+                          : (Number(selectedGrade) === 11 ||
+                              Number(selectedGrade) === 12) &&
+                            !selectedStream
+                          ? "Select stream first"
+                          : !selectedSubject
+                          ? "Select subject first"
+                          : ""}
+                      </div>
+                    ) : loadingSubjectTeachers ? (
                       <div className="px-2 py-1 text-sm text-muted-foreground">
                         Loading teachers...
                       </div>

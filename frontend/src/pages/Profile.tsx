@@ -31,7 +31,11 @@ import {
   uploadAvatar as uploadAvatarApi,
   changePassword as changePasswordApi,
 } from "@/lib/api/profileApi";
-import { SkeletonWrapper, SkeletonLine, SkeletonAvatar } from "@/components/skeleton";
+import {
+  SkeletonWrapper,
+  SkeletonLine,
+  SkeletonAvatar,
+} from "@/components/skeleton";
 
 type Gender = "male" | "female" | "other" | undefined;
 
@@ -73,12 +77,12 @@ const Profile = () => {
   const { user: authUser } = useAuth();
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  
+
   // Password change
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  
+
   const [loading, setLoading] = useState(true);
   const [apiUser, setApiUser] = useState<ApiUser | null>(null);
 
@@ -96,15 +100,17 @@ const Profile = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${getApiBase()}/api/auth/profile`, {
+      const url = `${getApiBase()}/api/auth/profile`;
+      console.debug("fetchProfile: fetching", { url, hasToken: !!token });
+      const res = await fetch(url, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: token ? `Bearer ${token}` : undefined,
         },
       });
       if (!res.ok) throw new Error("Failed to fetch profile");
       const data = await res.json();
       setApiUser(data.data.user);
-      
+
       // Set editable fields
       setFirstName(data.data.user.firstName || "");
       setLastName(data.data.user.lastName || "");
@@ -201,15 +207,16 @@ const Profile = () => {
         description="Manage your personal information and account settings"
         actions={
           !isEditing ? (
-            <Button onClick={() => setIsEditing(true)}>
-              Edit Profile
-            </Button>
+            <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
           ) : (
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => {
-                setIsEditing(false);
-                fetchProfile();
-              }}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsEditing(false);
+                  fetchProfile();
+                }}
+              >
                 <X className="h-4 w-4 mr-2" />
                 Cancel
               </Button>
@@ -321,11 +328,7 @@ const Profile = () => {
                     <Mail className="h-4 w-4 inline mr-2" />
                     Email
                   </Label>
-                  <Input
-                    id="email"
-                    value={apiUser?.email || ""}
-                    disabled
-                  />
+                  <Input id="email" value={apiUser?.email || ""} disabled />
                 </div>
 
                 <div className="space-y-2">
@@ -376,17 +379,26 @@ const Profile = () => {
 
                   <div className="space-y-2">
                     <Label>Grade</Label>
-                    <Input value={apiUser?.academicInfo?.grade || "N/A"} disabled />
+                    <Input
+                      value={apiUser?.academicInfo?.grade || "N/A"}
+                      disabled
+                    />
                   </div>
 
                   <div className="space-y-2">
                     <Label>Class</Label>
-                    <Input value={apiUser?.academicInfo?.class || "N/A"} disabled />
+                    <Input
+                      value={apiUser?.academicInfo?.class || "N/A"}
+                      disabled
+                    />
                   </div>
 
                   <div className="space-y-2">
                     <Label>Section</Label>
-                    <Input value={apiUser?.academicInfo?.section || "N/A"} disabled />
+                    <Input
+                      value={apiUser?.academicInfo?.section || "N/A"}
+                      disabled
+                    />
                   </div>
                 </div>
               </CardContent>
@@ -444,7 +456,9 @@ const Profile = () => {
 
                 <Button
                   onClick={handleChangePassword}
-                  disabled={!currentPassword || !newPassword || !confirmPassword}
+                  disabled={
+                    !currentPassword || !newPassword || !confirmPassword
+                  }
                 >
                   Change Password
                 </Button>

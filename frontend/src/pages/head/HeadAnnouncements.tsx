@@ -520,14 +520,19 @@ const HeadAnnouncements = () => {
                       const audiencePayload: {
                         scope: "all" | "teachers" | "students" | "class";
                         classId?: string | undefined;
-                      } = { scope: createAudience, classId };
-                      const created = await createAnnouncement({
+                      } = { scope: createAudience || "all", classId };
+                      const createPayload = {
                         title: createTitle,
                         message: createMessage,
-                        type: "school",
+                        type: "school" as const,
                         audience: audiencePayload,
                         attachments: [],
-                      });
+                      };
+                      console.debug(
+                        "createAnnouncement payload (head):",
+                        createPayload
+                      );
+                      const created = await createAnnouncement(createPayload);
                       // Prepend to list
                       const item = created as AnnouncementItem;
                       const itemAny = item as unknown as {

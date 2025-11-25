@@ -78,8 +78,13 @@ const Announcements = () => {
     setLoading(true);
     setError(null);
     try {
-      const source = sourceFilter === "all" ? undefined : sourceFilter;
-      const result = await getAnnouncements(page, PAGE_SIZE, source);
+      const source =
+        sourceFilter === "all" ? undefined : (sourceFilter as AnnouncementType);
+      const result = await getAnnouncements({
+        type: source,
+        page,
+        pageSize: PAGE_SIZE,
+      });
 
       const items = result.items.map((item) => ({
         ...item,

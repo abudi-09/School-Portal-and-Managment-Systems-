@@ -6,19 +6,49 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  try {
+    const token = localStorage.getItem("token");
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  } catch (e) {
+    console.error(
+      "Announcements API: failed to read token for request headers",
+      e
+    );
+  }
+
+  // Debug: log request summary to help diagnose invalid payloads
+  try {
+    console.debug("Announcements API Request:", {
+      method: config.method,
+      url: config.url,
+      dataType:
+        config.data === undefined
+          ? "undefined"
+          : Object.prototype.toString.call(config.data),
+      data: config.data,
+    });
+  } catch (e) {
+    console.debug("Announcements API Request: unable to serialize data", e);
+  }
+
   return config;
 });
 
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error(
-      "Announcements API Error:",
-      error.response?.status,
-      error.response?.data
-    );
+    // Network errors (no response) will have undefined response — include the message and request for diagnosis
+    if (!error.response) {
+      console.error("Announcements API Network Error:", error.message, {
+        request: error.request,
+      });
+    } else {
+      console.error(
+        "Announcements API Error:",
+        error.response.status,
+        error.response.data
+      );
+    }
     return Promise.reject(error);
   }
 );
@@ -44,7 +74,7 @@ export interface AnnouncementItem {
 }
 
 export async function getAnnouncements(params: {
-  type: AnnouncementType;
+  type?: AnnouncementType;
   page: number;
   pageSize: number;
 }) {
@@ -83,6 +113,10 @@ export interface CreateAnnouncementInput {
 }
 
 export async function createAnnouncement(input: CreateAnnouncementInput) {
+  if (!input || typeof input !== "object") {
+    console.error("createAnnouncement called with invalid input:", input);
+    throw new TypeError("createAnnouncement input must be an object");
+  }
   const { data } = await api.post<{ success: boolean; data: AnnouncementItem }>(
     "/api/announcements",
     input
@@ -104,6 +138,10 @@ export async function updateAnnouncement(
   id: string,
   input: UpdateAnnouncementInput
 ) {
+  if (!input || typeof input !== "object") {
+    console.error("updateAnnouncement called with invalid input:", input);
+    throw new TypeError("updateAnnouncement input must be an object");
+  }
   const { data } = await api.put<{ success: boolean; data: AnnouncementItem }>(
     `/api/announcements/${id}`,
     input

@@ -161,8 +161,9 @@ const Dashboard = () => {
       if (announcementsRes.ok) {
         const announcementsJson = await announcementsRes.json();
         const items = announcementsJson?.data?.items || [];
-        unread = items.filter((a: { status?: string }) => a.status === "unread")
-          .length;
+        unread = items.filter(
+          (a: { status?: string }) => a.status === "unread"
+        ).length;
       }
 
       const pendingAssignmentsCount = upcomingAssignments.filter(
@@ -247,9 +248,7 @@ const Dashboard = () => {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {loadingStats && stats.length === 0 ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <StatCardSkeleton key={i} />
-          ))
+          Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : statsError ? (
           <div className="col-span-full">
             <p className="text-sm text-destructive">{statsError}</p>
@@ -276,9 +275,7 @@ const Dashboard = () => {
           <Card>
             <CardHeader>
               <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>
-                Access your most-used features
-              </CardDescription>
+              <CardDescription>Access your most-used features</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -290,7 +287,10 @@ const Dashboard = () => {
                     <BookOpen className="h-5 w-5" />
                     <div className="flex flex-col">
                       <span className="text-sm">View Scores</span>
-                      <span className="text-xs text-muted-foreground">View your academic performance and detailed grade breakdowns</span>
+                      <span className="text-xs text-muted-foreground">
+                        View your academic performance and detailed grade
+                        breakdowns
+                      </span>
                     </div>
                   </Button>
                 </Link>
@@ -408,9 +408,7 @@ const Dashboard = () => {
                   Loading announcements…
                 </p>
               ) : announcementsError ? (
-                <p className="text-sm text-destructive">
-                  {announcementsError}
-                </p>
+                <p className="text-sm text-destructive">{announcementsError}</p>
               ) : recentAnnouncements.length === 0 ? (
                 <EmptyState
                   icon={Bell}

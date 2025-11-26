@@ -288,7 +288,10 @@ const Dashboard = () => {
                     className="w-full h-20 flex flex-col gap-2"
                   >
                     <BookOpen className="h-5 w-5" />
-                    <span className="text-sm">View Scores</span>
+                    <div className="flex flex-col">
+                      <span className="text-sm">View Scores</span>
+                      <span className="text-xs text-muted-foreground">View your academic performance and detailed grade breakdowns</span>
+                    </div>
                   </Button>
                 </Link>
                 <Link to="/assignments" className="block">

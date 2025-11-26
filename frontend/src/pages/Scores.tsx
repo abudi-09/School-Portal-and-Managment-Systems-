@@ -17,6 +17,7 @@ import {
   Target,
 } from "lucide-react";
 import { PageHeader } from "@/components/patterns";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StatCard } from "@/components/patterns";
 import { EmptyState } from "@/components/patterns";
 import {
@@ -28,7 +29,6 @@ import {
 } from "@/components/ui/select";
 
 const Scores = () => {
-  const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
   const [selectedSemester, setSelectedSemester] = useState("semester1");
 
   const semesterData = {
@@ -119,6 +119,23 @@ const Scores = () => {
     currentData.subjects.reduce((sum, s) => sum + s.rank, 0) / currentData.subjects.length
   );
 
+  // Helper to compute stats for any subject list
+  const computeStats = (subjects: { total: number; rank: number }[]) => {
+    if (!subjects || subjects.length === 0) return { totalScore: 0, averageScore: "0.0", averageRank: 0 };
+    const total = subjects.reduce((s, x) => s + (x.total || 0), 0);
+    const avg = (total / subjects.length).toFixed(1);
+    const avgRank = Math.round(subjects.reduce((s, x) => s + (x.rank || 0), 0) / subjects.length);
+    return { totalScore: total, averageScore: avg, averageRank: avgRank };
+  };
+
+  const sem1 = computeStats(semesterData.semester1.subjects);
+  const sem2 = computeStats(semesterData.semester2.subjects);
+  const combined = {
+    totalScore: sem1.totalScore + sem2.totalScore,
+    averageScore: ((parseFloat(sem1.averageScore) + parseFloat(sem2.averageScore)) / 2).toFixed(1),
+    averageRank: Math.round((sem1.averageRank + sem2.averageRank) / 2),
+  };
+
   const getGradeColor = (grade: string) => {
     if (grade.startsWith("A")) return "default";
     if (grade.startsWith("B")) return "secondary";
@@ -131,6 +148,81 @@ const Scores = () => {
     if (score >= 80) return "info";
     if (score >= 70) return "warning";
     return "destructive";
+  };
+
+  // Collapsible subject details component (local to Scores)
+  const SubjectCollapse = ({
+    subject,
+  }: {
+    subject: {
+      name: string;
+      total: number;
+      grade: string;
+      rank: number;
+      breakdown: Record<string, number>;
+    };
+  }) => {
+    const [open, setOpen] = useState(false);
+
+    return (
+      <div className="card-toggle">
+        <div>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className="w-full text-left p-4 flex items-center justify-between gap-4 focus:outline-none focus-visible:ring focus-visible:ring-primary/50"
+          >
+            <div>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg mb-0">{subject.name}</CardTitle>
+                <Badge variant={getGradeColor(subject.grade)} className="uppercase text-[10px]">{subject.grade}</Badge>
+              </div>
+              <CardDescription className="mb-0">Rank: #{subject.rank}</CardDescription>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-2xl font-bold">{subject.total}</p>
+                <p className="text-xs text-muted-foreground">/ 100</p>
+              </div>
+              {open ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </div>
+          </button>
+
+          <div className={`overflow-hidden transition-all duration-200 ${open ? "max-h-[800px] opacity-100" : "max-h-0 opacity-0"}`}>
+            <div className="p-4">
+              <div className="w-full overflow-hidden">
+                <div className="bg-card shadow-sm rounded-md border border-border/50">
+                  <table className="min-w-full divide-y divide-border/50 text-sm leading-6">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Assessment</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Score</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Out Of</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-card divide-y divide-border/50">
+                      {Object.entries(subject.breakdown).map(([type, score]) => (
+                        <tr key={type} className="bg-card hover:bg-muted/5 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap text-foreground capitalize">{type}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right font-semibold text-foreground">{score}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-muted-foreground">50</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-muted/10 font-semibold">
+                        <td className="px-6 py-4 text-foreground">Total</td>
+                        <td className="px-6 py-4 text-right text-foreground">{subject.total}</td>
+                        <td className="px-6 py-4 text-right text-muted-foreground">100</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -177,121 +269,72 @@ const Scores = () => {
         />
       </div>
 
-      {/* Subjects List */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Subject Breakdown</h2>
-          <p className="text-sm text-muted-foreground">
-            {currentData.subjects.length} subjects
-          </p>
-        </div>
+      {/* Tabbed content: Semester Overview + Subject Details */}
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList aria-label="Scores Sections" className="gap-2">
+          <TabsTrigger value="overview">Semester Overview</TabsTrigger>
+          <TabsTrigger value="details">Subject Details</TabsTrigger>
+        </TabsList>
 
-        {currentData.subjects.length === 0 ? (
-          <Card>
-            <CardContent className="p-12">
-              <EmptyState
-                icon={BookOpen}
-                title="No scores available"
-                description="Scores will appear here once your teachers grade your assessments."
-              />
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {currentData.subjects.map((subject) => {
-              const isExpanded = expandedSubject === subject.name;
+        <TabsContent value="overview" className="transition-opacity duration-200 ease-in-out" aria-live="polite">
+          <div className="grid gap-6">
+            {/* Semester One */}
+            <Card className="transition-shadow hover:shadow-md">
+              <CardHeader>
+                <CardTitle>Semester One</CardTitle>
+                <CardDescription>Summary for Semester 1</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <StatCard label="Total Score" value={sem1.totalScore} icon={Target} subtitle={`Out of ${semesterData.semester1.subjects.length * 100}`} variant="info" />
+                  <StatCard label="Average Score" value={sem1.averageScore} icon={Award} subtitle="Average across subjects" variant="success" />
+                  <StatCard label="Average Rank" value={sem1.averageRank} icon={TrendingUp} subtitle="Class position" variant="default" />
+                </div>
+              </CardContent>
+            </Card>
 
-              return (
-                <Card
-                  key={subject.name}
-                  className="hover:shadow-md transition-shadow"
-                >
-                  <CardHeader>
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <BookOpen className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="text-lg truncate">
-                            {subject.name}
-                          </CardTitle>
-                          <CardDescription>
-                            Rank: #{subject.rank} in class
-                          </CardDescription>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        <div className="text-right">
-                          <p className="text-2xl font-bold">{subject.total}</p>
-                          <p className="text-xs text-muted-foreground">/ 100</p>
-                        </div>
-                        <Badge variant={getGradeColor(subject.grade)} className="px-3">
-                          {subject.grade}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setExpandedSubject(isExpanded ? null : subject.name)
-                          }
-                          aria-expanded={isExpanded}
-                        >
-                          {isExpanded ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
+            {/* Semester Two */}
+            <Card className="transition-shadow hover:shadow-md">
+              <CardHeader>
+                <CardTitle>Semester Two</CardTitle>
+                <CardDescription>Summary for Semester 2</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <StatCard label="Total Score" value={sem2.totalScore} icon={Target} subtitle={`Out of ${semesterData.semester2.subjects.length * 100}`} variant="info" />
+                  <StatCard label="Average Score" value={sem2.averageScore} icon={Award} subtitle="Average across subjects" variant="success" />
+                  <StatCard label="Average Rank" value={sem2.averageRank} icon={TrendingUp} subtitle="Class position" variant="default" />
+                </div>
+              </CardContent>
+            </Card>
 
-                  {isExpanded && (
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                          {Object.entries(subject.breakdown).map(([type, score]) => (
-                            <div
-                              key={type}
-                              className="p-4 rounded-lg border bg-muted/30"
-                            >
-                              <p className="text-xs text-muted-foreground capitalize mb-1">
-                                {type}
-                              </p>
-                              <p className="text-xl font-bold">{score}</p>
-                              <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-primary rounded-full transition-all"
-                                  style={{
-                                    width: `${(score / 50) * 100}%`,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Performance Indicator */}
-                        <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/30">
-                          <TrendingUp className="h-4 w-4 text-success" />
-                          <p className="text-sm">
-                            <span className="font-medium">Strong performance</span>
-                            {" - "}
-                            <span className="text-muted-foreground">
-                              Keep up the good work!
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  )}
-                </Card>
-              );
-            })}
+            {/* Combined */}
+            <Card className="transition-shadow hover:shadow-md">
+              <CardHeader>
+                <CardTitle>Combined (Both Semesters)</CardTitle>
+                <CardDescription>Average across semesters</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <StatCard label="Total Score" value={combined.totalScore} icon={Target} subtitle={`Out of ${(semesterData.semester1.subjects.length + semesterData.semester2.subjects.length) * 100}`} variant="info" />
+                  <StatCard label="Average Score" value={combined.averageScore} icon={Award} subtitle="Average of both semesters" variant="success" />
+                  <StatCard label="Average Rank" value={combined.averageRank} icon={TrendingUp} subtitle="Combined class position" variant="default" />
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        )}
-      </div>
+        </TabsContent>
+
+        <TabsContent value="details" className="transition-opacity duration-200 ease-in-out">
+          <div className="grid gap-4">
+            {currentData.subjects.map((subject) => (
+              <Card key={subject.name} className="transition-transform transform hover:-translate-y-0.5">
+                <SubjectCollapse subject={subject} />
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

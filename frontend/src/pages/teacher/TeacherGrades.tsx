@@ -67,6 +67,11 @@ import {
   getTeacherSheet,
   submitGradeSheet,
   updateTeacherScore,
+  saveLocalSnapshot,
+  getLocalMeta,
+  loadLocalSnapshot,
+  restoreLocalSnapshot,
+  getSheetUpdatedAt,
   type GradeColumn,
   type TeacherSheetView,
 } from "@/lib/grades/workflowStore";
@@ -105,6 +110,94 @@ const TeacherGrades = () => {
 
   const [deleteCol, setDeleteCol] = useState<GradeColumn | null>(null);
   const [page, setPage] = useState(1);
+
+  const [localMeta, setLocalMeta] = useState(() => {
+    try {
+      return getLocalMeta();
+    } catch {
+      return undefined;
+    }
+  });
+
+  const [snapshotAvailable, setSnapshotAvailable] = useState(false);
+  const [snapshotSheetMeta, setSnapshotSheetMeta] = useState<{
+    updatedAt?: string;
+    sheetId?: string;
+  } | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [ignoreSnapshot, setIgnoreSnapshot] = useState(false);
+  const [diffInfo, setDiffInfo] = useState<{
+    changedCells: number;
+    changedColumns: number;
+    snapshotAt?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const onHydrated = () => {
+      try {
+        setLocalMeta(getLocalMeta());
+      } catch (err) {
+        console.debug("TeacherGrades: failed to read local meta", err);
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener(
+        "grade-workflow-store:hydrated",
+        onHydrated as EventListener
+      );
+      window.addEventListener("storage", onHydrated as EventListener);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener(
+          "grade-workflow-store:hydrated",
+          onHydrated as EventListener
+        );
+        window.removeEventListener("storage", onHydrated as EventListener);
+      }
+    };
+  }, []);
+
+  // Detect newer snapshot in IndexedDB for the currently selected sheet
+  useEffect(() => {
+    let cancelled = false;
+    async function checkForNewerSnapshot() {
+      if (!sheetView) return;
+      try {
+        const snap = await loadLocalSnapshot();
+        if (!snap) return;
+        // find matching sheet by classId + subjectId
+        const snapSheet = snap.gradeSheets.find(
+          (g) =>
+            g.classId === sheetView.classId &&
+            g.subjectId === sheetView.subjectId
+        );
+        if (!snapSheet) return;
+        const currentUpdated =
+          getSheetUpdatedAt(sheetView.sheetId) ??
+          sheetView.submittedAt ??
+          sheetView.approvedAt;
+        if (
+          snapSheet.updatedAt &&
+          currentUpdated &&
+          snapSheet.updatedAt > currentUpdated &&
+          !ignoreSnapshot
+        ) {
+          setSnapshotAvailable(true);
+          setSnapshotSheetMeta({
+            updatedAt: snapSheet.updatedAt,
+            sheetId: snapSheet.id,
+          });
+        }
+      } catch (err) {
+        console.debug("TeacherGrades: snapshot check failed", err);
+      }
+    }
+    checkForNewerSnapshot();
+    return () => {
+      cancelled = true;
+    };
+  }, [sheetView, ignoreSnapshot]);
 
   useEffect(() => {
     if (!selectedKey) {
@@ -258,11 +351,27 @@ const TeacherGrades = () => {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => {
+                const ok = saveLocalSnapshot();
+                if (ok) setLocalMeta(getLocalMeta());
+              }}
+            >
+              <Download className="h-4 w-4 mr-2" /> Save Snapshot
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleSaveDraft}
               disabled={!sheetView}
             >
               <Save className="h-4 w-4 mr-2" /> Save Draft
             </Button>
+            <div className="text-xs text-muted-foreground ml-3">
+              Last saved:{" "}
+              {localMeta?.lastLocalSavedAt
+                ? new Date(localMeta.lastLocalSavedAt).toLocaleString()
+                : "Never"}
+            </div>
             <Button
               size="sm"
               onClick={handleSubmit}
@@ -274,13 +383,197 @@ const TeacherGrades = () => {
         }
       />
 
+      {snapshotAvailable && snapshotSheetMeta ? (
+        <div className="rounded-md border border-border bg-muted p-4 flex items-center justify-between">
+          <div className="flex items-start gap-4">
+            <div className="text-sm font-medium">
+              A newer local snapshot is available
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Snapshot saved at:{" "}
+              {snapshotSheetMeta.updatedAt
+                ? new Date(snapshotSheetMeta.updatedAt).toLocaleString()
+                : "Unknown"}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={async () => {
+                try {
+                  await restoreLocalSnapshot();
+                  // refresh the UI
+                  refreshAssignments();
+                  if (sheetView) {
+                    const [classId, subjectId] = selectedKey.split("|");
+                    const refreshed = getTeacherSheet(
+                      TEACHER_ID,
+                      classId,
+                      subjectId
+                    );
+                    setSheetView(refreshed);
+                  }
+                  setSnapshotAvailable(false);
+                  setLocalMeta(getLocalMeta());
+                } catch (err) {
+                  console.debug("TeacherGrades: restore failed", err);
+                }
+              }}
+            >
+              Restore
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                setCompareOpen(true);
+                // compute diff
+                try {
+                  const snap = await loadLocalSnapshot();
+                  if (!snap || !sheetView) return;
+                  const snapSheet = snap.gradeSheets?.find(
+                    (g: { classId?: string; subjectId?: string }) =>
+                      g.classId === sheetView.classId &&
+                      g.subjectId === sheetView.subjectId
+                  );
+                  if (!snapSheet) return;
+                  // compute changed columns
+                  const currentCols = sheetView.columns ?? [];
+                  const snapCols = snapSheet.columns ?? [];
+                  const changedColumns = snapCols.reduce(
+                    (
+                      acc: number,
+                      sc: { id?: string; name?: string; maxScore?: number }
+                    ) => {
+                      const match = currentCols.find((c) => c.id === sc.id);
+                      if (!match) return acc + 1;
+                      if (
+                        match.name !== sc.name ||
+                        match.maxScore !== sc.maxScore
+                      )
+                        return acc + 1;
+                      return acc;
+                    },
+                    0
+                  );
+                  // compute changed cells
+                  let changedCells = 0;
+                  const currentScores = sheetView.scores ?? {};
+                  const snapScores = snapSheet.scores ?? {};
+                  // snapScores shape: { studentId: { columnId: value } }
+                  for (const sid of Object.keys(snapScores)) {
+                    const cols = snapScores[sid] ?? {};
+                    for (const cid of Object.keys(cols)) {
+                      const cur = currentScores[sid]?.[cid];
+                      const s = cols[cid];
+                      if (cur !== s) changedCells += 1;
+                    }
+                  }
+                  setDiffInfo({
+                    changedCells,
+                    changedColumns,
+                    snapshotAt: snapSheet.updatedAt,
+                  });
+                } catch (err) {
+                  console.debug("TeacherGrades: compare failed", err);
+                }
+              }}
+            >
+              Compare
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setIgnoreSnapshot(true);
+                setSnapshotAvailable(false);
+              }}
+            >
+              Ignore
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Compare Local Snapshot</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            {diffInfo ? (
+              <div className="space-y-2 text-sm">
+                <div>
+                  <strong>{diffInfo.changedCells}</strong> changed cells
+                </div>
+                <div>
+                  <strong>{diffInfo.changedColumns}</strong> changed columns
+                </div>
+                <div className="text-muted-foreground">
+                  Snapshot timestamp:{" "}
+                  {diffInfo.snapshotAt
+                    ? new Date(diffInfo.snapshotAt).toLocaleString()
+                    : "Unknown"}
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Computing differences…
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <div className="flex gap-2">
+              <Button
+                onClick={async () => {
+                  try {
+                    await restoreLocalSnapshot();
+                    refreshAssignments();
+                    if (sheetView) {
+                      const [classId, subjectId] = selectedKey.split("|");
+                      const refreshed = getTeacherSheet(
+                        TEACHER_ID,
+                        classId,
+                        subjectId
+                      );
+                      setSheetView(refreshed);
+                    }
+                    setSnapshotAvailable(false);
+                    setLocalMeta(getLocalMeta());
+                  } catch (err) {
+                    console.debug("TeacherGrades: restore failed", err);
+                  }
+                  setCompareOpen(false);
+                }}
+              >
+                Restore Local Snapshot
+              </Button>
+              <Button variant="ghost" onClick={() => setCompareOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
           label="Grading Status"
           value={status}
-          icon={status === "approved" ? CheckCircle2 : status === "submitted" ? Lock : FileSpreadsheet}
-          variant={status === "approved" ? "success" : status === "submitted" ? "info" : "default"}
+          icon={
+            status === "approved"
+              ? CheckCircle2
+              : status === "submitted"
+              ? Lock
+              : FileSpreadsheet
+          }
+          variant={
+            status === "approved"
+              ? "success"
+              : status === "submitted"
+              ? "info"
+              : "default"
+          }
           className="capitalize"
         />
         <StatCard
@@ -292,7 +585,9 @@ const TeacherGrades = () => {
         <Card>
           <CardContent className="p-6 flex flex-col justify-center h-full space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">Completion</span>
+              <span className="text-sm font-medium text-muted-foreground">
+                Completion
+              </span>
               <span className="text-lg font-bold">{completionPercentage}%</span>
             </div>
             <Progress value={completionPercentage} className="h-2" />
@@ -306,7 +601,9 @@ const TeacherGrades = () => {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <CardTitle>Grading Workflow</CardTitle>
-              <CardDescription>Select a class and subject to manage</CardDescription>
+              <CardDescription>
+                Select a class and subject to manage
+              </CardDescription>
             </div>
             <Select value={selectedKey} onValueChange={setSelectedKey}>
               <SelectTrigger className="w-full md:w-72">
@@ -317,7 +614,10 @@ const TeacherGrades = () => {
                   <SelectItem key={option.key} value={option.key}>
                     <div className="flex items-center justify-between w-full gap-2">
                       <span>{option.label}</span>
-                      <Badge variant="outline" className="text-[10px] h-5 capitalize">
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] h-5 capitalize"
+                      >
                         {option.status}
                       </Badge>
                     </div>
@@ -331,14 +631,32 @@ const TeacherGrades = () => {
           <div className="relative flex items-center justify-between w-full max-w-3xl mx-auto py-6">
             {/* Progress Line */}
             <div className="absolute left-0 top-1/2 w-full h-0.5 bg-muted -z-10" />
-            
+
             {/* Steps */}
             {[
-              { id: 1, label: "Teacher Entry", desc: "Input scores", active: true },
-              { id: 2, label: "Head Review", desc: "Verification", active: status !== "draft" },
-              { id: 3, label: "Published", desc: "Visible to students", active: status === "approved" },
+              {
+                id: 1,
+                label: "Teacher Entry",
+                desc: "Input scores",
+                active: true,
+              },
+              {
+                id: 2,
+                label: "Head Review",
+                desc: "Verification",
+                active: status !== "draft",
+              },
+              {
+                id: 3,
+                label: "Published",
+                desc: "Visible to students",
+                active: status === "approved",
+              },
             ].map((step, idx) => (
-              <div key={step.id} className="flex flex-col items-center bg-background px-2">
+              <div
+                key={step.id}
+                className="flex flex-col items-center bg-background px-2"
+              >
                 <div
                   className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
                     step.active
@@ -346,7 +664,11 @@ const TeacherGrades = () => {
                       : "bg-background border-muted text-muted-foreground"
                   }`}
                 >
-                  {idx === 2 && step.active ? <CheckCircle2 className="h-5 w-5" /> : step.id}
+                  {idx === 2 && step.active ? (
+                    <CheckCircle2 className="h-5 w-5" />
+                  ) : (
+                    step.id
+                  )}
                 </div>
                 <p className="mt-2 text-sm font-medium">{step.label}</p>
                 <p className="text-xs text-muted-foreground">{step.desc}</p>
@@ -364,7 +686,8 @@ const TeacherGrades = () => {
           {status === "submitted" && (
             <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-400 text-sm flex items-center gap-2">
               <Lock className="h-4 w-4" />
-              Grade sheet submitted and locked. Awaiting head-of-class processing.
+              Grade sheet submitted and locked. Awaiting head-of-class
+              processing.
             </div>
           )}
           {status === "approved" && (
@@ -382,7 +705,10 @@ const TeacherGrades = () => {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Student Grades</CardTitle>
-              <CardDescription>Manage scores for {sheetView?.className} - {sheetView?.subjectName}</CardDescription>
+              <CardDescription>
+                Manage scores for {sheetView?.className} -{" "}
+                {sheetView?.subjectName}
+              </CardDescription>
             </div>
             <Button
               size="sm"
@@ -409,10 +735,17 @@ const TeacherGrades = () => {
                       <TableHead className="w-12 text-center">#</TableHead>
                       <TableHead>Student</TableHead>
                       {columns.map((col) => (
-                        <TableHead key={col.id} className="text-center min-w-[120px]">
+                        <TableHead
+                          key={col.id}
+                          className="text-center min-w-[120px]"
+                        >
                           <div className="flex flex-col items-center gap-1 py-2">
-                            <span className="font-semibold text-foreground">{col.name}</span>
-                            <span className="text-xs font-normal text-muted-foreground">Max: {col.maxScore}</span>
+                            <span className="font-semibold text-foreground">
+                              {col.name}
+                            </span>
+                            <span className="text-xs font-normal text-muted-foreground">
+                              Max: {col.maxScore}
+                            </span>
                             {!isLocked && (
                               <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Button
@@ -441,8 +774,12 @@ const TeacherGrades = () => {
                           </div>
                         </TableHead>
                       ))}
-                      <TableHead className="text-center font-bold bg-muted/30 w-24">Total</TableHead>
-                      <TableHead className="text-center font-bold bg-muted/30 w-24">Avg %</TableHead>
+                      <TableHead className="text-center font-bold bg-muted/30 w-24">
+                        Total
+                      </TableHead>
+                      <TableHead className="text-center font-bold bg-muted/30 w-24">
+                        Avg %
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -454,7 +791,9 @@ const TeacherGrades = () => {
                         <TableCell>
                           <div>
                             <p className="font-medium">{student.name}</p>
-                            <p className="text-xs text-muted-foreground">{student.rollNo}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {student.rollNo}
+                            </p>
                           </div>
                         </TableCell>
                         {columns.map((col) => (
@@ -465,7 +804,13 @@ const TeacherGrades = () => {
                               min={0}
                               max={col.maxScore}
                               value={scores[student.id]?.[col.id] ?? ""}
-                              onChange={(e) => handleScoreChange(student.id, col.id, e.target.value)}
+                              onChange={(e) =>
+                                handleScoreChange(
+                                  student.id,
+                                  col.id,
+                                  e.target.value
+                                )
+                              }
                               disabled={isLocked}
                             />
                           </TableCell>
@@ -475,7 +820,11 @@ const TeacherGrades = () => {
                         </TableCell>
                         <TableCell className="text-center bg-muted/10">
                           <Badge
-                            variant={getStudentAverage(student.id) >= 85 ? "success" : "secondary"}
+                            variant={
+                              getStudentAverage(student.id) >= 85
+                                ? "success"
+                                : "secondary"
+                            }
                           >
                             {getStudentAverage(student.id).toFixed(1)}%
                           </Badge>
@@ -486,7 +835,11 @@ const TeacherGrades = () => {
                 </Table>
               </div>
               <div className="mt-4">
-                <TablePagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+                <TablePagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={setPage}
+                />
               </div>
             </>
           )}
@@ -519,7 +872,9 @@ const TeacherGrades = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
             <Button onClick={handleAddColumn}>Add Column</Button>
           </DialogFooter>
         </DialogContent>
@@ -549,18 +904,24 @@ const TeacherGrades = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
             <Button onClick={handleSaveEdit}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteCol} onOpenChange={(open) => !open && setDeleteCol(null)}>
+      <AlertDialog
+        open={!!deleteCol}
+        onOpenChange={(open) => !open && setDeleteCol(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Column?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deleteCol?.name}"? All entered scores for this column will be lost.
+              Are you sure you want to delete "{deleteCol?.name}"? All entered
+              scores for this column will be lost.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

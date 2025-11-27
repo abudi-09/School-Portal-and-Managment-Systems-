@@ -81,10 +81,112 @@ type GradeWorkflowStore = {
   classes: ClassDefinition[];
   gradeSheets: GradeSheetRecord[];
   finalResults: Record<string, ClassFinalResult>;
+  // optional client-side metadata used for local persistence/versioning
+  _meta?: {
+    localVersion?: number;
+    lastLocalSavedAt?: string;
+    deviceId?: string;
+  };
 };
 
 const STORAGE_KEY = "grade-workflow-store";
 let memoryStore: GradeWorkflowStore | null = null;
+const IDB_DB_NAME = "pathways-ui";
+const IDB_STORE_NAME = "kv";
+const IDB_KEY = STORAGE_KEY;
+
+// Per-browser unique id to help signal edits from different devices/sessions
+let DEVICE_ID: string | null = null;
+if (typeof window !== "undefined") {
+  DEVICE_ID = window.localStorage.getItem("grade-device-id");
+  if (!DEVICE_ID) {
+    try {
+      DEVICE_ID = nanoid(8);
+      window.localStorage.setItem("grade-device-id", DEVICE_ID);
+    } catch {
+      // fallback
+      DEVICE_ID = String(Date.now());
+    }
+  }
+}
+
+// IndexedDB helpers (lightweight, no external deps)
+function openIDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || !window.indexedDB) {
+      return reject(new Error("IndexedDB not available"));
+    }
+    const req = window.indexedDB.open(IDB_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE_NAME)) {
+        db.createObjectStore(IDB_STORE_NAME, { keyPath: "key" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGet(key: string): Promise<unknown | null> {
+  try {
+    const db = await openIDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE_NAME, "readonly");
+      const store = tx.objectStore(IDB_STORE_NAME);
+      const req = store.get(key);
+      req.onsuccess = () => resolve(req.result ? req.result.value : null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    return null; // Handle error silently
+  }
+}
+
+async function idbSet(key: string, value: unknown): Promise<void> {
+  try {
+    const db = await openIDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE_NAME, "readwrite");
+      const store = tx.objectStore(IDB_STORE_NAME);
+      const req = store.put({ key, value });
+      req.onsuccess = () => resolve(undefined);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.debug("workflowStore: idbSet failed", err);
+  }
+}
+
+/** Load the raw local snapshot from IndexedDB (if any) */
+export async function loadLocalSnapshot(): Promise<GradeWorkflowStore | null> {
+  try {
+    const raw = await idbGet(IDB_KEY);
+    return raw as GradeWorkflowStore | null;
+  } catch {
+    return null; // Handle error silently
+  }
+}
+
+/** Get the updatedAt timestamp for a given sheet id from the current store */
+export function getSheetUpdatedAt(sheetId: string): string | undefined {
+  const s = getStore();
+  const sheet = s.gradeSheets.find((g) => g.id === sheetId);
+  return sheet?.updatedAt;
+}
+
+/** Restore the entire in-memory store from the IndexedDB snapshot (if present) */
+export async function restoreLocalSnapshot(): Promise<boolean> {
+  try {
+    const snap = await loadLocalSnapshot();
+    if (!snap) return false;
+    // write into memory and localStorage via persist
+    persist(snap);
+    return true;
+  } catch {
+    return false; // Handle error silently
+  }
+}
 
 const seedStore: GradeWorkflowStore = createSeedStore();
 
@@ -122,14 +224,76 @@ function getStore(): GradeWorkflowStore {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(memoryStore));
   }
+  // asynchronously attempt to hydrate from IndexedDB if it has a newer copy
+  if (typeof window !== "undefined") {
+    (async () => {
+      try {
+        const idbValue = await idbGet(IDB_KEY);
+        if (!idbValue) return;
+        const idbStore = idbValue as GradeWorkflowStore;
+        // compare latest updatedAt across gradeSheets
+        const idbLatest = latestUpdatedAt(idbStore);
+        const localLatest = latestUpdatedAt(memoryStore as GradeWorkflowStore);
+        if (idbLatest && (!localLatest || idbLatest > localLatest)) {
+          // adopt IDB copy as authoritative locally
+          memoryStore = deepCopy(idbStore);
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(memoryStore));
+          // notify consumers that store was hydrated from IDB
+          try {
+            window.dispatchEvent(
+              new CustomEvent("grade-workflow-store:hydrated", {
+                detail: { source: "idb" },
+              })
+            );
+          } catch (err) {
+            console.debug("workflowStore: hydration dispatch failed", err);
+          }
+        }
+      } catch (err) {
+        console.debug("workflowStore: idb hydration failed", err);
+      }
+    })();
+  }
   return memoryStore;
 }
 
 function persist(store: GradeWorkflowStore) {
+  // annotate meta and persist to both localStorage and IndexedDB (async)
   memoryStore = store;
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    store._meta = store._meta || {};
+    store._meta.localVersion = (store._meta.localVersion || 0) + 1;
+    store._meta.lastLocalSavedAt = new Date().toISOString();
+    if (DEVICE_ID) store._meta.deviceId = DEVICE_ID;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    } catch (err) {
+      console.debug(
+        "workflowStore: localStorage write failed during persist",
+        err
+      );
+    }
+    // fire-and-forget async sync to IndexedDB
+    (async () => {
+      try {
+        await idbSet(IDB_KEY, store);
+      } catch (e) {
+        console.debug("workflowStore: idb persist failed", e);
+      }
+    })();
   }
+}
+
+function latestUpdatedAt(
+  s: GradeWorkflowStore | null | undefined
+): string | null {
+  if (!s || !s.gradeSheets || s.gradeSheets.length === 0) return null;
+  let latest: string | null = null;
+  s.gradeSheets.forEach((g) => {
+    if (!g.updatedAt) return;
+    if (!latest || g.updatedAt > latest) latest = g.updatedAt;
+  });
+  return latest;
 }
 
 function cloneStore(): GradeWorkflowStore {
@@ -461,6 +625,26 @@ export function getHeadTeacherClasses(
 export function getAllClasses(): ClassDefinition[] {
   const store = getStore();
   return deepCopy(store.classes);
+}
+
+/**
+ * Save a local snapshot of the entire workflow store. This triggers persist
+ * which writes to localStorage and async-syncs to IndexedDB. Returns true
+ * when the action was performed.
+ */
+export function saveLocalSnapshot(): boolean {
+  try {
+    const store = cloneStore();
+    persist(store);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getLocalMeta() {
+  const s = getStore();
+  return s._meta;
 }
 
 /**

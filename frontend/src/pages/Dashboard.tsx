@@ -10,6 +10,8 @@ import { PageHeader } from "@/components/patterns";
 import { StatCard } from "@/components/patterns";
 import { EmptyState } from "@/components/patterns";
 import { useEffect, useState, useCallback } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { apiClient } from "@/lib/apiClient";
 import type { LucideIcon } from "lucide-react";
 import { StatCardSkeleton } from "@/components/shared/LoadingSkeletons";
 import { Button } from "@/components/ui/button";
@@ -81,16 +83,28 @@ const Dashboard = () => {
     null
   );
 
+  const { toast } = useToast();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const fetchAssignments = useCallback(async () => {
     setLoadingAssignments(true);
     setAssignmentsError(null);
     try {
-      // TODO: Replace with real endpoint for student assignments
-      setUpcomingAssignments([]);
+      const json = await apiClient(`/api/assignments`, { method: "GET", query: { page: 1, pageSize: 20 } });
+      const items: any[] = json?.data?.items ?? json?.items ?? [];
+      const mapped = items.map((it) => ({
+        id: it._id ?? it.id ?? `${it.title}-${Math.random()}`,
+        title: it.title ?? it.name ?? "Untitled",
+        subject: it.subjectName ?? it.subject ?? it.course ?? "",
+        due: it.due ? new Date(it.due).toLocaleDateString() : it.dueDate ? new Date(it.dueDate).toLocaleDateString() : "-",
+        status: it.status ?? (it.submitted ? "submitted" : "pending") ?? "pending",
+      }));
+      setUpcomingAssignments(mapped);
+      return true;
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to load assignments";
+      const msg = err instanceof Error ? err.message : "Failed to load assignments";
       setAssignmentsError(msg);
+      return false;
     } finally {
       setLoadingAssignments(false);
     }
@@ -100,30 +114,21 @@ const Dashboard = () => {
     setLoadingAnnouncements(true);
     setAnnouncementsError(null);
     try {
-      const res = await fetch(
-        `${apiBaseUrl}/api/announcements?page=1&pageSize=5`,
-        { headers: authHeaders() }
-      );
-      if (!res.ok) throw new Error("Failed to load announcements");
-      const json = await res.json();
-      const items: Array<{
-        _id: string;
-        title: string;
-        date: string;
-        type?: string;
-      }> = json?.data?.items || [];
+      const json = await apiClient(`/api/announcements`, { method: "GET", query: { page: 1, pageSize: 5 } });
+      const items: Array<{ _id?: string; title?: string; date?: string; type?: string }> = json?.data?.items ?? json?.items ?? [];
       setRecentAnnouncements(
         items.map((i) => ({
-          id: i._id,
-          title: i.title,
-          date: new Date(i.date).toLocaleDateString(),
+          id: i._id ?? i.id ?? Math.random().toString(),
+          title: i.title ?? "",
+          date: i.date ? new Date(i.date).toLocaleDateString() : "",
           type: i.type || "info",
         }))
       );
+      return true;
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to load announcements";
+      const msg = err instanceof Error ? err.message : "Failed to load announcements";
       setAnnouncementsError(msg);
+      return false;
     } finally {
       setLoadingAnnouncements(false);
     }
@@ -133,42 +138,28 @@ const Dashboard = () => {
     setLoadingStats(true);
     setStatsError(null);
     try {
-      // GPA from evaluations
-      const evalRes = await fetch(`${apiBaseUrl}/api/evaluations`, {
-        headers: authHeaders(),
-      });
       let gpaValue: string | number = "—";
-      if (evalRes.ok) {
-        const evalJson = await evalRes.json();
-        const evaluations: Array<{ score: number; maxScore: number }> =
-          evalJson?.data?.evaluations || [];
+      try {
+        const evalJson = await apiClient(`/api/evaluations`, { method: "GET", query: { page: 1, pageSize: 100 } });
+        const evaluations: Array<{ score?: number; maxScore?: number }> = evalJson?.data?.evaluations ?? evalJson?.evaluations ?? [];
         if (evaluations.length) {
-          const avgPercent =
-            evaluations.reduce(
-              (sum, e) => sum + e.score / (e.maxScore || 100),
-              0
-            ) / evaluations.length;
+          const avgPercent = evaluations.reduce((sum, e) => sum + (e.score ?? 0) / ((e.maxScore as number) || 100), 0) / evaluations.length;
           gpaValue = (avgPercent * 4).toFixed(2);
         }
+      } catch (err) {
+        console.debug("fetchStats: evaluations fetch failed", err);
       }
 
-      // Announcements count
-      const announcementsRes = await fetch(
-        `${apiBaseUrl}/api/announcements?page=1&pageSize=100`,
-        { headers: authHeaders() }
-      );
       let unread = 0;
-      if (announcementsRes.ok) {
-        const announcementsJson = await announcementsRes.json();
-        const items = announcementsJson?.data?.items || [];
-        unread = items.filter(
-          (a: { status?: string }) => a.status === "unread"
-        ).length;
+      try {
+        const announcementsJson = await apiClient(`/api/announcements`, { method: "GET", query: { page: 1, pageSize: 100 } });
+        const items = announcementsJson?.data?.items ?? announcementsJson?.items ?? [];
+        unread = items.filter((a: any) => a.status === "unread").length;
+      } catch (err) {
+        console.debug("fetchStats: announcements fetch failed", err);
       }
 
-      const pendingAssignmentsCount = upcomingAssignments.filter(
-        (a) => a.status !== "submitted"
-      ).length;
+      const pendingAssignmentsCount = upcomingAssignments.filter((a) => a.status !== "submitted").length;
 
       setStats([
         {
@@ -204,9 +195,11 @@ const Dashboard = () => {
           variant: "info",
         },
       ]);
+      return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load stats";
       setStatsError(msg);
+      return false;
     } finally {
       setLoadingStats(false);
     }
@@ -222,9 +215,21 @@ const Dashboard = () => {
   }, [fetchStats, fetchAnnouncements]);
 
   const handleRefresh = () => {
-    fetchStats();
-    fetchAnnouncements();
-    fetchAssignments();
+    setIsRefreshing(true);
+    Promise.all([fetchStats(), fetchAnnouncements(), fetchAssignments()])
+      .then((results) => {
+        const ok = results.every((r) => r === true);
+        if (ok) {
+          toast({ title: "Dashboard updated!" });
+        } else {
+          toast({ title: "Partial update", description: "Some sections failed to refresh." });
+        }
+      })
+      .catch((err) => {
+        console.debug("handleRefresh failed", err);
+        toast({ title: "Could not refresh — try again." });
+      })
+      .finally(() => setIsRefreshing(false));
   };
 
   return (
@@ -234,14 +239,14 @@ const Dashboard = () => {
         title="Dashboard"
         description="Your academic overview and recent activity"
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={loadingStats}
-          >
-            Refresh
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? "Refreshing…" : "Refresh"}
+            </Button>
         }
       />
 

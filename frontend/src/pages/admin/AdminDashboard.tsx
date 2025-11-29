@@ -27,6 +27,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/contexts/useAuth";
+import { apiClient } from "@/lib/apiClient";
 import { StatCardSkeleton } from "@/components/shared/LoadingSkeletons";
 import { useNavigate } from "react-router-dom";
 import { StatCard } from "@/components/patterns";
@@ -65,6 +67,7 @@ const authHeaders = () => {
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // Notifications
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -303,20 +306,29 @@ const AdminDashboard = () => {
     setLoadingActivity(true);
     setActivityError(null);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/admin/activity?limit=6`, {
-        headers: authHeaders(),
+      // Request server-side filtered activity for admins and the current admin user
+      const query: Record<string, string | number | undefined> = {
+        role: "admin",
+        actorId: user?.id,
+        limit: 6,
+      };
+      const json = await apiClient(`/api/admin/activity`, {
+        method: "GET",
+        query,
       });
-      if (!res.ok) throw new Error("Failed to load activity");
-      const json = await res.json();
       const logs: Array<{
         time?: string;
         classId?: string;
         subject?: string;
         change?: string;
         actorName?: string;
+        actorId?: string;
+        actorRole?: string;
         toTeacherName?: string;
         fromTeacherName?: string;
-      }> = json?.data?.logs || [];
+      }> = json?.data?.logs ?? json?.logs ?? [];
+
+      // If backend already filters by role & actorId, we can map directly.
       const items = logs.map((l) => ({
         action:
           l.change === "assign"
@@ -334,10 +346,11 @@ const AdminDashboard = () => {
       const msg =
         err instanceof Error ? err.message : "Failed to load activity";
       setActivityError(msg);
+      setActivity([]);
     } finally {
       setLoadingActivity(false);
     }
-  }, []);
+  }, [user]);
 
   const fetchSystemStatus = useCallback(async () => {
     setLoadingSystem(true);
@@ -666,12 +679,30 @@ const AdminDashboard = () => {
                 </p>
               )}
               {activityError && (
-                <p className="text-sm text-destructive">{activityError}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-destructive">{activityError}</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => fetchActivity()}
+                  >
+                    Retry
+                  </Button>
+                </div>
               )}
               {!loadingActivity && !activityError && activity.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  No recent activity
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    No recent activity for your admin account
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => fetchActivity()}
+                  >
+                    Refresh
+                  </Button>
+                </div>
               )}
               {activity.map((act, index) => (
                 <div

@@ -51,3 +51,5 @@ export async function apiClient(path: string, options: RequestOptions = {}) {
   }
   return payload;
 }
+
+export default apiClient;

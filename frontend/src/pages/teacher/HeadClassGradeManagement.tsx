@@ -214,15 +214,21 @@ const HeadClassGradeManagement = () => {
     return latest;
   }, [summary, subjectHeaders]);
 
-  if (!user || user.role !== "teacher" || !user.isHeadClassTeacher) {
+  // Allow head-of-school users and teachers who are head-of-class
+  const isHeadOrHeadTeacher =
+    !!user &&
+    (user.role === "head" ||
+      (user.role === "teacher" && user.isHeadClassTeacher));
+
+  if (!isHeadOrHeadTeacher) {
     return (
       <div className="p-6">
         <Card>
           <CardHeader>
             <CardTitle>Restricted Access</CardTitle>
             <CardDescription>
-              Only teachers assigned as head of class can view consolidated
-              grades.
+              Only head-of-school users or teachers assigned as head of class
+              can view consolidated grades.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -237,8 +243,9 @@ const HeadClassGradeManagement = () => {
           <CardHeader>
             <CardTitle>No Head Class Assignment</CardTitle>
             <CardDescription>
-              You are not assigned to any class as head teacher yet. Please
-              contact the administrator for access.
+              No classes found for your account. If you recently updated
+              assignments, try refreshing. Otherwise, contact the administrator
+              to be assigned as head teacher for specific classes.
             </CardDescription>
           </CardHeader>
         </Card>
